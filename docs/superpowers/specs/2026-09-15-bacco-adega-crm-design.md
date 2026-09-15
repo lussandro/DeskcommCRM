@@ -126,10 +126,15 @@ kanban nos dois temas.
     `MARCA_CONGELADA` (~`:210`) reconciliada com o que sobrar de "deskcomm";
   - `branding-contraste.test.ts:61,63`, `branding-rampa.test.ts:113,116`,
     `branding-pares-pintados.test.ts:340` (âncoras Sage `#506d48`/`#161510`);
-  - fixtures com `#506d48` literal (`app/api/v1/ai/providers/route.test.ts:52`,
-    `app/email-templates/[modelo]/route.test.ts:22`, `lib/email/templates/acesso-gotrue.test.ts:21`);
-  - `supabase/templates/{confirmation,recovery}.html` e `hostgator-setup-kit/marca-emails.sh:140`
-    (fallback `#506d48`).
+  - `supabase/templates/{confirmation,recovery}.html` (fallback `background: #506d48` antes de
+    `__ACCENT__`, `confirmation.html:27`) e `hostgator-setup-kit/marca-emails.sh:140`
+    (`ACCENT="#506d48"` quando `APP_ACCENT_HEX` é inválido) → accent Bacco derivado;
+  - `tests/unit/tailwind-tokens.test.ts:89` (`DE_FORA_DO_CSS` lista `--font-atkinson`) junto com
+    a troca de fonte (§4.3; `globals.css:535,701`).
+  - **Não mudam** (medido): as fixtures com `#506d48` em
+    `app/api/v1/ai/providers/route.test.ts:52`, `app/email-templates/[modelo]/route.test.ts:22`,
+    `lib/email/templates/acesso-gotrue.test.ts:21` usam marca de exemplo ("Acme", "THOTH CRM"),
+    não a do produto.
   A instância Bacco continua podendo receber marca por organização (logo da vinícola).
 - `lib/branding.ts:19` `DEFAULT_APP_NAME = "Bacco Adega CRM"`.
 - **Arte oficial recebida em 2026-09-15**, guardada em `docs/brand/bacco/`:
@@ -160,10 +165,17 @@ kanban nos dois temas.
   sobre borgonha. Derivar dos SVGs recebidos só trocando `fill` para os valores do preview;
   nenhuma geometria nova.
 - `docs/brand/` com os SVGs novos; `app/icon.tsx` e `app/manifest.ts` herdam de `desenho.ts`.
-- Literais visíveis a trocar: `lib/email/templates/ai-budget-alarm.tsx:35`,
-  `app/design/page.tsx:51,110`, `app/design/layout.tsx:7`, `public/llms.txt`,
-  `lib/nuvemshop/config.ts:13` (User-Agent), `lib/agenda/google/evento.ts:60`
-  (`SUFIXO_ICAL_UID`, aparece no Google Calendar do cliente final), `Dockerfile:58`.
+- Literais visíveis a trocar: `lib/email/templates/ai-budget-alarm.tsx:35` (é a única DIVIDA
+  da catraca `MARCA_CONGELADA`, `tests/unit/branding.test.ts:482` — usar o nome de
+  `marcaDaSaida()` e remover a entrada), `app/design/page.tsx:51,110`,
+  `app/design/layout.tsx:7`, `public/llms.txt`, `Dockerfile:58`.
+- **Ficam como estão** (revisado 2026-09-15), entradas PROTOCOLO/INFRA da catraca:
+  `lib/agenda/google/evento.ts:60,63` (`SUFIXO_ICAL_UID`/`PREFIXO_PROPRIEDADE`) — o prefixo
+  `deskcommapp` também está gravado em SQL (`google_event_id` nas migrations 0225/0226) e
+  entra na reconciliação com o Google; o UID não é exibido ao usuário.
+  `lib/nuvemshop/config.ts:13` (User-Agent com e-mail do autor do upstream) — só é usado com
+  `NUVEMSHOP_ENABLED` (`api-client.ts:68`, `oauth.ts:72`), fora da v1; **se a Nuvemshop for
+  ligada, trocar por contato da Bacco antes** (§8).
   A lista é re-medida no início da implementação com
   `grep -rIni deskcomm app components lib hooks workers public Dockerfile*`.
 - `README*.md`, `VISION.md`, `package.json` (`name`, `description`) reescritos para o
@@ -305,6 +317,12 @@ guardrail disso (busca por idade/álcool em `lib` e `app`: zero).
 
 ## 6. Infra e deploy
 
+- **Domínio de produção:** `adega-crm.baccosistemas.com.br` (dono, 2026-09-15). Registro DNS
+  `A` → IP da VPS antes do install (o kit valida DNS e emite TLS pelo Caddy, ou pelo proxy da
+  Hostinger se ele ocupar 80/443). Medido em 2026-09-15: `dig +short A` →
+  `2.25.222.110` (a VPS), sem AAAA; NS `*.ns.cloudflare.com`. A resposta é o IP da VPS, não da
+  Cloudflare, logo o registro está **DNS-only** — manter assim até o TLS ser emitido (proxy
+  laranja da Cloudflare intercepta o desafio HTTP do Caddy).
 - **Supabase próprio (self-hosted)** — decisão do dono em 2026-09-15.
   - O kit do upstream **aceita** Supabase próprio mas **não o instala**
     (`.env.hostgator.example:119-127`): subir a stack Supabase oficial em Docker antes, e
