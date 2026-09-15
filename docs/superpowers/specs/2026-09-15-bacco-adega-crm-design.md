@@ -51,6 +51,12 @@ Decisões:
    publicadas no **GHCR** (decisão do dono, 2026-09-15). Repo privado na **conta pessoal** do dono
    por ora; migrar para org Bacco depois troca remote e `IMG_NS`. `.env` da VPS fixa `APP_IMAGE`,
    `WORKER_IMAGE`, `SCHEDULER_IMAGE`. Nem a VPS nem a máquina local compilam.
+   Repo: `github.com/lussandro/bacco-adega-crm` (privado). O código Bacco vive na **`main` do
+   GitHub** (`git push origin bacco:main`; localmente a branch segue `bacco` e o upstream é
+   `upstream/main`) — assim `ci.yml`, `publish-image.yml` e a guarda `a-tag-veio-da-main`
+   funcionam sem editar gatilho. Removidos do fork: `relogio.yml` (cron de 5 min com secrets do
+   autor), `acolhida.yml` (triagem de PR de comunidade), `release.yml` (GitHub App do autor).
+   `e2e.yml` só por `workflow_dispatch` (decisão do dono).
    **Gates estáticos** (`typecheck`, `lint`, `test:unit`, `test:db`, `test:shell`) rodam no CI do
    GitHub. **Teste a quente** (app, Supabase, WhatsApp, e2e, screenshots) roda **na VPS com
    Docker** — nunca na máquina local (decisão do dono, 2026-09-15). A linha de base oficial é a
