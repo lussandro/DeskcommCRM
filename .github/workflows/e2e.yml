@@ -31,10 +31,11 @@ name: e2e
 # O job falha honestamente: a primeira versão usava `continue-on-error: true` no
 # job inteiro e reportou VERDE com o `supabase start` quebrado e zero teste
 # executado. Verde que não distingue "passou" de "nem rodou" é pior que vermelho.
-# Fork Bacco Adega CRM: só manual. Teste a quente roda na VPS com Docker
-# (spec docs/superpowers/specs/2026-09-15-bacco-adega-crm-design.md §3.2).
 on:
-  workflow_dispatch: {}
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
 
 # O GITHUB_TOKEN deste job serve a `actions/checkout` (clone) e a
 # `actions/setup-node` (manifest de `actions/node-versions`, repo público).

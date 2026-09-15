@@ -50,7 +50,7 @@ E-mail e senha do primeiro admin: já fornecidos; entram na VPS por stdin (Task 
 ```bash
 dig +short A adega-crm.baccosistemas.com.br; dig +short A api-adega.baccosistemas.com.br
 ssh -o BatchMode=yes root@2.25.222.110 'grep PRETTY_NAME /etc/os-release; nproc; free -h | sed -n 2p; df -h / | tail -1; ss -tlnp | awk "NR>1{print \$4}" | sort -u'
-gh run list -R lussandro/bacco-adega-crm --branch main --limit 6 --json name,headSha,conclusion --jq '.[] | "\(.name) \(.headSha[0:8]) \(.conclusion)"'
+gh run list -R lussandro/bacco-adega-crm --limit 20 --json name,headSha,headBranch,event,conclusion --jq '.[] | select(.headBranch=="main" and .event=="push") | "\(.name) \(.headSha[0:8]) \(.conclusion)"'
 ```
 Expected: dois A `2.25.222.110`; CentOS Stream 10, 2 vCPU, ~7.5 GiB, ~100 GB; portas `22`, `9090`. CI da base medido em 2026-09-15: `ci` failure (`verify` → Typecheck `JavaScript heap out of memory`, exit 134; `invariants` success), `perf` success, `publish-image` success. Registrar em `evidence/bacco-deploy/00-precondicoes.md`.
 
@@ -132,7 +132,7 @@ gh api repos/lussandro/bacco-adega-crm/actions/workflows --jq '.workflows[] | "\
 ```
 Expected: `acolhida`, `relogio`, `release`, `e2e` com `disabled_manually`; `ci`, `perf`, `publish-image` `active`.
 
-Run (ao terminar): `gh run list -R lussandro/bacco-adega-crm --branch main --limit 4 --json name,headSha,conclusion --jq '.[] | "\(.name) \(.headSha[0:8]) \(.conclusion)"'`
+Run (ao terminar): `gh run list -R lussandro/bacco-adega-crm --limit 20 --json name,headSha,headBranch,event,conclusion --jq '.[] | select(.headBranch=="main" and .event=="push") | "\(.name) \(.headSha[0:8]) \(.conclusion)"'` (este `gh` não tem `--branch`)
 Expected: `ci` **success** no SHA novo (prova typecheck, lint, `test:unit` com `namespace-das-imagens`, `test:shell`, `test:db`). Se falhar: `gh run view <id> --log-failed | grep -aE '×|FAIL|Error|Tests |Test Files'` — corrigir a causa e repetir; **sem tag enquanto `ci` não for success**. Registrar em `evidence/bacco-deploy/01-ci.md`.
 
 - [ ] **Step 5: Primeira versão Bacco**
@@ -240,7 +240,7 @@ Expected: todas `ok`. Qualquer `VAZIO`/`IGUAL AO EXEMPLO`: **não subir**. (Só 
 A chave do Resend vai por pipe, sem aparecer:
 
 ```bash
-grep -E '^RESEND_API_KEY=' ~/bacco-controle/apps/api/.env | head -1 | cut -d= -f2- | tr -d '"'"'"' \r\n' \
+grep -E '^RESEND_API_KEY=' ~/bacco-controle/apps/api/.env | head -1 | cut -d= -f2- | tr -d '"\r\n' \
   | ssh root@2.25.222.110 'umask 077; cat > /root/.resend_key; printf "resend key: %s chars\n" "$(wc -c < /root/.resend_key)"'
 ```
 Expected: `resend key: 36 chars`.
@@ -455,7 +455,7 @@ Expected: `syntax is ok` e `test is successful`.
 - [ ] **Step 3: Certificados** (e-mail ACME confirmado pelo dono na hora)
 
 ```bash
-ssh root@2.25.222.110 'certbot --nginx --non-interactive --agree-tos -m "<EMAIL_CONFIRMADO_PELO_DONO>" --redirect -d adega-crm.baccosistemas.com.br -d api-adega.baccosistemas.com.br && systemctl enable --now certbot-renew.timer; systemctl list-timers | grep -i certbot'
+ssh root@2.25.222.110 'certbot --nginx --non-interactive --agree-tos -m "lussandro@gmail.com" --redirect -d adega-crm.baccosistemas.com.br -d api-adega.baccosistemas.com.br && systemctl enable --now certbot-renew.timer; systemctl list-timers | grep -i certbot'
 ```
 Expected: certificado para os dois nomes; redirect 80→443; timer de renovação ativo. Registros A devem seguir DNS-only.
 
@@ -537,7 +537,7 @@ ssh -t root@2.25.222.110 'set -e; cd /opt/bacco-adega-crm
 put() { grep -v "^#\?$1=" .env > .env.tmp || true; printf "%s=%s\n" "$1" "$2" >> .env.tmp; mv .env.tmp .env; }
 g() { grep "^$1=" /opt/supabase/docker/.env | cut -d= -f2-; }
 put DOMAIN adega-crm.baccosistemas.com.br
-put ACME_EMAIL "<EMAIL_CONFIRMADO_PELO_DONO>"
+put ACME_EMAIL "lussandro@gmail.com"
 put NEXT_PUBLIC_APP_URL https://adega-crm.baccosistemas.com.br
 put REVERSE_PROXY npm
 put PROXY_NETWORK_NAME bacco_proxy
@@ -550,13 +550,13 @@ put NEXT_PUBLIC_SUPABASE_ANON_KEY "$(g ANON_KEY)"
 put SUPABASE_SERVICE_ROLE_KEY "$(g SERVICE_ROLE_KEY)"
 put SUPABASE_DB_URL "postgresql://agent_worker.bacco-adega:$(cat /root/.agent_worker_pw)@172.17.0.1:5432/postgres"
 put RESEND_API_KEY "$(cat /root/.resend_key)"
-put RESEND_FROM_EMAIL "Bacco Adega CRM <nao-responda@baccosistemas.com.br>"
+put RESEND_FROM_EMAIL nao-responda@baccosistemas.com.br
 read -r -p "E-mail do primeiro admin: " OE; put OWNER_EMAIL "$OE"
 read -r -s -p "Senha do primeiro admin: " OP; echo; put OWNER_PASSWORD "$OP"; unset OP
 chmod 600 .env
 grep -cE "^(DOMAIN|ACME_EMAIL|REVERSE_PROXY|PROXY_NETWORK_NAME|PROXY_NETWORK_APP_IP|APP_IMAGE|NEXT_PUBLIC_SUPABASE_URL|SUPABASE_DB_URL|RESEND_API_KEY|OWNER_EMAIL|OWNER_PASSWORD)=." .env'
 ```
-Expected: `11`. `APP_NAME`, `APP_ACCENT_HEX`, `APP_LOGO_URL` vazios (spec §4.5). O formato exato de `RESEND_FROM_EMAIL` aceito pelo app é conferido em `lib/email/` antes deste passo; se o app exigir só o endereço, gravar só `nao-responda@baccosistemas.com.br`.
+Expected: `11`. `APP_NAME`, `APP_ACCENT_HEX`, `APP_LOGO_URL` vazios (spec §4.5). `RESEND_FROM_EMAIL` é **só o endereço**: o kit valida com `v_email` (`install.sh:1273`) e o app usa o valor cru (`lib/email/resend.ts:70`); o nome exibido "Bacco Adega CRM" vale para o SMTP do GoTrue (Task 3).
 
 - [ ] **Step 3: Instalador**
 

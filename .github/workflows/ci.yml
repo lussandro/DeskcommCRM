@@ -39,6 +39,11 @@ jobs:
 
       - name: Typecheck
         run: pnpm typecheck
+        env:
+          # Runner de repo privado tem menos memória que o do upstream (repo
+          # público): o tsc deste projeto estourou o heap default (exit 134,
+          # run 34979163506). Mesmo motivo do NODE_OPTIONS do Dockerfile:40.
+          NODE_OPTIONS: --max-old-space-size=6144
 
       - name: Lint
         run: pnpm lint
