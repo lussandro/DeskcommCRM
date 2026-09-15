@@ -62,8 +62,9 @@ de revendedor; o `<img>` do revendedor e `marcaEhADoProduto` seguem valendo dent
 - Componente novo `components/auth/CampoDeAcesso.tsx`: ícone à esquerda (barril `@/lib/ui/icons`, ADR-05:
   `Envelope`, `Lock`) e, em campo de senha, botão de olho real (`Eye`/`EyeSlash`) que alterna `type`, com
   `aria-label` e `aria-pressed`, textos com `es`.
-- Aplicado em `LoginForm`, `SignupForm`, `ResetPasswordForm`, `ForgotPasswordForm`. `MfaForm` e
-  `RecoveryForm` (código numérico) ganham só o estilo.
+- Aplicado em `LoginForm`, `SignupForm`, `ResetPasswordForm`, `ForgotPasswordForm`. `MfaForm` e o
+  código de recuperação ganham só o estilo; o e-mail do `RecoveryForm` usa o campo novo. O botão de olho se chama
+  "Mostrar"/"Ocultar", com `aria-controls` — nunca "senha", porque o `getByLabel` do Playwright lê `aria-label`.
 - Placeholders "seu@email.com" e "Sua senha". Validação, erros e actions de auth não mudam.
 
 ### 4.3 Página de login

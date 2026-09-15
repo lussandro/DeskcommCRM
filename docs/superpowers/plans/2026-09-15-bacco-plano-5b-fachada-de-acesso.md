@@ -1,4 +1,9 @@
-# Bacco Adega CRM — Plano 5B: fachada das seis telas de acesso
+# Bacco Adega CRM — Plano 5B: fachada das seis telas de acesso (v2)
+
+> **v2 (2026-09-15):** revisado por refutador (tasks executadas em worktree) e `codex exec`. Correções: botão de
+> olho com nome "Mostrar"/"Ocultar" + `aria-controls` (o nome antigo "Mostrar senha" casava `getByLabel("Senha")`
+> e `/senha/i` em 34 specs e2e), card `rounded-lg`, cor dos títulos da fachada, passo explícito para MFA e
+> código de recuperação, teste de marca fixa nas telas de acesso, critério de imagem "texto de interface".
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
@@ -19,6 +24,7 @@
 - O nome da marca na fachada vem da resolução (`marca.nome` / `branding().name`), nunca literal — instalação de revendedor não pode ver "Bacco Adega CRM".
 - O subtítulo do login mantém o nome da marca como texto exato isolado (`tests/e2e/icone-da-marca.spec.ts` faz `getByText(marca, { exact: true })`).
 - Ícones pelo barril `@/lib/ui/icons` (ADR-05), não direto de `@phosphor-icons/react`.
+- O nome acessível do botão de olho é "Mostrar"/"Ocultar" e **nunca contém "senha"**: o `getByLabel` do Playwright lê `aria-label`, e 34 specs e2e usam `getByLabel("Senha")` ou `getByLabel(/senha/i)` para o campo.
 - Todo texto novo passado a `t(...)`/`traduzir(...)` ganha `es` em `lib/i18n/dicionario.ts`.
 - Commit termina com `Co-Authored-By: Claude Opus 5 (1M context) <noreply@anthropic.com>`.
 
@@ -26,7 +32,8 @@
 
 Este plano não prova a tela. A prova (Playwright na VPS, dois temas, 1366 px e 400 px, `getComputedStyle`)
 é a Task final do Plano 5C, depois do deploy da `v26.9.2`. Até lá o status visual da fachada é
-**não validado**, mesmo com CI verde.
+**não validado**, mesmo com CI verde. O push para a `main` vem antes da prova porque a prova roda na imagem
+publicada pelo CI — publicar não é declarar pronto.
 
 ---
 
@@ -50,7 +57,7 @@ Este plano não prova a tela. A prova (Playwright na VPS, dois temas, 1366 px e 
   public/fachada/lateral-esquerda.webp 390x1086 13 KB
   public/fachada/lateral-direita.webp 448x1086 4 KB
   ```
-- [ ] **Step 2: Evidência** — `python3 -c "from PIL import Image; [Image.open(f'public/fachada/lateral-{l}.webp').save(f'evidence/bacco-rebrand/5b-lateral-{l}.png') for l in ('esquerda','direita')]"` e abrir as duas: nenhuma letra, traço dourado ou borda de card visível. Registrar em `evidence/bacco-rebrand/5b-laterais.md`, citando `evidence/bacco-rebrand/5b-lateral-esquerda.png` e `evidence/bacco-rebrand/5b-lateral-direita.png` pelo caminho completo em crase, com a origem (kit v2, recorte de tela gerada) e o que foi desfocado.
+- [ ] **Step 2: Evidência** — `python3 -c "from PIL import Image; [Image.open(f'public/fachada/lateral-{l}.webp').save(f'evidence/bacco-rebrand/5b-lateral-{l}.png') for l in ('esquerda','direita')]"` e abrir as duas: nenhum texto de interface, traço dourado ou borda de card visível (o "B" do rótulo da garrafa e da rolha é arte do produto e fica). Registrar em `evidence/bacco-rebrand/5b-laterais.md`, citando `evidence/bacco-rebrand/5b-lateral-esquerda.png` e `evidence/bacco-rebrand/5b-lateral-direita.png` pelo caminho completo em crase, com a origem (kit v2, recorte de tela gerada) e o que foi desfocado.
 - [ ] **Step 3:** `pnpm exec vitest run tests/unit/evidencia-citada.test.ts` (depois de `git add` dos PNG e do `.md`) → exit 0.
 - [ ] **Step 4: Commit** — `feat(bacco): laterais fotográficas da fachada de acesso` + trailer.
 
@@ -93,12 +100,14 @@ describe("CampoDeAcesso", () => {
     const input = () => container.querySelector("input#password");
     expect(input()?.getAttribute("type")).toBe("password");
 
-    const botao = screen.getByRole("button", { name: "Mostrar senha" });
+    // Nome sem "senha": `getByLabel("Senha")`/`/senha/i` dos e2e casaria o botão junto com o campo.
+    const botao = screen.getByRole("button", { name: "Mostrar" });
     expect(botao.getAttribute("aria-pressed")).toBe("false");
+    expect(botao.getAttribute("aria-controls")).toBe("password");
     fireEvent.click(botao);
 
     expect(input()?.getAttribute("type")).toBe("text");
-    const ocultar = screen.getByRole("button", { name: "Ocultar senha" });
+    const ocultar = screen.getByRole("button", { name: "Ocultar" });
     expect(ocultar.getAttribute("aria-pressed")).toBe("true");
     expect(ocultar.getAttribute("type")).toBe("button");
   });
@@ -160,7 +169,8 @@ export const CampoDeAcesso = React.forwardRef<HTMLInputElement, Props>(function 
         <button
           type="button"
           onClick={() => setVisivel((v) => !v)}
-          aria-label={visivel ? t("Ocultar senha") : t("Mostrar senha")}
+          aria-label={visivel ? t("Ocultar") : t("Mostrar")}
+          aria-controls={props.id}
           aria-pressed={visivel}
           className="absolute right-2 top-1/2 -translate-y-1/2 rounded-sm p-1.5 text-text-subtle hover:text-text focus-visible:outline-2 focus-visible:outline-accent-text"
         >
@@ -180,14 +190,14 @@ export const CampoDeAcesso = React.forwardRef<HTMLInputElement, Props>(function 
   "ou": { es: "o" },
   "seu@email.com": { es: "tu@email.com" },
   "Sua senha": { es: "Tu contraseña" },
-  "Mostrar senha": { es: "Mostrar contraseña" },
-  "Ocultar senha": { es: "Ocultar contraseña" },
+  "Mostrar": { es: "Mostrar" },
+  "Ocultar": { es: "Ocultar" },
   "Mais que vinhos, grandes histórias": { es: "Más que vinos, grandes historias" },
   "Vinhos · Pessoas · Resultados": { es: "Vinos · Personas · Resultados" },
   "Gestão que brinda ao seu crescimento": { es: "Gestión que brinda por tu crecimiento" },
 ```
 
-  Antes, `grep -nE '^  "(ou|Sua senha|Mostrar senha)":' lib/i18n/dicionario.ts` → vazio (medido 2026-09-15). Chave duplicada quebra o objeto: se alguma já existir, não repetir.
+  Antes, `grep -nE '^  "(ou|Sua senha|Mostrar|Ocultar)":' lib/i18n/dicionario.ts` → vazio (medido 2026-09-15). Chave duplicada quebra o objeto: se alguma já existir, não repetir.
 
 - [ ] **Step 6:** `pnpm exec vitest run tests/unit/campo-de-acesso.test.tsx lib/ui/icons.test.ts` → exit 0.
 - [ ] **Step 7: Commit** — `feat(bacco): campo de acesso com ícone e olho de senha` + trailer.
@@ -251,6 +261,8 @@ export const CampoDeAcesso = React.forwardRef<HTMLInputElement, Props>(function 
 - [ ] **Step 4: `ForgotPasswordForm.tsx`** — `Input` de `email` → `CampoDeAcesso icone="email"` com `placeholder={t("seu@email.com")}`; trocar o import de `Input` por `CampoDeAcesso`.
 - [ ] **Step 5: `ResetPasswordForm.tsx`** — `Input` de `password` e `password_confirm` → `CampoDeAcesso icone="senha"` sem `type`; `mfa_code` continua `Input`. Import de `CampoDeAcesso` acrescentado; `Input` fica.
 - [ ] **Step 6: `RecoveryForm.tsx`** — `Input` de `email` → `CampoDeAcesso icone="email"` (mantendo `required`, `value`, `onChange`); `recovery-code` continua `Input`.
+- [ ] **Step 6b: MFA e código de recuperação** — `components/auth/MfaForm.tsx` e o campo `recovery-code` do `RecoveryForm` não mudam: o estilo vem do card (Task 4) e dos tokens (5A). Conferir `git diff --stat components/auth/MfaForm.tsx` vazio e `grep -n 'id="recovery-code"' components/auth/RecoveryForm.tsx` com a mesma linha de antes.
+- [ ] **Step 6c: e2e continua achando o campo** — `grep -rnE 'getByLabel\((/senha/i|"Senha")' tests/e2e | wc -l` (medido: dezenas de usos). Eles seguem válidos porque o botão de olho se chama "Mostrar"/"Ocultar"; `grep -rn '"Mostrar senha"\|"Ocultar senha"' components app` → vazio.
 - [ ] **Step 7:** `pnpm exec vitest run tests/unit/campo-de-acesso.test.tsx tests/unit/i18n-espanhol-cobre-a-tela.test.ts $(grep -rlE "LoginForm|SignupForm|ForgotPasswordForm|ResetPasswordForm|RecoveryForm" tests/unit components app --include=*.test.ts --include=*.test.tsx | tr '\n' ' ') && NODE_OPTIONS=--max-old-space-size=6144 pnpm typecheck && pnpm lint` → exit 0.
 - [ ] **Step 8: Commit** — `feat(bacco): formulários de acesso com ícone, olho de senha e links em ouro` + trailer.
 
@@ -289,7 +301,41 @@ export const CampoDeAcesso = React.forwardRef<HTMLInputElement, Props>(function 
   });
 ```
 
-- [ ] **Step 2:** `pnpm exec vitest run tests/unit/marca-na-fachada-de-acesso.test.tsx` → os dois novos FAIL; os três antigos PASS.
+- [ ] **Step 1b: Guarda de marca fixa** — `tests/unit/fachada-sem-marca-fixa.test.ts`:
+
+```ts
+import fs from "node:fs";
+import path from "node:path";
+import { describe, expect, it } from "vitest";
+
+/**
+ * As telas de acesso são vistas por clientes de revendedor antes de qualquer organização: o nome do
+ * produto do fork NUNCA pode estar escrito à mão ali — ele sai de `marcaDaSaida`/`branding()`.
+ * A catraca geral (`tests/unit/branding.test.ts`) procura a marca do upstream, não a do fork.
+ */
+const RAIZ = process.cwd();
+const semComentarios = (s: string) => s.replace(/\/\*[\s\S]*?\*\//g, "").replace(/(^|[^:])\/\/.*$/gm, "$1");
+
+function arquivos(dir: string): string[] {
+  return fs.readdirSync(dir, { withFileTypes: true }).flatMap((e) => {
+    const p = path.join(dir, e.name);
+    if (e.isDirectory()) return arquivos(p);
+    return /\.tsx?$/.test(e.name) && !/\.test\./.test(e.name) ? [p] : [];
+  });
+}
+
+describe("telas de acesso sem o nome do produto escrito à mão", () => {
+  it("app/(public) e components/auth não contêm 'Bacco Adega CRM' fora de comentário", () => {
+    const culpados = ["app/(public)", "components/auth"]
+      .flatMap((d) => arquivos(path.join(RAIZ, d)))
+      .filter((f) => /Bacco Adega CRM/.test(semComentarios(fs.readFileSync(f, "utf8"))))
+      .map((f) => path.relative(RAIZ, f));
+    expect(culpados).toEqual([]);
+  });
+});
+```
+
+- [ ] **Step 2:** `pnpm exec vitest run tests/unit/marca-na-fachada-de-acesso.test.tsx tests/unit/fachada-sem-marca-fixa.test.ts` → os dois `it` novos da fachada FAIL; os três antigos e a guarda de marca PASS (a guarda já vale hoje e protege a Task 4).
 
 - [ ] **Step 3: `app/(public)/layout.tsx`**
   - Imports acrescentados: `import { traduzir } from "@/lib/i18n/dicionario";` e `import { normalizarIdioma } from "@/lib/i18n/idiomas";`.
@@ -339,7 +385,8 @@ export const CampoDeAcesso = React.forwardRef<HTMLInputElement, Props>(function 
         </p>
 
         {/* Card */}
-        <div className="relative z-10 w-full max-w-md space-y-6 rounded-xl border border-gold bg-surface p-8 shadow-lg">
+        {/* Títulos editoriais da fachada: borgonha-ação no claro, creme no escuro (spec §4.4). */}
+        <div className="relative z-10 w-full max-w-md space-y-6 rounded-lg border border-gold bg-surface p-8 shadow-lg [&_.font-display]:text-accent-text dark:[&_.font-display]:text-text">
           {marca.logoUrl ? (
             <div className="flex justify-center">
               {/*
@@ -389,7 +436,7 @@ export const CampoDeAcesso = React.forwardRef<HTMLInputElement, Props>(function 
   O ramo `marca.logoUrl ?` acima é o de hoje, byte a byte (comentários, chip `dark:bg-white` e `<img data-testid="logo-da-fachada">`): `tests/unit/logo-nao-some-no-tema-escuro.test.ts` exige o `<img>` dentro do chip e `tests/e2e/marca-logo.spec.ts` lê o `data-testid`. Conferir com `git diff app/(public)/layout.tsx` que essas linhas aparecem só como movidas, sem alteração.
   - No comentário de cabeçalho do arquivo, acrescentar um parágrafo: "── Fachada Bacco (Plano 5B) ── Fundo em `background-image` com `aria-hidden` (a fachada sem logo não pode ter `<img>`); frases em texto traduzido com o nome da marca RESOLVIDA; card com borda ouro. Laterais geradas por `docs/brand/bacco/limpar-laterais-login.py`."
 
-- [ ] **Step 4:** `pnpm exec vitest run tests/unit/marca-na-fachada-de-acesso.test.tsx tests/unit/logo-nao-some-no-tema-escuro.test.ts tests/unit/tailwind-tokens.test.ts tests/unit/i18n-espanhol-cobre-a-tela.test.ts tests/unit/branding.test.ts` → exit 0.
+- [ ] **Step 4:** `pnpm exec vitest run tests/unit/marca-na-fachada-de-acesso.test.tsx tests/unit/fachada-sem-marca-fixa.test.ts tests/unit/logo-nao-some-no-tema-escuro.test.ts tests/unit/tailwind-tokens.test.ts tests/unit/i18n-espanhol-cobre-a-tela.test.ts tests/unit/branding.test.ts` → exit 0.
 - [ ] **Step 5:** `NODE_OPTIONS=--max-old-space-size=6144 pnpm typecheck && pnpm lint` → exit 0.
 - [ ] **Step 6: Commit** — `feat(bacco): fachada de acesso com laterais, card ouro e frases` + trailer.
 
