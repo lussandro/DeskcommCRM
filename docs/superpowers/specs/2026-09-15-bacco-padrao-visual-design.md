@@ -129,7 +129,10 @@ valores com "~" saem da amostragem das capturas e são fixados no plano por medi
 
 ### 5.2 Rampa e marca por instalação
 
-A rampa `--color-accent-50…950` passa a ser derivada da ação principal de cada tema, desenhada à parte
+A rampa `--color-accent-50…950` passa a ser UMA rampa, `rampaDeSemente("#6a1730")`, igual nos dois temas (decisão do dono de 2026-09-15:
+a ação do escuro é o grau 600 dessa rampa, e não `#7C1D3A`, para não refatorar a régua para uma rampa por
+tema). O que continua desenhado à parte por tema são os GRAUS de cada papel (accent, hover, soft, texto,
+anel), não a rampa
 ("Light + dark drawn separately"). `platform_branding`/`organizations.settings.branding` continuam
 podendo sobrepor o accent (marca própria); o padrão do produto é o do kit. A régua gerada
 (`lib/branding/regua-do-produto.ts`) é regenerada; a régua Sage congelada segue isolando os testes de
