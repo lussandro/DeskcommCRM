@@ -1,326 +1,300 @@
-# Bacco Adega CRM — Plano 1: Rebrand + vertical vinícola
+# Bacco Adega CRM — Plano 1: Rebrand + vertical vinícola (v2)
 
-> ⛔ **NÃO EXECUTAR ESTA VERSÃO.** Revisada por refutador (agente Claude, com experimentos em cópia) e por `codex exec` em 2026-09-15; os achados abaixo foram **verificados no código** e exigem reescrita. A ordem aprovada pelo dono é Plano 4 (CI + deploy na VPS) antes deste. Decisões posteriores à escrita: neutros e fundo do upstream ficam (só accent muda); gates rodam no CI do GitHub; teste a quente e evidência visual rodam na VPS com Docker, nunca local.
+> **Status:** reescrito em 2026-09-15 a partir da v1 (⛔ recusada por refutador + `codex exec`).
+> **Revisada em 2026-09-15 por refutador (experimentos em worktree) e `codex exec`: ambos
+> "executável com correções"; correções aplicadas (v2.1).** Toda linha citada foi remedida contra o
+> código do commit `2820a014` (branch `bacco`), não copiada da v1.
 >
-> **Correções obrigatórias na reescrita:**
-> 1. **Task 1:** remover troca de `--color-bg`/`--color-text`/`neutral-50/900` (decisão do dono). Os testes de algoritmo que usam a Sage como controle positivo (`branding-contraste`: razões medidas, "Sage inteira cabe nos pisos", "caminhada anda", "Sage pura nasce colidida", `movimentosNoRun`, "separável do neutro"; `branding-pares-pintados`: "caminhada anda", "Sage pintada", "anel de foco") passam a ler régua Sage **congelada como fixture**, não `globals.css` — colar número novo desarma o teste. Remeter o grau do accent escuro **por medição** (grau 300 medido pior: 11 falhas). Números de linha: `--color-text` `:41`, accent escuro `:357`, soft `:359`, hover `:360`, `--ring` claro também em `:164` e `:311`.
-> 2. **Task 1 Step 7:** `hostgator-setup-kit/test-validators.sh:1028` exige `background: #506d48; background: #506d48` — atualizar junto com `marca-emails.sh:140` (e o comentário `:115`), senão `test:shell` reprova.
-> 3. **Task 2:** `h1` global aplica Playfair em 51 `<h1>` inclusive inbox/kanban — contraria spec §4.3. Aplicar `font-display` só em login, onboarding e marca.
-> 4. **Task 3:** manter o script (medido: roda, 16 KB, typecheck verde, render conferido). Registrar que o logotipo da barra **omite** separador e tagline de propósito (ilegível no tamanho da barra) e atualizar spec §4.1. Nits: `desenho.ts:101-102`, `MarcaDoProduto.tsx:9` e comentários "Sage" em `rampa.ts:13`, `saida.ts:80`, `env.ts:339`.
-> 5. **Task 4:** incluir `tests/unit/branding.test.ts:15` (`initial: "D"`) e `:134` (não `:146`), `tests/unit/branding-marca-resolve.test.ts:224`, `tests/unit/branding-saida.test.ts:194,217`, `tests/unit/lgpd-pdf-meet.test.ts:126` (garante que o PDF LGPD não leva a marca — trocar para "Bacco Adega CRM", não remover) e `tests/e2e/signup-journey.spec.ts:46`.
-> 6. **Task 5:** PISTAS classificam errado frases comuns ("clube de assinatura com degustação" → enoturismo; "vinícola com visitas e loja virtual" → enoturismo; "vinícola", "vendemos vinho" → genérico). Revisar ordem/regex e adicionar esses casos ao teste (plural, feminino, sem acento).
-> 7. **Task 6:** slugs `ecommerce_*` de `PROMPT_TEMPLATES` ficam (id técnico) — declarar. Conferência final por grep mais larga (`paciente|cl[ií]nica|odontol|corretor|imobili|e-?commerce|iPhone|Perfume`).
-> 8. **Task 7:** reescrever `public/llms.txt` inteiro (linhas 17-27 citam upstream); incluir `Dockerfile.worker:11`, `Dockerfile.scheduler:12`; `publish-image.yml` matrix/títulos vão para o Plano 4. Não apagar `docs/brand/deskcomm-*.svg` sem ajustar `README.es.md:6-7` e `docs/brand/og-card.html`.
-> 9. **Task 0 e verificação:** usar rodapé `Test Files`/`Tests`/`Errors` + exit code, nunca `grep FAIL` (`CLAUDE.md:328-369`); linha de base = primeira execução do CI no GitHub, não a local.
-> 10. **Task 8:** sai deste plano — evidência visual roda na VPS (Plano 4 entrega o ambiente). `/admin/marca` exige platform admin (`e2e-dono` via `seed-e2e-system-update.ts`, que revoga `e2e-admin`); incluir onboarding e detalhe de lead.
-> 11. **Tarefas faltando (spec §5.2, §7):** fragmento `.changes/` + `pnpm release:conferir`; revisão dos textos de captação (webhooks, RD Station, planilha de leads, ads).
-> 12. Nit: `ACCENT_DO_PRODUTO` está em `lib/branding/saida.ts:90`.
+> **"Conteúdo da v1"** nos passos abaixo = o bloco de código literal do mesmo passo em
+> `git show 2820a014:docs/superpowers/plans/2026-09-15-bacco-plano-1-rebrand-vertical.md`
+> (script `texto-para-path.py`, pacotes de funil, `PROMPT_BODIES`, textos do README). Onde a v2
+> diverge, vale a v2.
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+## As 12 correções da v1 e onde cada uma entrou
 
-**Goal:** Trocar a marca do produto DeskcommCRM pela Bacco Adega CRM (paleta, fontes, símbolo, nome) e trocar os nichos do onboarding pelos três públicos da vinícola, com todos os gates do upstream verdes.
+| # | Correção exigida | Onde |
+|---|---|---|
+| 1 | Neutros/fundo do upstream ficam; testes de algoritmo leem régua Sage congelada; grau do accent escuro por medição | Global Constraints, Task 1 |
+| 2 | `test-validators.sh:1028` + `marca-emails.sh:115,140` juntos | Task 1 Step 7 |
+| 3 | Playfair só em login/cadastro/onboarding, nunca `h1` global | Task 2 |
+| 4 | Script mantido; omissão de separador/tagline declarada; spec §4.1; nits | Task 3 |
+| 5 | Linhas extras de nome (`branding.test.ts:15,134`, `branding-marca-resolve:224`, `branding-saida:194,217`, `lgpd-pdf-meet:126`, `signup-journey:46`) | Task 4 |
+| 6 | PISTAS reordenadas, casos de plural/feminino/sem acento, fallback de vinho | Task 5 |
+| 7 | Slugs `ecommerce_*` ficam (declarado); conferência por grep larga | Task 6 |
+| 8 | `llms.txt` inteiro; `Dockerfile.worker:11`, `Dockerfile.scheduler:12`; SVGs Deskcomm não são apagados | Task 7 |
+| 9 | Verificação por exit code + rodapé `Test Files`/`Tests`/`Errors`; linha de base = CI | Global Constraints, Task 0 |
+| 10 | Prova em tela sai do ambiente local e vai para a VPS | Task 10 |
+| 11 | Fragmento `.changes/` + `release:conferir`; revisão dos textos de captação | Task 8, Task 6 Step 6 |
+| 12 | `ACCENT_DO_PRODUTO` em `lib/branding/saida.ts:90` | Task 1 Step 8 |
 
-**Architecture:** Fork com marca de produto deliberada (spec §4.4): os valores do design system mudam na fonte (`app/globals.css`, `lib/branding/desenho.ts`, `lib/branding.ts`) e os testes-doutrina que fixam a marca antiga mudam no mesmo commit, com a razão escrita. A paleta sai do gerador do próprio repo (`rampaDeSemente`), nunca de hex digitado à mão. O símbolo sai dos SVGs oficiais convertidos em paths por um script versionado.
+## Decisões do dono que este plano aplica
 
-**Tech Stack:** Next.js 16, React 19, Tailwind 4, Vitest 4, Playwright, Python 3 + fontTools (só o script de conversão do logo), Node 22 via nvm, pnpm 9.15.9.
+- 2026-09-15: neutros e superfícies do upstream mantidos; creme só na marca (spec §4.2).
+- 2026-09-15: gates no CI do GitHub; app, e2e e evidência visual só na VPS.
+- 2026-09-15: Plano 1 inteiro nesta rodada (marca + vertical).
+- 2026-09-15: texto de onboarding que só diz "vinícola"/"vinho" sem público → `clientes_vinicola`.
+- 2026-09-15: prova em tela com conta QA criada por `/signup` na produção.
 
-**Spec:** `docs/superpowers/specs/2026-09-15-bacco-adega-crm-design.md` (§4, §5.1–§5.4, §7, §10)
+## Goal
+
+Trocar a marca do produto DeskcommCRM pela Bacco Adega CRM (paleta de accent, fontes,
+símbolo, nome) e os nichos do onboarding pelos três públicos da vinícola, com CI verde e prova
+em tela na VPS.
+
+**Spec:** `docs/superpowers/specs/2026-09-15-bacco-adega-crm-design.md` (§4, §5.1–§5.4, §7).
+**ADR:** vault `projetos/_shared/decisoes/ADR-015-bacco-adega-crm-fork-deskcomm.md`.
 
 ## Global Constraints
 
-- Node 22 (`source ~/.nvm/nvm.sh && nvm use 22` antes de qualquer comando `pnpm`); pnpm 9.15.9.
-- Branch `bacco`, base `v1.27.0`. Nenhum commit na `main`.
-- Cores do produto (spec §4.1): borgonha `#4A0E1F`, creme `#F5F0E6`, ouro `#C49A4A`, grafite `#2E2E2E`. Hex sempre **minúsculo** no código (`tests/unit/marca-do-produto.test.tsx` usa `/#[0-9a-f]{6}/`).
-- Rampa accent = saída de `rampaDeSemente("#4a0e1f")`, medida em 2026-09-15:
-  `#fbf2f3 #f1dddf #dab5ba #b9828b #985461 #752f3f #4a0e1f #40131e #39161d #33171d #291619` (graus 50…950).
-- Fontes (spec §4.3): Inter no corpo/interface; Playfair Display 600 só em `h1`; IBM Plex Mono mantida.
-- Nome do produto: `Bacco Adega CRM`. Tagline do logo: "Relacionamento e atendimento inteligente".
-- **Não renomear** identificadores técnicos: `sb-deskcomm-auth`, `X-Deskcomm-*`, `deskcomm-theme`, `deskcomm-impersonate`, MCP `deskcomm-crm`, `SUFIXO_ICAL_UID`, `lib/nuvemshop/config.ts` (spec §2, §4.4).
-- Não tocar `app/design/**` além dos três títulos (showcase interno, `robots: noindex`, pulado pela catraca).
-- Todo texto novo passado a `t(...)` ganha entrada `es` em `lib/i18n/dicionario.ts` (senão `tests/unit/i18n-espanhol-cobre-a-tela.test.ts:471` falha).
-- Mensagem de commit termina com `Co-Authored-By: Claude Opus 5 (1M context) <noreply@anthropic.com>`.
-- Nada é "pronto" sem o comando de verificação rodado e a saída observada.
-- **Evidência versionada precisa de citação exata** (`tests/unit/evidencia-citada.test.ts`): toda imagem commitada em `evidence/` tem de aparecer, em crase e com o caminho completo (sem glob, sem `${}`), em algum `.md` versionado — senão o teste reprova como órfã. Em crase, nome de imagem sem barra é resolvido contra a pasta do próprio documento: escreva sempre o caminho completo.
-
-## Mapa de arquivos
-
-| Arquivo | Responsabilidade | Tarefa |
-|---|---|---|
-| `evidence/bacco-rebrand/00-baseline-*.log` | falhas pré-existentes na v1.27.0 | 0 |
-| `app/globals.css` | tokens de cor (rampa, fundo, texto, accent escuro) e fonte | 1, 2 |
-| `lib/branding/regua-do-produto.ts` | régua gerada do `globals.css` | 1 |
-| `tests/unit/branding-{rampa,contraste,pares-pintados}.test.ts` | âncoras da paleta do produto | 1 |
-| `supabase/templates/{confirmation,recovery}.html`, `hostgator-setup-kit/marca-emails.sh` | fallback de cor dos e-mails de acesso | 1 |
-| `app/layout.tsx`, `tests/unit/tailwind-tokens.test.ts` | fontes via `next/font` | 2 |
-| `docs/brand/bacco/texto-para-path.py` | converte os SVGs oficiais em `lib/branding/desenho.ts` | 3 |
-| `lib/branding/desenho.ts` | geometria do símbolo/logotipo (GERADO) | 3 |
-| `components/branding/MarcaDoProduto.tsx`, `app/icon.tsx` | desenho em duas cores | 3 |
-| `lib/branding.ts` + testes de nome/catraca | nome do produto | 4 |
-| `lib/email/templates/ai-budget-alarm.tsx` | última DIVIDA da catraca | 4 |
-| `lib/onboarding/{pacotes-de-funil,sugerir-funil}.ts` + teste | nichos da vinícola | 5 |
-| telas/dicionário/CSV/agente | copy de outros setores → vinho | 6 |
-| `README.md`, `public/llms.txt`, `package.json`, `LICENSE`, `Dockerfile`, `docs/brand/README.md` | textos de produto | 7 |
-| `tests/e2e/bacco-evidencia.spec.ts`, `evidence/bacco-rebrand/*.png` | prova em tela | 8 |
-
----
-
-### Task 0: Linha de base na v1.27.0 intacta
-
-**Files:**
-- Create: `evidence/bacco-rebrand/00-baseline-gov-verify.log`
-
-**Interfaces:**
-- Produces: lista de testes que já falham antes de qualquer mudança — toda tarefa seguinte compara contra ela.
-
-- [ ] **Step 1: Conferir que a árvore está na base**
-
-Run: `cd /home/lussandro/Bacco-Crm && git status -sb && git diff --stat v1.27.0 -- app lib components tests`
-Expected: `## bacco`, e o diff contra `v1.27.0` vazio (só `docs/` mudou).
-
-- [ ] **Step 2: Rodar os gates e guardar a saída**
-
-```bash
-cd /home/lussandro/Bacco-Crm && source ~/.nvm/nvm.sh && nvm use 22
-pnpm install --frozen-lockfile
-mkdir -p evidence/bacco-rebrand
-pnpm gov:verify > evidence/bacco-rebrand/00-baseline-gov-verify.log 2>&1; echo "exit=$?" >> evidence/bacco-rebrand/00-baseline-gov-verify.log
-tail -40 evidence/bacco-rebrand/00-baseline-gov-verify.log
-```
-Expected: o log termina com `exit=<n>`. Anote no topo do log, à mão, a lista de arquivos de teste que falharam (linhas `FAIL`). `typecheck` já foi medido verde em 2026-09-15.
-
-- [ ] **Step 3: Commit**
-
-```bash
-git add evidence/bacco-rebrand/00-baseline-gov-verify.log
-git commit -m "chore(bacco): linha de base do gov:verify na v1.27.0
-
-Co-Authored-By: Claude Opus 5 (1M context) <noreply@anthropic.com>"
-```
+- Branch `bacco` (tracking `origin/main` do fork). Push **sempre** `git push --no-tags origin bacco:main`.
+- **Onde roda o quê:** local só comando puro (`pnpm exec vitest run <arquivos>`, `pnpm typecheck`,
+  `pnpm lint`, `pnpm exec tsx` de medição, `rsvg-convert`, `bash -n`), com
+  `source ~/.nvm/nvm.sh && nvm use 22`. `test:unit` inteiro, `test:db`, `test:shell`, build e
+  imagens: **CI do GitHub**. App, e2e, telas: **VPS**.
+- **Leitura de resultado de teste:** exit code é a autoridade; depois as linhas `Test Files`,
+  `Tests` e `Errors` do rodapé. Nunca `grep FAIL` sozinho (`CLAUDE.md`, seção Testes). No CI,
+  ler `Errors` no log do job `verify`.
+- **Paleta (medida em 2026-09-15 com `rampaDeSemente` + `extrairRegua` + `medirPares` sobre o
+  `globals.css` alterado em memória, script em Task 1 Step 0):**
+  - Rampa accent `rampaDeSemente("#4a0e1f")`, graus 50…950:
+    `#fbf2f3 #f1dddf #dab5ba #b9828b #985461 #752f3f #4a0e1f #40131e #39161d #33171d #291619`.
+  - Claro: accent grau **600** (`#4a0e1f`), hover grau **500** (os graus 700–950 colapsam no 600),
+    ring e outline seguem 500 (upstream). Medido: **0 reprovas**, accent×error sob dicromacia 0,2404.
+  - Escuro: accent **300** (`#b9828b`), hover **200**, `--ring` 300, `:focus-visible` 300,
+    `--color-accent-soft: rgba(152, 84, 97, 0.16)` (grau 400). Medido: **0 reprovas**;
+    accent×error 0,0519 (piso 0,05); `derivarMarca` sinaliza
+    `redundancia_nao_cromatica_necessaria/escuro/success` — o mesmo sinal que a Sage já dava.
+  - Medições que descartam as outras opções: escuro em 400 = **12 reprovas** (accent, ring e
+    outline × `surface-elevated` e × `accent-soft` compostos, 2,39–2,87 < 3). Escuro em 200 = 0
+    reprovas, accent×error 0,1674, sem sinal — **alternativa se o dono reprovar o 300** na prova
+    em tela (Task 10 Step 6).
+  - `--color-bg`, `--color-text`, neutros e superfícies: **não mudam**.
+- **Fontes:** Inter no corpo; Playfair Display 600 via utilitário `font-display` **só** nos 7
+  `<h1>` de `app/(public)/login|signup` e nos 8 `<h2>` de título de passo do onboarding; IBM Plex Mono mantida.
+- **Versão do fork:** `vAA.M.P` (Plano 4: primeira `v26.9.0`, tag anotada feita à mão). Esta entrega
+  é **`v26.9.1`** — o `CHANGELOG.md`/`cortar-release.ts` seguem a numeração do upstream (`1.27.0` →
+  `1.28.0`, medido), que o `sort -V` do `update.sh:45`/`agent.sh:111` poria **abaixo** da `v26.9.0`.
+- Nome `Bacco Adega CRM`; inicial `B`; prefixo de arquivo `bacco-adega-crm`.
+- **Não renomear** (identificador técnico ou contrato): `sb-deskcomm-auth`, `X-Deskcomm-*`,
+  `deskcomm-theme`, `deskcomm-impersonate`, MCP `deskcomm-crm`, `SUFIXO_ICAL_UID`/`PREFIXO_PROPRIEDADE`,
+  `lib/nuvemshop/config.ts`, `'X-Client-Id': 'deskcomm-worker'`, `deskcomm.show_ai_citations`,
+  `deskcomm.designshowcase.v1`, `@keyframes deskcomm-card-pulse`, slugs `ecommerce_*` de
+  `PromptTemplate`, `package.json` `version`.
+- Todo texto novo passado a `t(...)`/`traduzir(...)` ganha entrada `es` em `lib/i18n/dicionario.ts`.
+- Hex minúsculo no código.
+- **Evidência:** toda imagem em `evidence/` citada pelo caminho completo, em crase, num `.md`
+  versionado (`tests/unit/evidencia-citada.test.ts`).
+- Commit termina com `Co-Authored-By: Claude Opus 5 (1M context) <noreply@anthropic.com>`.
 
 ---
 
-### Task 1: Paleta Bacco no design system
+### Task 0: Linha de base
+
+**Files:** Create `evidence/bacco-rebrand/00-linha-de-base.md`
+
+- [ ] **Step 1: O código de produto é o do último CI verde**
+
+```bash
+cd /home/lussandro/Bacco-Crm && git status -sb
+git diff --stat f52796ab HEAD -- app lib components hooks workers tests supabase hostgator-setup-kit scripts .github
+```
+Expected: árvore limpa; diff vazio (os commits depois de `f52796ab` são só `evidence/`/docs).
+Linha de base = run `34990752387` (`ci` success, `evidence/bacco-deploy/01-ci.md`). Se o diff
+não for vazio: parar e rodar o CI no HEAD antes de seguir.
+
+- [ ] **Step 2: Retrato do que ainda diz "deskcomm"**
+
+```bash
+grep -rIniE "deskcomm" app components lib hooks workers public Dockerfile* \
+  | grep -vE "\.test\.|/design/" > /tmp/deskcomm-antes.txt; wc -l /tmp/deskcomm-antes.txt
+```
+Registrar no `00-linha-de-base.md` o total e a classificação de cada arquivo (visível ao usuário ×
+comentário × identificador técnico da lista "Não renomear"). Registrar o número que o comando der
+(não copiar de nota). Visíveis conhecidos: `lib/branding.ts:19`, `lib/email/templates/ai-budget-alarm.tsx:35`
+(template sem chamador — fica como DIVIDA, Task 4), `public/llms.txt`, `Dockerfile:2-3,58`,
+`Dockerfile.worker:11`, `Dockerfile.scheduler:12`; `app/design/*` é tratado à parte (o grep o exclui).
+
+- [ ] **Step 3: Commit** — `chore(bacco): linha de base do rebrand`.
+
+---
+
+### Task 1: Paleta borgonha no design system
 
 **Files:**
-- Modify: `tests/unit/branding-rampa.test.ts:105-116`
-- Modify: `tests/unit/branding-contraste.test.ts:61`
-- Modify: `app/globals.css:35,40,50-64,253-275,346-362,414`
-- Modify: `lib/branding/regua-do-produto.ts` (literal inteiro, colado da falha do teste)
-- Modify: `tests/unit/branding-pares-pintados.test.ts:340` (só se falhar por âncora Sage)
-- Modify: `supabase/templates/confirmation.html:27`, `supabase/templates/recovery.html:22`, `hostgator-setup-kit/marca-emails.sh:140`
+- Create: `tests/fixtures/branding/regua-sage.ts`
+- Modify: `tests/unit/branding-contraste.test.ts`, `tests/unit/branding-pares-pintados.test.ts`, `tests/unit/branding-rampa.test.ts`, `tests/unit/branding-marca-resolve.test.ts:265-268`
+- Modify: `app/globals.css:28,50-60,64,265,346-356,357,359,360,414,731`
+- Modify (gerado): `lib/branding/regua-do-produto.ts`
+- Modify: `supabase/templates/confirmation.html:27`, `supabase/templates/recovery.html:22`, `hostgator-setup-kit/marca-emails.sh:115,140`, `hostgator-setup-kit/test-validators.sh:1028`
+- Modify (comentários/exemplos): `lib/branding/rampa.ts:13`, `lib/branding/saida.ts:79-80`, `lib/env.ts:339`, `.env.example:329`
 
-**Interfaces:**
-- Produces: tokens `--color-accent-50…950` borgonha; `--color-accent` = grau 600 no claro; `ACCENT_DO_PRODUTO` (`lib/branding/saida.ts:94`) passa a valer `#4a0e1f` automaticamente, porque lê a régua.
+- [ ] **Step 0: Reproduzir a medição da paleta**
 
-- [ ] **Step 1: Confirmar a rampa pelo gerador**
+Script versionado em `docs/superpowers/plans/anexos/medir-grau-escuro.ts`: altera o `globals.css`
+**em memória** e imprime reprovas por tema, accent×error e motivos de `derivarMarca` para os graus
+escuros 400/300/200/100/50.
 
-Run: `pnpm exec tsx -e 'import { rampaDeSemente } from "./lib/branding/rampa"; console.log(rampaDeSemente("#4a0e1f").join(" "))'`
-Expected: `#fbf2f3 #f1dddf #dab5ba #b9828b #985461 #752f3f #4a0e1f #40131e #39161d #33171d #291619`
+Run: `pnpm exec tsx docs/superpowers/plans/anexos/medir-grau-escuro.ts`
+Expected: os números das Global Constraints. Número diferente = parar e reportar.
 
-- [ ] **Step 2: Mudar as âncoras dos testes (vão falhar)**
+- [ ] **Step 1: Congelar a régua Sage ANTES de tocar o CSS**
 
-Em `tests/unit/branding-rampa.test.ts`, no `describe("rampaDeSemente — catraca de calibração contra o design system")`:
+```bash
+mkdir -p tests/fixtures/branding
+pnpm exec tsx -e '
+import { REGUA_DO_PRODUTO } from "./lib/branding/regua-do-produto";
+const cab = `/**
+ * Régua SAGE congelada — controle positivo dos testes de ALGORITMO de branding.
+ *
+ * É o \`REGUA_DO_PRODUTO\` do upstream (DeskcommCRM v1.27.0) no momento em que o fork
+ * Bacco trocou a paleta. Os testes de algoritmo (contraste, reconciliação, caminhada,
+ * pares pintados) têm números medidos contra a Sage; ler o globals.css do produto
+ * faria colar números novos em controle positivo, o que desarma o teste.
+ * Asserções sobre a paleta DO PRODUTO leem o globals.css, nunca este arquivo.
+ * NÃO regenere.
+ */
+import type { Regua } from "@/lib/branding/contraste";
 
-```ts
-    expect(esperados[K]).toBe("#4a0e1f");
-  });
-
-  it("reproduz os 11 stops borgonha a partir de #4a0e1f com Δ ≤ 2/255 por canal", () => {
-    const derivada = rampaDeSemente("#4a0e1f");
+export const REGUA_SAGE: Regua = `;
+process.stdout.write(cab + JSON.stringify(REGUA_DO_PRODUTO, null, 2) + ";\n");
+' > tests/fixtures/branding/regua-sage.ts
+grep -c "#506d48" tests/fixtures/branding/regua-sage.ts
 ```
+Expected: `≥1`.
 
-Em `tests/unit/branding-contraste.test.ts:61`:
+- [ ] **Step 2: Repontar os testes de algoritmo para a fixture (CSS ainda Sage — tudo verde)**
 
-```ts
-    expect(REGUA.rampaDoProduto[6]).toBe("#4a0e1f");
-```
+`tests/unit/branding-contraste.test.ts` (hoje `:30-31` lê `REGUA = extrairRegua(CSS)` para o arquivo inteiro):
 
-(`FIXTURE` nas linhas 55-58 fica como está: `#506d48` ali é controle positivo de algoritmo, não a cor do produto.)
+- `const REGUA_DO_CSS = extrairRegua(CSS);` e `const REGUA: Regua = REGUA_SAGE;` com comentário
+  apontando para o cabeçalho da fixture.
+- Usam `REGUA_DO_CSS` (extração e produto): `it` de `:59` ("acha os dois temas"), `:71`, `:84`,
+  `:94`. Todo o resto do arquivo usa `REGUA` (Sage) — inclusive `:117` "razões medidas à mão",
+  `:127` "a Sage inteira… cabe nos pisos", `:218` caminhada, `:306`/`:325` reconciliação,
+  `:350` `movimentosNoRun`, `:386`/`:399` acromática e "separável do neutro".
+- Novo `it` ao lado de `:127`: `"a paleta do produto, como está no CSS, cabe nos pisos"` — mesmo
+  corpo, lendo `REGUA_DO_CSS`. É o gate real da borgonha.
+- `:61` fica `#506d48` neste passo (muda no Step 4).
 
-- [ ] **Step 3: Rodar e ver falhar**
+`tests/unit/branding-pares-pintados.test.ts`:
 
-Run: `pnpm exec vitest run tests/unit/branding-rampa.test.ts tests/unit/branding-contraste.test.ts`
-Expected: FAIL — `expected '#506d48' to be '#4a0e1f'`.
+- `const REGUA = REGUA_SAGE;` (`:40`) e `corDe` (`:58`) passa `REGUA_SAGE` a `resolverMarca` em
+  vez de `REGUA_DO_PRODUTO`. Todos os `it` existentes seguem Sage (incluindo `:245` anel de foco,
+  `:312` caminhada = 13, `:340` "a Sage reproduz, pintada").
+`tests/unit/branding-marca-resolve.test.ts:265-268` ("nenhum motivo carrega o hex da marca"): é teste
+de algoritmo — passar `REGUA_SAGE` onde hoje passa `REGUA_DO_PRODUTO`. (Medido pelo refutador: sobre a
+régua borgonha `#0f172a` não gera motivo e o `it` cai em `expected 0 to be greater than 0`.)
 
-- [ ] **Step 4: Trocar os tokens no `app/globals.css`**
+`tests/unit/branding-rampa.test.ts`: novo `it` de CONTROLE, ao lado de `:116`:
+`"reproduz os 11 stops Sage congelados a partir de #506d48 com Δ ≤ 2/255 por canal"`, lendo
+`REGUA_SAGE.rampaDoProduto` (mesmo corpo do `it` de `:116`). É o que continua calibrando o algoritmo
+depois que o CSS deixa de ser Sage.
 
-No `:root` (linhas 50-60) e no `[data-theme="dark"]` (linhas 346-356), a rampa inteira:
+Run: `pnpm exec vitest run tests/unit/branding-contraste.test.ts tests/unit/branding-pares-pintados.test.ts tests/unit/branding-rampa.test.ts tests/unit/branding-marca-resolve.test.ts`
+Expected: exit 0 — prova de que a fixture é equivalente à régua de hoje.
 
-```css
-  --color-accent-50:  #fbf2f3;
-  --color-accent-100: #f1dddf;
-  --color-accent-200: #dab5ba;
-  --color-accent-300: #b9828b;
-  --color-accent-400: #985461;
-  --color-accent-500: #752f3f;
-  --color-accent-600: #4a0e1f;
-  --color-accent-700: #40131e;
-  --color-accent-800: #39161d;
-  --color-accent-900: #33171d;
-  --color-accent-950: #291619;
-```
+- [ ] **Step 3: Âncoras do PRODUTO para borgonha (vão falhar)**
 
-Troque o comentário `/* Accent — Sage (11 stops) */` por `/* Accent — Borgonha Bacco (11 stops, rampaDeSemente("#4a0e1f")) */` e o cabeçalho da linha 28 por `Bacco Adega CRM — Design System tokens (Borgonha · density Aerada)`.
+- `branding-contraste.test.ts:61` → `toBe("#4a0e1f")`; `:81` (anel de foco do escuro) → `indice: 3`.
+- `branding-rampa.test.ts`: `:51` renomear `stopsSageDoCss` → `stopsDoProdutoNoCss`; `:113` →
+  `#4a0e1f`; `:116-117` → título `"reproduz os 11 stops do produto a partir de #4a0e1f…"` e
+  `rampaDeSemente("#4a0e1f")`. `:68`, `:76` (entradas de `normalizarHex`) ficam.
+- `branding-pares-pintados.test.ts`: novo `describe("a marca do produto, sem instalação configurada")`:
+  `resolverMarca` com `APP_ACCENT_HEX: "#4a0e1f"` sobre `REGUA_DO_PRODUTO` → `deslocamento` 0 nos dois
+  temas e zero pares reprovados (sem números colados). Medido: antes do CSS mudar dá `expected -1 to be +0`.
 
-Hover no claro vai para o grau **mais claro**: a semente já é escura e os graus 700–950 saem quase iguais ao 600 (medido). No `:root` (linha 64) e no `[data-theme="light"]` (linha 265):
+Run: mesmo comando. Expected: falha só nesses `it`/`describe`.
 
-```css
-  --color-accent-hover: var(--color-accent-500);
-```
+- [ ] **Step 4: `app/globals.css`**
 
-Fundo creme e texto grafite do board, no `:root` (linhas 35, 40, 67, 76) e no `[data-theme="light"]` (linhas 253, 257, 266, 275):
+- `:28` → `Bacco Adega CRM — Design System tokens (accent Borgonha · density Aerada)`.
+- `:root` `:50-60` e `[data-theme="dark"]` `:346-356`: a rampa das Global Constraints
+  (`--color-accent-50` … `--color-accent-950`); comentário do bloco → `Accent — Borgonha Bacco (rampaDeSemente("#4a0e1f"))`.
+- `:64` e `:265`: `--color-accent-hover: var(--color-accent-500);`
+- `:357`: `--color-accent: var(--color-accent-300);`
+- `:359`: `--color-accent-soft: rgba(152, 84, 97, 0.16);`
+- `:360`: `--color-accent-hover: var(--color-accent-200);`
+- `:414`: `--ring: var(--color-accent-300);`
+- `:731`: `outline-color: var(--color-accent-300);`
+- **Não tocar:** `:35,:41,:67,:76,:164,:253,:257,:266,:275,:311,:331,:337,:363,:372`.
 
-```css
-  --color-bg: #f5f0e6;
-  --color-text: #2e2e2e;
-  --color-neutral-50:  #f5f0e6;
-  --color-neutral-900: #2e2e2e;
-```
-
-Accent suave do tema escuro, hoje verde fixo (`globals.css:358`), passa a ser o grau 400 borgonha (`#985461` = 152, 84, 97):
-
-```css
-  --color-accent-soft: rgba(152, 84, 97, 0.16);
-```
-
-- [ ] **Step 5: Regenerar a régua do produto**
+- [ ] **Step 5: Regenerar a régua**
 
 Run: `pnpm exec vitest run tests/unit/branding-regua-do-produto.test.ts`
-Expected: FAIL com a mensagem `Substitua o objeto de lib/branding/regua-do-produto.ts por:` seguida de um JSON. Cole esse objeto como valor de `export const REGUA_DO_PRODUTO: Regua = ...` em `lib/branding/regua-do-produto.ts` (mantendo o cabeçalho e o `import type`). Rode de novo.
-Expected: PASS.
+Expected: FAIL com `Substitua o objeto de lib/branding/regua-do-produto.ts por:` + JSON. Colar como
+valor de `REGUA_DO_PRODUTO` (mantendo cabeçalho e `import type`). Rodar de novo → PASS.
 
-- [ ] **Step 6: Rodar a família de branding e ler cada falha**
-
-Run: `pnpm exec vitest run tests/unit/branding-*.test.ts tests/unit/tailwind-tokens.test.ts tests/unit/logo-nao-some-no-tema-escuro.test.ts`
-
-Regras para cada falha, nesta ordem:
-1. Falha que compara com valor da **paleta Sage do produto** (`#506d48`, `#82a077`, razões de contraste medidas da Sage — ex.: `branding-pares-pintados.test.ts:340`): substitua pelo valor que a mensagem de falha imprime para a régua nova, e troque "Sage" por "Borgonha" no título do `it`.
-2. Falha de **piso de contraste** (`PISOS` texto 4.5 / componente 3.0) no **tema escuro**: o accent escuro é o grau 400 `#985461`, que mede 3.29 sobre `#161510`. Suba um grau no bloco `[data-theme="dark"]`:
-   ```css
-     --color-accent: var(--color-accent-300);
-     --color-accent-hover: var(--color-accent-200);
-   ```
-   e `--ring: var(--color-accent-300);` (linha 414), `outline-color: var(--color-accent-300);` (linha ~731); regenere a régua (Step 5) e rode de novo.
-3. Falha de **piso no tema claro** ou de separação accent × erro: pare e reporte — não mexa em `contraste.ts` nem nos pisos.
-
-Expected ao final: PASS em todos, exceto os que já falhavam na Task 0.
-
-- [ ] **Step 7: Fallback de cor dos e-mails de acesso**
-
-`supabase/templates/confirmation.html:27` e `supabase/templates/recovery.html:22`: troque `background: #506d48;` por `background: #4a0e1f;` (mantendo o `background: __ACCENT__;` logo depois).
-
-`hostgator-setup-kit/marca-emails.sh:140`: `*) ACCENT="#4a0e1f";;`
-
-Run: `pnpm exec vitest run tests/unit/branding.test.ts && pnpm test:shell`
-Expected: PASS (a catraca do GoTrue exige `__ACCENT__` e nenhuma marca nos templates; o fallback é hex, não marca).
-
-- [ ] **Step 8: Typecheck e commit**
+- [ ] **Step 6: Família de branding**
 
 ```bash
-pnpm typecheck
-git add app/globals.css lib/branding/regua-do-produto.ts tests/unit supabase/templates hostgator-setup-kit/marca-emails.sh
-git commit -m "feat(bacco): paleta borgonha no design system
-
-Rampa gerada por rampaDeSemente(#4a0e1f); fundo creme e texto grafite do
-board; hover sobe para o grau 500 porque os graus escuros colapsam.
-Âncoras Sage dos testes de branding trocadas pela régua nova.
-
-Co-Authored-By: Claude Opus 5 (1M context) <noreply@anthropic.com>"
+pnpm exec vitest run tests/unit/branding-*.test.ts tests/unit/tailwind-tokens.test.ts \
+  tests/unit/logo-nao-some-no-tema-escuro.test.ts tests/unit/marca-do-produto.test.tsx \
+  lib/branding > /tmp/vt-t1.log 2>&1; echo "exit=$?"
+grep -aE "^ *(Test Files|Tests|Errors) " /tmp/vt-t1.log
 ```
+Regras:
+1. Falha em `it` que lê `REGUA_SAGE` = a fixture vazou → **parar**.
+2. Falha de piso em `"a paleta do produto… cabe nos pisos"` = divergência da medição do Step 0 → **parar e reportar** (não trocar grau sem medir).
+3. Falha que compara hex/razão do produto com Sage (ex.: comentário `:88` sobre `rgba(130,160,119)`) → atualizar para o valor medido e explicar no `it`.
+
+Expected: exit 0; `Errors` ausente.
+
+- [ ] **Step 7: Fallback de cor dos e-mails de acesso (as quatro pontas juntas)**
+
+- `supabase/templates/confirmation.html:27` e `recovery.html:22`: `background: #506d48;` → `background: #4a0e1f;`
+- `hostgator-setup-kit/marca-emails.sh:140`: `*) ACCENT="#4a0e1f";;`; comentário `:115` → grau 600 da rampa borgonha.
+- `hostgator-setup-kit/test-validators.sh:1028`: `'background: #4a0e1f; background: #4a0e1f'`.
+
+Run: `bash -n hostgator-setup-kit/marca-emails.sh hostgator-setup-kit/test-validators.sh && pnpm exec vitest run tests/unit/branding.test.ts lib/email`
+Expected: exit 0. `test:shell` é conferido no CI (Task 9).
+
+- [ ] **Step 8: Comentários que viraram falsos**
+
+- `lib/branding/rampa.ts:13`: a régua do produto hoje é borgonha; a tabela de lightness de `:206`
+  foi calibrada na Sage e continua sendo calibração do algoritmo (não mexer nos números).
+- `lib/branding/saida.ts:79-80`: grau 600 da rampa do produto é `#4a0e1f`; remover o número de
+  linha `(:34)`/`(:175)` (envelhece) — `ACCENT_DO_PRODUTO` (`:90`) continua lendo a régua.
+- `lib/env.ts:339` e `.env.example:329`: exemplo `#4a0e1f`.
+
+- [ ] **Step 9:** `pnpm typecheck && pnpm lint` → exit 0. Commit `feat(bacco): accent borgonha no design system` com o corpo: rampa, graus medidos (claro 600/500, escuro 300/200), régua Sage congelada como controle.
 
 ---
 
-### Task 2: Fontes Inter + Playfair Display
+### Task 2: Inter na interface, Playfair nos títulos públicos
 
 **Files:**
-- Modify: `tests/unit/tailwind-tokens.test.ts:89`
-- Modify: `app/layout.tsx:2,28-33,281`
-- Modify: `app/globals.css:535-538,701`
+- Modify: `app/layout.tsx:2,28-33,281`, `app/globals.css:535-536,701`, `tests/unit/tailwind-tokens.test.ts:89`
+- Modify (classe `font-display`): `app/(public)/login/page.tsx:33`, `login/forgot/page.tsx:23`,
+  `login/reset/page.tsx:21`, `login/recovery/page.tsx:28`, `login/mfa/page.tsx:34`,
+  `app/(public)/signup/page.tsx:62,85`, `app/onboarding/welcome/page.tsx:24`,
+  `funil/page.tsx:33`, `setup-ai/page.tsx:49`, `connect-whatsapp/page.tsx:33`,
+  `connect-nuvemshop/page.tsx:14`, `invite-team/page.tsx:15`, `testar/page.tsx:39`,
+  `done/_client.tsx:26`
 
-**Interfaces:**
-- Produces: custom properties `--font-inter` e `--font-display` declaradas no `<html>`; utilitário Tailwind `font-display`; todo `h1` em Playfair Display.
+- [ ] **Step 1: Teste primeiro** — `tailwind-tokens.test.ts:89`:
+  `const DE_FORA_DO_CSS = ["--font-inter", "--font-playfair", "--font-mono"];`
+  Run `pnpm exec vitest run tests/unit/tailwind-tokens.test.ts` → FAIL.
 
-- [ ] **Step 1: Teste primeiro**
+- [ ] **Step 2: `app/layout.tsx`** — `:2` `import { IBM_Plex_Mono, Inter, Playfair_Display } from "next/font/google";`;
+  `:28-33` troca o bloco `atkinson` por `inter` (`subsets: ["latin","latin-ext"]`, `display: "swap"`,
+  `variable: "--font-inter"`) e `playfair` (mesmo, `weight: ["600"]`, `variable: "--font-playfair"`);
+  `:281` `` className={`${inter.variable} ${playfair.variable} ${plexMono.variable}`} ``.
+  (Variável do next/font com nome **diferente** do token `--font-display`, para o `@theme inline`
+  não referenciar a si mesmo.)
 
-`tests/unit/tailwind-tokens.test.ts:89`:
+- [ ] **Step 3: `app/globals.css`** — `:535` `--font-sans: var(--font-inter), ui-sans-serif, …`;
+  logo abaixo, `--font-display: var(--font-playfair), Georgia, "Times New Roman", serif;`;
+  `:701` `font-family: var(--font-inter), ui-sans-serif, …`. **Sem** regra global de `h1`.
 
-```ts
-    const DE_FORA_DO_CSS = ["--font-inter", "--font-display", "--font-mono"];
-```
+- [ ] **Step 4: Aplicar `font-display`** nos 15 elementos listados em Files (acrescentar a classe
+  ao `className` existente). Conferência (exclui o showcase `app/design`, que tem `--ds-font-display`
+  próprio): `grep -rnE 'className="[^"]*\bfont-display\b' app --include=*.tsx | grep -v app/design | wc -l` → 15.
 
-Run: `pnpm exec vitest run tests/unit/tailwind-tokens.test.ts`
-Expected: FAIL — `--font-inter deixou de ser declarada pelo next/font`.
-
-- [ ] **Step 2: `app/layout.tsx`**
-
-Linha 2:
-
-```ts
-import { IBM_Plex_Mono, Inter, Playfair_Display } from "next/font/google";
-```
-
-Linhas 28-33 (substitui o bloco `atkinson`):
-
-```ts
-const inter = Inter({
-  subsets: ["latin", "latin-ext"],
-  display: "swap",
-  variable: "--font-inter",
-});
-
-const playfair = Playfair_Display({
-  subsets: ["latin", "latin-ext"],
-  weight: ["600"],
-  display: "swap",
-  variable: "--font-display",
-});
-```
-
-Linha 281:
-
-```tsx
-      className={`${inter.variable} ${playfair.variable} ${plexMono.variable}`}
-```
-
-- [ ] **Step 3: `app/globals.css`**
-
-Linhas 535-538 (bloco `/* Tipografia */` do `@theme inline`):
-
-```css
-  --font-sans: var(--font-inter), ui-sans-serif, system-ui, -apple-system,
-    "Segoe UI", Roboto, sans-serif;
-  --font-display: var(--font-display), Georgia, "Times New Roman", serif;
-  --font-mono: var(--font-mono), ui-monospace, SFMono-Regular, Menlo, Monaco,
-    Consolas, monospace;
-```
-
-Linha 701 (`body`):
-
-```css
-    font-family: var(--font-inter), ui-sans-serif, system-ui, -apple-system,
-```
-
-Logo após a regra `code, kbd, pre, samp` (~linha 710), dentro do mesmo `@layer base`:
-
-```css
-  h1 {
-    font-family: var(--font-display), Georgia, "Times New Roman", serif;
-  }
-```
-
-- [ ] **Step 4: Verificar**
-
-Run: `pnpm exec vitest run tests/unit/tailwind-tokens.test.ts && pnpm typecheck && pnpm lint`
-Expected: PASS; `grep -rn 'font-atkinson' app lib components tests --include='*.ts*' --include='*.css'` sem resultado.
-
-- [ ] **Step 5: Commit**
-
-```bash
-git add app/layout.tsx app/globals.css tests/unit/tailwind-tokens.test.ts
-git commit -m "feat(bacco): Inter na interface e Playfair Display nos títulos
-
-Co-Authored-By: Claude Opus 5 (1M context) <noreply@anthropic.com>"
-```
+- [ ] **Step 5:** `pnpm exec vitest run tests/unit/tailwind-tokens.test.ts && pnpm typecheck && pnpm lint`
+  → exit 0; `grep -rn "font-atkinson" app lib components tests --include='*.ts*' --include='*.css' | grep -v app/design`
+  vazio (medido: `app/design/lib/fonts.ts`, `variant-context.tsx`, `SectionTypography.tsx` citam a Atkinson
+  do showcase e ficam).
+  Commit `feat(bacco): Inter na interface e Playfair nos títulos públicos`.
 
 ---
 
@@ -329,960 +303,307 @@ Co-Authored-By: Claude Opus 5 (1M context) <noreply@anthropic.com>"
 **Files:**
 - Create: `docs/brand/bacco/texto-para-path.py`
 - Modify (gerado): `lib/branding/desenho.ts`
-- Modify: `components/branding/MarcaDoProduto.tsx:1,29-41,50-89`
-- Modify: `app/icon.tsx:4,97-100`
-- Modify: `tests/unit/marca-do-produto.test.tsx:141-145`
+- Modify: `components/branding/MarcaDoProduto.tsx:1,9-10,29-41,49-89`, `app/icon.tsx:4,83-84,97-100`, `tests/unit/marca-do-produto.test.tsx:141-145`
+- Modify: `docs/superpowers/specs/2026-09-15-bacco-adega-crm-design.md` §4.1 (linha do logotipo)
 
-**Interfaces:**
-- Consumes: `docs/brand/bacco/bacco-adega-crm-simbolo.svg`, `docs/brand/bacco/bacco-adega-crm-logo-bordo.svg`.
-- Produces (em `lib/branding/desenho.ts`):
-  ```ts
-  export type Uva = { readonly cx: number; readonly cy: number; readonly r: number };
-  export type Desenho = { readonly corpo: readonly string[]; readonly uvas: readonly Uva[] };
-  export const SIMBOLO: Desenho & { readonly viewBox: string };
-  export const LOGOTIPO: {
-    readonly viewBox: string;
-    readonly proporcao: number;
-    readonly simbolo: Desenho;
-    readonly nome: readonly string[];
-    readonly sufixo: readonly string[];
-  };
-  export const CORES_DA_MARCA: {
-    readonly claro: { corpo: "#4a0e1f"; uvas: "#c49a4a"; nome: "#4a0e1f"; sufixo: "#c49a4a" };
-    readonly escuro: { corpo: "#f5f0e6"; uvas: "#c49a4a"; nome: "#f5f0e6"; sufixo: "#c49a4a" };
-  };
-  ```
-  e em `MarcaDoProduto.tsx`: `CLASSES_DE_COR` com as chaves `corpo`, `uvas`, `nome`, `sufixo`.
+O conteúdo dos Steps 1–5 é o da v1 (script `texto-para-path.py`, contrato `SIMBOLO`/`LOGOTIPO`/
+`CORES_DA_MARCA` com papéis `corpo`/`uvas`/`nome`/`sufixo`, `Partes`, favicon), já **medido** pelo
+refutador: roda, gera 16 KB, typecheck verde, render conferido. Mudanças em relação à v1:
 
-- [ ] **Step 1: Teste do favicon primeiro**
+- **Omissão declarada:** o logotipo da barra usa `bacco-adega-crm-logo-bordo.svg` **sem** a linha
+  separadora e **sem** a tagline (ilegíveis na altura da barra) e sem a folha (o SVG horizontal não
+  a tem). Escrever isso no cabeçalho gerado pelo script e na spec §4.1.
+- `MarcaDoProduto.tsx:9-10`: comentário "as cores seguem o TEMA: borgonha e ouro no claro, creme e ouro no escuro".
+- `desenho.ts` é gerado inteiro: o comentário de `CORES_DA_MARCA` (hoje "sálvia 600/400", `:96-99`) sai do script.
+- `CLASSES_DE_COR` com as chaves `corpo`, `uvas`, `nome`, `sufixo` — os `it` de `:113` e `:121`
+  iteram as chaves, então passam sem edição se classes e paleta baterem.
 
-`tests/unit/marca-do-produto.test.tsx:141-145`:
-
-```ts
-  it("desenha o símbolo quando a marca é a do produto, e a inicial quando não é", () => {
-    expect(icone).toMatch(/marcaEhADoProduto\(\{ name: marca\.nome, logoUrl: marca\.logoUrl \}\)/);
-    expect(icone).toMatch(/SIMBOLO\.corpo\.map/);
-    expect(icone).toMatch(/SIMBOLO\.uvas\.map/);
-    expect(icone).toMatch(/letraDoIcone\(marca\.nome\)/);
-  });
-```
-
-Run: `pnpm exec vitest run tests/unit/marca-do-produto.test.tsx`
-Expected: FAIL — `SIMBOLO\.corpo\.map` não casa.
-
-- [ ] **Step 2: Script de conversão**
-
-Create `docs/brand/bacco/texto-para-path.py`:
-
-```python
-#!/usr/bin/env python3
-"""Gera lib/branding/desenho.ts a partir dos SVGs oficiais do Bacco Adega CRM.
-
-Os SVGs recebidos usam <text> com Playfair Display / Inter; o app e o favicon
-(satori) precisam de paths. Uso:
-
-  FONTES=$(mktemp -d)
-  curl -fsSL -o "$FONTES/Playfair.ttf" "https://raw.githubusercontent.com/google/fonts/main/ofl/playfairdisplay/PlayfairDisplay%5Bwght%5D.ttf"
-  curl -fsSL -o "$FONTES/Inter.ttf" "https://raw.githubusercontent.com/google/fonts/main/ofl/inter/Inter%5Bopsz%2Cwght%5D.ttf"
-  python3 docs/brand/bacco/texto-para-path.py "$FONTES" > lib/branding/desenho.ts
-
-Requer: python3 com fontTools (pip install fonttools). Sem kerning: conferir
-o render contra docs/brand/bacco/preview.png.
-"""
-import json
-import re
-import sys
-from pathlib import Path
-
-from fontTools.pens.boundsPen import BoundsPen
-from fontTools.pens.svgPathPen import SVGPathPen
-from fontTools.pens.transformPen import TransformPen
-from fontTools.ttLib import TTFont
-from fontTools.varLib.instancer import instantiateVariableFont
-
-AQUI = Path(__file__).parent
-FONTES = Path(sys.argv[1])
-_fontes = {}
-
-
-def fonte(classe, peso):
-    chave = (classe, peso)
-    if chave not in _fontes:
-        serif = classe == "serif"
-        f = TTFont(FONTES / ("Playfair.ttf" if serif else "Inter.ttf"))
-        eixos = {"wght": peso} if serif else {"wght": peso, "opsz": 14}
-        _fontes[chave] = instantiateVariableFont(f, eixos)
-    return _fontes[chave]
-
-
-def attr(tag, nome, padrao=None):
-    m = re.search(rf'\s{nome}="([^"]*)"', tag)
-    return m.group(1) if m else padrao
-
-
-def arredonda(d):
-    return re.sub(r"-?\d+\.\d+", lambda m: f"{float(m.group()):.1f}".rstrip("0").rstrip("."), d)
-
-
-class Caixa:
-    def __init__(self):
-        self.x0 = self.y0 = float("inf")
-        self.x1 = self.y1 = float("-inf")
-
-    def soma(self, x0, y0, x1, y1):
-        self.x0, self.y0 = min(self.x0, x0), min(self.y0, y0)
-        self.x1, self.y1 = max(self.x1, x1), max(self.y1, y1)
-
-    def viewbox(self, margem=0.04):
-        w, h = self.x1 - self.x0, self.y1 - self.y0
-        m = max(w, h) * margem
-        return round(self.x0 - m, 1), round(self.y0 - m, 1), round(w + 2 * m, 1), round(h + 2 * m, 1)
-
-
-def texto(tag, conteudo, dx, dy, caixa):
-    classe = "serif" if "serif" in attr(tag, "class", "") else "sans"
-    f = fonte(classe, int(attr(tag, "font-weight", "400")))
-    tamanho = float(attr(tag, "font-size"))
-    x, y = float(attr(tag, "x")) + dx, float(attr(tag, "y")) + dy
-    espaco = float(attr(tag, "letter-spacing", "0"))
-    cmap, glifos, hmtx = f.getBestCmap(), f.getGlyphSet(), f["hmtx"]
-    escala = tamanho / f["head"].unitsPerEm
-    caneta, limites = SVGPathPen(glifos), BoundsPen(glifos)
-    for ch in conteudo:
-        g = cmap[ord(ch)]
-        matriz = (escala, 0, 0, -escala, x, y)
-        glifos[g].draw(TransformPen(caneta, matriz))
-        glifos[g].draw(TransformPen(limites, matriz))
-        x += hmtx[g][0] * escala + espaco
-    if limites.bounds:
-        caixa.soma(*limites.bounds)
-    return arredonda(caneta.getCommands())
-
-
-def caminho(d, dx, dy, caixa):
-    nums = [float(n) for n in re.findall(r"-?\d+(?:\.\d+)?", d)]
-    xs, ys = nums[0::2], nums[1::2]
-    caixa.soma(min(xs) + dx, min(ys) + dy, max(xs) + dx, max(ys) + dy)
-    if dx == 0 and dy == 0:
-        return d
-    return re.sub(
-        r"(-?\d+(?:\.\d+)?) (-?\d+(?:\.\d+)?)",
-        lambda m: f"{float(m.group(1)) + dx:g} {float(m.group(2)) + dy:g}",
-        d,
-    )
-
-
-def uvas(svg, dx, dy, caixa):
-    saida = []
-    for c in re.findall(r"<circle[^>]*/>", svg):
-        cx, cy, r = float(attr(c, "cx")) + dx, float(attr(c, "cy")) + dy, float(attr(c, "r"))
-        caixa.soma(cx - r, cy - r, cx + r, cy + r)
-        saida.append({"cx": cx, "cy": cy, "r": r})
-    return saida
-
-
-simbolo_svg = (AQUI / "bacco-adega-crm-simbolo.svg").read_text()
-cx_simbolo = Caixa()
-folha = re.search(r'<path d="([^"]+)"', simbolo_svg).group(1)
-b_tag, b_txt = re.search(r"<text([^>]*)>([^<]*)</text>", simbolo_svg).groups()
-simbolo = {
-    "corpo": [caminho(folha, 0, 0, cx_simbolo), texto(b_tag, b_txt, 0, 0, cx_simbolo)],
-    "uvas": uvas(simbolo_svg, 0, 0, cx_simbolo),
-}
-vb_s = cx_simbolo.viewbox()
-
-logo_svg = (AQUI / "bacco-adega-crm-logo-bordo.svg").read_text()
-dx, dy = map(float, re.search(r'translate\(([-\d.]+) ([-\d.]+)\)', logo_svg).groups())
-cx_logo = Caixa()
-textos = re.findall(r"<text([^>]*)>([^<]*)</text>", logo_svg)
-por_conteudo = {conteudo: tag for tag, conteudo in textos}
-logotipo = {
-    "simbolo": {
-        "corpo": [texto(por_conteudo["B"], "B", dx, dy, cx_logo)],
-        "uvas": uvas(logo_svg, dx, dy, cx_logo),
-    },
-    "nome": [texto(por_conteudo["Bacco"], "Bacco", dx, dy, cx_logo)],
-    "sufixo": [
-        texto(por_conteudo["ADEGA"], "ADEGA", dx, dy, cx_logo),
-        texto(por_conteudo["CRM"], "CRM", dx, dy, cx_logo),
-    ],
-}
-vb_l = cx_logo.viewbox()
-
-print('''/**
- * O DESENHO da marca do produto — símbolo e logotipo do Bacco Adega CRM.
- *
- * ESTE ARQUIVO É GERADO por `docs/brand/bacco/texto-para-path.py` a partir de
- * `docs/brand/bacco/bacco-adega-crm-simbolo.svg` e `bacco-adega-crm-logo-bordo.svg`
- * (texto convertido em paths com Playfair Display 600). Não edite à mão.
- *
- * Mora aqui, e não num `.svg` em `public/`, pelas razões de sempre da marca
- * própria: o favicon (`app/icon.tsx`) é gerado pelo satori, que aceita SVG inline
- * mas não lê arquivo, e um arquivo em `public/` vazaria para quem configurou
- * marca própria. As cores ficam em `CORES_DA_MARCA`; quem desenha escolhe o tema.
- */
-
-export type Uva = { readonly cx: number; readonly cy: number; readonly r: number };
-export type Desenho = { readonly corpo: readonly string[]; readonly uvas: readonly Uva[] };
-''')
-print(f'export const SIMBOLO: Desenho & {{ readonly viewBox: string }} = {{\n  viewBox: "{" ".join(map(str, vb_s))}",\n  corpo: {json.dumps(simbolo["corpo"])},\n  uvas: {json.dumps(simbolo["uvas"])},\n}};\n')
-print(f'export const LOGOTIPO = {{\n  viewBox: "{" ".join(map(str, vb_l))}",\n  /** Proporção largura/altura do `viewBox`, para dimensionar por altura. */\n  proporcao: {vb_l[2]} / {vb_l[3]},\n  simbolo: {json.dumps(logotipo["simbolo"])} as Desenho,\n  nome: {json.dumps(logotipo["nome"])} as readonly string[],\n  sufixo: {json.dumps(logotipo["sufixo"])} as readonly string[],\n}} as const;\n')
-print('''/**
- * Cores da marca por tema: borgonha e ouro no claro; creme e ouro no escuro
- * (negativo sobre borgonha de `docs/brand/bacco/preview.png`).
- */
-export const CORES_DA_MARCA = {
-  claro: { corpo: "#4a0e1f", uvas: "#c49a4a", nome: "#4a0e1f", sufixo: "#c49a4a" },
-  escuro: { corpo: "#f5f0e6", uvas: "#c49a4a", nome: "#f5f0e6", sufixo: "#c49a4a" },
-} as const;''')
-```
-
-- [ ] **Step 3: Gerar `desenho.ts`**
-
-```bash
-python3 -c "import fontTools" || pip install --user fonttools
-FONTES=$(mktemp -d)
-curl -fsSL -o "$FONTES/Playfair.ttf" "https://raw.githubusercontent.com/google/fonts/main/ofl/playfairdisplay/PlayfairDisplay%5Bwght%5D.ttf"
-curl -fsSL -o "$FONTES/Inter.ttf" "https://raw.githubusercontent.com/google/fonts/main/ofl/inter/Inter%5Bopsz%2Cwght%5D.ttf"
-python3 docs/brand/bacco/texto-para-path.py "$FONTES" > lib/branding/desenho.ts
-grep -c 'export const' lib/branding/desenho.ts && wc -c lib/branding/desenho.ts
-```
-Expected: `3` exports (`SIMBOLO`, `LOGOTIPO`, `CORES_DA_MARCA`) e arquivo com dezenas de KB, sem `<text`.
-
-- [ ] **Step 4: `components/branding/MarcaDoProduto.tsx`**
-
-Linha 1:
-
-```ts
-import { LOGOTIPO, SIMBOLO, type Desenho } from "@/lib/branding/desenho";
-```
-
-Linhas 29-41 (cores e `CLASSES_DE_COR`):
-
-```ts
-const CORPO_CLARO_ESCURO = "fill-[#4a0e1f] dark:fill-[#f5f0e6]";
-const UVAS_CLARO_ESCURO = "fill-[#c49a4a] dark:fill-[#c49a4a]";
-const NOME_CLARO_ESCURO = "fill-[#4a0e1f] dark:fill-[#f5f0e6]";
-const SUFIXO_CLARO_ESCURO = "fill-[#c49a4a] dark:fill-[#c49a4a]";
-
-// As classes acima repetem os hexes de `CORES_DA_MARCA` porque o Tailwind só
-// gera utilitário para valor LITERAL no fonte. Quem impede os dois de divergirem
-// é `tests/unit/marca-do-produto.test.tsx`, que compara as classes à paleta —
-// e não uma asserção em runtime: um throw aqui derrubaria a casca inteira.
-export const CLASSES_DE_COR = {
-  corpo: CORPO_CLARO_ESCURO,
-  uvas: UVAS_CLARO_ESCURO,
-  nome: NOME_CLARO_ESCURO,
-  sufixo: SUFIXO_CLARO_ESCURO,
-} as const;
-```
-
-Substitua `SimboloDoProduto` e `LogotipoDoProduto` (linhas 49-89) por:
-
-```tsx
-function Partes({ desenho }: { readonly desenho: Desenho }) {
-  return (
-    <>
-      <g className={CORPO_CLARO_ESCURO}>
-        {desenho.corpo.map((d, i) => (
-          <path key={i} d={d} />
-        ))}
-      </g>
-      <g className={UVAS_CLARO_ESCURO}>
-        {desenho.uvas.map((u, i) => (
-          <circle key={i} cx={u.cx} cy={u.cy} r={u.r} />
-        ))}
-      </g>
-    </>
-  );
-}
-
-/** O símbolo sozinho — para a barra recolhida, avatar e cantos apertados. */
-export function SimboloDoProduto({ nome, className, decorativo = false }: Props) {
-  return (
-    <svg
-      viewBox={SIMBOLO.viewBox}
-      className={cn("shrink-0", className)}
-      {...acessibilidade(nome, decorativo)}
-    >
-      <Partes desenho={SIMBOLO} />
-    </svg>
-  );
-}
-
-/** Símbolo + nome — para a barra aberta e a fachada de entrada. */
-export function LogotipoDoProduto({ nome, className, decorativo = false }: Props) {
-  return (
-    <svg
-      viewBox={LOGOTIPO.viewBox}
-      className={cn("shrink-0", className)}
-      {...acessibilidade(nome, decorativo)}
-    >
-      <Partes desenho={LOGOTIPO.simbolo} />
-      <g className={NOME_CLARO_ESCURO}>
-        {LOGOTIPO.nome.map((d, i) => (
-          <path key={i} d={d} />
-        ))}
-      </g>
-      <g className={SUFIXO_CLARO_ESCURO}>
-        {LOGOTIPO.sufixo.map((d, i) => (
-          <path key={i} d={d} />
-        ))}
-      </g>
-    </svg>
-  );
-}
-```
-
-Atualize o comentário do topo (linhas 9-10): "as cores seguem o TEMA: borgonha e ouro no claro, creme e ouro no escuro".
-
-- [ ] **Step 5: `app/icon.tsx`**
-
-Linhas 97-100 (dentro do ramo `marcaEhADoProduto`):
-
-```tsx
-          <svg viewBox={SIMBOLO.viewBox} width={lado} height={lado}>
-            <g fill={CORES_DA_MARCA.claro.corpo}>
-              {SIMBOLO.corpo.map((d, i) => (
-                <path key={i} d={d} />
-              ))}
-            </g>
-            <g fill={CORES_DA_MARCA.claro.uvas}>
-              {SIMBOLO.uvas.map((u, i) => (
-                <circle key={i} cx={u.cx} cy={u.cy} r={u.r} />
-              ))}
-            </g>
-          </svg>
-```
-
-Troque o comentário das linhas 83-84 por: `// 78% da aresta: o viewBox do símbolo já é recortado pelo bbox real (margem de 4%).`
-
+- [ ] **Step 1: Teste do favicon** (`:141-145` → `SIMBOLO\.corpo\.map`, `SIMBOLO\.uvas\.map`) → FAIL.
+- [ ] **Step 2: Script** (texto integral da v1, Task 3 Step 2, com o cabeçalho acrescido da omissão).
+- [ ] **Step 3: Gerar** — `python3 -c "import fontTools"` (medido: 4.63.0 instalado); baixar as duas
+  fontes OFL para `mktemp -d`; `python3 docs/brand/bacco/texto-para-path.py "$FONTES" > lib/branding/desenho.ts`.
+  Expected: 3 `export const`, sem `<text`.
+- [ ] **Step 4: `MarcaDoProduto.tsx`** e **Step 5: `app/icon.tsx`** — como na v1.
 - [ ] **Step 6: Verificar**
-
-Run: `pnpm exec vitest run tests/unit/marca-do-produto.test.tsx tests/unit/logo-nao-some-no-tema-escuro.test.ts tests/unit/barra-lateral-nao-perde-o-sticky.test.ts && pnpm typecheck && pnpm lint`
-Expected: PASS. (`as cores do desenho` passa porque o multiconjunto de hex das classes é igual ao de `CORES_DA_MARCA`.)
-
-Render de conferência (fora do app):
-
-```bash
-S=$(mktemp -d)
-pnpm exec tsx -e '
-import { SIMBOLO, LOGOTIPO, CORES_DA_MARCA as C } from "./lib/branding/desenho";
-import { writeFileSync } from "node:fs";
-const p = (d: readonly string[], f: string) => d.map((x) => `<path d="${x}" fill="${f}"/>`).join("");
-const u = (us: { cx: number; cy: number; r: number }[], f: string) => us.map((x) => `<circle cx="${x.cx}" cy="${x.cy}" r="${x.r}" fill="${f}"/>`).join("");
-writeFileSync(process.argv[1] + "/simbolo.svg", `<svg xmlns="http://www.w3.org/2000/svg" viewBox="${SIMBOLO.viewBox}">${p(SIMBOLO.corpo, C.claro.corpo)}${u([...SIMBOLO.uvas], C.claro.uvas)}</svg>`);
-writeFileSync(process.argv[1] + "/logotipo.svg", `<svg xmlns="http://www.w3.org/2000/svg" viewBox="${LOGOTIPO.viewBox}">${p(LOGOTIPO.simbolo.corpo, C.claro.corpo)}${u([...LOGOTIPO.simbolo.uvas], C.claro.uvas)}${p(LOGOTIPO.nome, C.claro.nome)}${p(LOGOTIPO.sufixo, C.claro.sufixo)}</svg>`);
-' "$S"
-rsvg-convert -b '#f5f0e6' -w 512 "$S/simbolo.svg" -o evidence/bacco-rebrand/03-simbolo.png
-rsvg-convert -b '#f5f0e6' -h 160 "$S/logotipo.svg" -o evidence/bacco-rebrand/03-logotipo.png
-```
-Expected: abrir os dois PNG e comparar com `docs/brand/bacco/preview.png` (B com folha e cacho no símbolo; "B + uvas · Bacco · ADEGA CRM" no logotipo). Símbolo centrado, sem corte.
-
-Registre a conferência em `evidence/bacco-rebrand/03-revisao.md`, citando as duas imagens geradas no comando acima (símbolo e logotipo) pelo caminho exato em crase, com uma linha do que foi visto em cada uma. (Este plano não as cita pelo nome porque ainda não existem — o teste reprovaria o próprio plano.) Depois:
-
-Run: `pnpm exec vitest run tests/unit/evidencia-citada.test.ts`
-Expected: PASS.
-
-- [ ] **Step 7: Commit**
-
-```bash
-git add docs/brand/bacco/texto-para-path.py lib/branding/desenho.ts components/branding/MarcaDoProduto.tsx app/icon.tsx tests/unit/marca-do-produto.test.tsx evidence/bacco-rebrand/03-*.png evidence/bacco-rebrand/03-revisao.md
-git commit -m "feat(bacco): símbolo e logotipo Bacco em duas cores
-
-desenho.ts passa a ser gerado dos SVGs oficiais (texto em paths) e o
-símbolo ganha papel de cor para as uvas.
-
-Co-Authored-By: Claude Opus 5 (1M context) <noreply@anthropic.com>"
-```
+  `pnpm exec vitest run tests/unit/marca-do-produto.test.tsx tests/unit/logo-nao-some-no-tema-escuro.test.ts tests/unit/barra-lateral-nao-perde-o-sticky.test.ts && pnpm typecheck && pnpm lint` → exit 0.
+  Render de conferência com `rsvg-convert` (script da v1) para `evidence/bacco-rebrand/03-simbolo.png`
+  e `evidence/bacco-rebrand/03-logotipo.png`; comparar com `docs/brand/bacco/preview.png`; registrar em
+  `evidence/bacco-rebrand/03-revisao.md` citando os dois caminhos. `pnpm exec vitest run tests/unit/evidencia-citada.test.ts` → exit 0.
+- [ ] **Step 7:** Commit `feat(bacco): símbolo e logotipo Bacco em duas cores`.
 
 ---
 
-### Task 4: Nome do produto e catraca de marca
+### Task 4: Nome do produto
 
 **Files:**
-- Modify: `tests/unit/marca-do-produto-nao-se-edita-no-codigo.test.ts:57,66,71`
-- Modify: `tests/unit/branding.test.ts:146,~304-311,~327-331,482-497`
-- Modify: `lib/branding.ts:19`
-- Modify: `lib/email/templates/ai-budget-alarm.tsx:35`
-- Modify: `app/design/page.tsx:51,110`, `app/design/layout.tsx:7`
-- Modify: `tests/e2e/logo-moldura-no-tema-escuro.spec.ts:522`
-
-**Interfaces:**
-- Produces: `DEFAULT_APP_NAME === "Bacco Adega CRM"`; `resolveBranding()` → `{ name: "Bacco Adega CRM", logoUrl: null, initial: "B" }`; `prefixoDoArquivo(DEFAULT_APP_NAME) === "bacco-adega-crm"`.
+- Modify: `lib/branding.ts:19`, `app/design/page.tsx:51,110`, `app/design/layout.tsx:7`,
+  `docs/superpowers/specs/2026-09-15-bacco-adega-crm-design.md` §4.4
+- Modify (testes): `tests/unit/marca-do-produto-nao-se-edita-no-codigo.test.ts:57,67,79`,
+  `tests/unit/branding.test.ts:15,134,326-331`,
+  `tests/unit/branding-marca-resolve.test.ts:224`, `tests/unit/branding-saida.test.ts:194,217`,
+  `tests/unit/lgpd-pdf-meet.test.ts:126`, `tests/e2e/signup-journey.spec.ts:46`,
+  `tests/e2e/logo-moldura-no-tema-escuro.spec.ts:522`
 
 - [ ] **Step 1: Testes primeiro**
+  - `marca-do-produto-nao-se-edita-no-codigo.test.ts`: `:57` `"Bacco Adega CRM"`; `:67` título
+    `"é Bacco Adega CRM — marca de produto do fork Bacco (spec §4.4); instalação personaliza pelo banco"`; `:79` `initial: "B"`.
+  - `branding.test.ts`: `:15` `initial: "B"`; `:134` `"bacco-adega-crm"`; remover de `MARCA_CONGELADA`
+    **só** a entrada `lib/branding.ts` (`:326-331`, PADRAO). A DIVIDA `ai-budget-alarm.tsx` (`:304-311`)
+    e os `it` de `:482`/`:499` **ficam como estão**: `buildBudgetAlarmEmail` não tem chamador (medido:
+    `grep -rn buildBudgetAlarmEmail app lib workers scripts` → só a definição), e trocar o assunto por
+    `DEFAULT_APP_NAME` violaria "saída sem DOM usa `marcaDaSaida()`" (`CLAUDE.md`, Marca própria).
+    Quem ligar o alarme paga a dívida com `marcaDaSaida()`.
+  - `branding-marca-resolve.test.ts:224`, `branding-saida.test.ts:194,217` → `"Bacco Adega CRM"`.
+  - `lgpd-pdf-meet.test.ts:126` → `"Bacco Adega CRM"` (continua provando que o PDF de LGPD não leva a marca do produto).
+  - `signup-journey.spec.ts:46` → `"Boas-vindas ao Bacco Adega CRM"`; `logo-moldura-no-tema-escuro.spec.ts:522` → `name: "Bacco Adega CRM"`.
 
-`tests/unit/marca-do-produto-nao-se-edita-no-codigo.test.ts:57`:
-
-```ts
-const MARCA_DO_PRODUTO = "Bacco Adega CRM";
-```
-
-Linha 66, título do `it`: `"é Bacco Adega CRM — marca de produto do fork Bacco (spec §4.4); instalação personaliza pelo banco"`. No `it` seguinte, a inicial esperada (`initial: "D"`) vira `initial: "B"`.
-
-`tests/unit/branding.test.ts:146`:
-
-```ts
-    expect(prefixoDoArquivo(DEFAULT_APP_NAME)).toBe("bacco-adega-crm");
-```
-
-`tests/unit/branding.test.ts:482-497` — o caso da DIVIDA:
-
-```ts
-  it("não sobra dívida de marca: o alarme de orçamento usa o nome do produto", () => {
-    // No fork Bacco a última DIVIDA (assunto do alarme de orçamento com o nome
-    // cravado) foi paga lendo DEFAULT_APP_NAME. Dívida nova aqui precisa de
-    // decisão, não de mais uma linha na lista.
-    const dividas = Object.entries(MARCA_CONGELADA)
-      .filter(([, e]) => e.categoria === "DIVIDA")
-      .map(([arquivo]) => arquivo);
-    expect(dividas).toEqual([]);
-  });
-```
-
-Em `MARCA_CONGELADA`, apague as entradas `"lib/email/templates/ai-budget-alarm.tsx"` (categoria DIVIDA, ~linha 304) e `"lib/branding.ts"` (categoria PADRAO, ~linha 326).
-
-Run: `pnpm exec vitest run tests/unit/marca-do-produto-nao-se-edita-no-codigo.test.ts tests/unit/branding.test.ts`
-Expected: FAIL — `DEFAULT_APP_NAME` ainda é `DeskcommCRM` e os dois arquivos ainda têm marca.
+  Run: `pnpm exec vitest run tests/unit/marca-do-produto-nao-se-edita-no-codigo.test.ts tests/unit/branding.test.ts tests/unit/branding-marca-resolve.test.ts tests/unit/branding-saida.test.ts tests/unit/lgpd-pdf-meet.test.ts` → FAIL.
 
 - [ ] **Step 2: Implementar**
+  - `lib/branding.ts:19` `export const DEFAULT_APP_NAME = "Bacco Adega CRM";`
+  - `app/design/page.tsx:51,110`, `app/design/layout.tsx:7` → "Bacco Adega CRM".
+  - Spec §4.4: registrar que o alarme de orçamento fica como DIVIDA (motivo acima), que a linha certa do
+    prefixo é `branding.test.ts:134`, e que `README*`/`VISION.md` saíram para o plano de docs.
 
-`lib/branding.ts:19`:
-
-```ts
-export const DEFAULT_APP_NAME = "Bacco Adega CRM";
-```
-
-`lib/email/templates/ai-budget-alarm.tsx` — import no topo e linha 35:
-
-```ts
-import { DEFAULT_APP_NAME } from "@/lib/branding";
-```
-
-```ts
-  const subject = `Alerta IA: orçamento atingiu ${pctStr} — ${DEFAULT_APP_NAME}`;
-```
-
-`app/design/page.tsx:51` → `<h1>Bacco Adega CRM</h1>`; `:110` → `<h1>Showcase de Design System — Bacco Adega CRM</h1>`; `app/design/layout.tsx:7` → `title: "Design Showcase — Bacco Adega CRM",`.
-
-`tests/e2e/logo-moldura-no-tema-escuro.spec.ts:522`:
-
-```ts
-    const marca = barra.getByRole("img", { name: "Bacco Adega CRM" });
-```
-
-- [ ] **Step 3: Verificar**
-
-Run: `pnpm exec vitest run tests/unit/marca-do-produto-nao-se-edita-no-codigo.test.ts tests/unit/branding.test.ts tests/unit/marca-do-produto.test.tsx && pnpm typecheck`
-Expected: PASS. Se o `it("toda DIVIDA nomeia a fase que a resolve, e só DIVIDA tem fase")` falhar por lista vazia, leia a asserção e ajuste só para aceitar zero DIVIDAs — sem afrouxar a regra "só DIVIDA tem fase".
-
-- [ ] **Step 4: Commit**
-
-```bash
-git add lib/branding.ts lib/email/templates/ai-budget-alarm.tsx app/design tests/unit/branding.test.ts tests/unit/marca-do-produto-nao-se-edita-no-codigo.test.ts tests/e2e/logo-moldura-no-tema-escuro.spec.ts
-git commit -m "feat(bacco): Bacco Adega CRM é o nome do produto
-
-Fork com marca de produto (spec §4.4). A última DIVIDA da catraca de
-marca é paga lendo DEFAULT_APP_NAME.
-
-Co-Authored-By: Claude Opus 5 (1M context) <noreply@anthropic.com>"
-```
+- [ ] **Step 3:** mesmo run do Step 1 + `tests/unit/marca-do-produto.test.tsx` + `pnpm typecheck` → exit 0.
+  Commit `feat(bacco): Bacco Adega CRM é o nome do produto`.
 
 ---
 
 ### Task 5: Funis exclusivos da vinícola
 
 **Files:**
-- Modify: `lib/onboarding/sugerir-funil.test.ts:19,36-54,57-69,105-111`
-- Modify: `lib/onboarding/pacotes-de-funil.ts:34-131`
-- Modify: `lib/onboarding/sugerir-funil.ts:44-52`
-- Modify: `lib/i18n/dicionario.ts:5252-5258`
-- Modify: `lib/agenda/tipos.ts:21-25` (só o comentário)
+- Modify: `lib/onboarding/pacotes-de-funil.ts:15,34-115`, `lib/onboarding/sugerir-funil.ts:44-66`, `lib/onboarding/sugerir-funil.test.ts:20,35-54,57-69,105-111`
+- Modify: `lib/i18n/dicionario.ts:5252-5258`, `lib/agenda/tipos.ts:21-25` (comentário)
 
-**Interfaces:**
-- Produces: `PACOTES` com ids `clientes_vinicola`, `enoturismo_interesse`, `consumidor_vinho`, `generico` (nessa ordem); `escolherPacotePorTexto(texto)` reconhecendo os três.
+- [ ] **Step 1: Teste primeiro** (`sugerir-funil.test.ts`)
+  - `:20` `CTX = { nome: "Vinícola Serra Alta", oQueFaz: "Vendemos vinho para restaurantes e empórios" }`.
+  - `:35-54` → um `it.each` com os casos (entrada → id; os 17 medidos pelo refutador contra as regex do Step 3, 0 divergências):
 
-- [ ] **Step 1: Teste primeiro**
+    | Entrada | id |
+    |---|---|
+    | `Vendemos para restaurantes e empórios` | `clientes_vinicola` |
+    | `distribuidora de vinhos` | `clientes_vinicola` |
+    | `Venda para hotéis e bares` | `clientes_vinicola` |
+    | `RESTAURANTES E EMPORIOS` | `clientes_vinicola` |
+    | `Recebemos turistas para degustação` | `enoturismo_interesse` |
+    | `degustacoes e visitas guiadas` | `enoturismo_interesse` |
+    | `enoturismo` | `enoturismo_interesse` |
+    | `Loja virtual de vinhos para o consumidor` | `consumidor_vinho` |
+    | `clube de assinatura com degustação` | `consumidor_vinho` |
+    | `vinícola com visitas e loja virtual` | `consumidor_vinho` |
+    | `vinícola` | `clientes_vinicola` |
+    | `VINICOLA` | `clientes_vinicola` |
+    | `vendemos vinho` | `clientes_vinicola` |
+    | `xyzzy` / `` (vazio) / `consultório odontológico` | `generico` |
 
-`lib/onboarding/sugerir-funil.test.ts:19`:
+  - `:57-69` e `:105-111`: como na v1 (`"Pedido fechado"`, `"Vinícola Serra Alta"`, pacote do ramo = `clientes_vinicola`).
 
-```ts
-const CTX = { nome: "Vinícola Serra Alta", oQueFaz: "Vendemos vinho para restaurantes e empórios" };
-```
+  Run `pnpm exec vitest run lib/onboarding/sugerir-funil.test.ts` → FAIL.
 
-Linhas 36-54 (os três `it` do primeiro `describe`):
+- [ ] **Step 2: `pacotes-de-funil.ts`** — os três pacotes da v1 (Task 5 Step 2) no lugar de
+  `clinica`/`imobiliaria`/`servicos`/`curso`/`loja` (`:34-115`), `generico` intacto e último; `:15` "dono de uma vinícola".
 
-```ts
-  it("reconhece o ramo pelas palavras que ele usaria", () => {
-    expect(escolherPacotePorTexto("Vendemos para restaurantes e empórios").id).toBe("clientes_vinicola");
-    expect(escolherPacotePorTexto("Recebemos turistas para degustação").id).toBe("enoturismo_interesse");
-    expect(escolherPacotePorTexto("Loja virtual de vinhos para o consumidor").id).toBe("consumidor_vinho");
-  });
-
-  it("cai no genérico quando não reconhece — nunca em nada", () => {
-    expect(escolherPacotePorTexto("xyzzy").id).toBe(PACOTE_PADRAO.id);
-    expect(escolherPacotePorTexto("").id).toBe(PACOTE_PADRAO.id);
-  });
-
-  it("não se importa com acento nem caixa", () => {
-    // O dono digita no celular, sem acento e em minúscula.
-    expect(escolherPacotePorTexto("RESTAURANTES E EMPORIOS").id).toBe("clientes_vinicola");
-    expect(escolherPacotePorTexto("degustacao").id).toBe("enoturismo_interesse");
-  });
-```
-
-Linhas 57-69 (`describe("o pedido")`, os dois primeiros `it`):
-
-```ts
-  it("leva o exemplo do ramo, não uma descrição do formato em prosa", () => {
-    // Descrever o formato produz JSON válido com conteúdo de manual de vendas.
-    const { prompt } = pedidoDeSugestao(CTX, escolherPacotePorTexto("restaurante"));
-    expect(prompt).toContain("Pedido fechado");
-    expect(prompt).toContain("Vinícola Serra Alta");
-    expect(prompt).toContain("Vendemos vinho para restaurantes e empórios");
-  });
-
-  it("manda não copiar o exemplo", () => {
-    // Sem isto o modelo devolve o exemplo de volta, e toda vinícola do mundo
-    // termina com o mesmo quadro.
-    const { prompt } = pedidoDeSugestao(CTX, escolherPacotePorTexto("restaurante"));
-    expect(prompt).toMatch(/não copie/i);
-  });
-```
-
-Linhas 105-111 (`cai no pacote do RAMO`):
-
-```ts
-  it("cai no pacote do RAMO quando o modelo não responde JSON", async () => {
-    // E o pacote é o de clientes da vinícola, não o genérico: quem já disse o que
-    // faz não deve receber o quadro de "outro tipo de negócio".
-    const s = await sugerirFunil(CTX, responde("Desculpe, não entendi."));
-    expect(s.origem).toBe("pacote");
-    expect(s.origem === "pacote" && s.pacote.id).toBe("clientes_vinicola");
-    expect(s.origem === "pacote" && s.porque).toBeTruthy();
-  });
-```
-
-(A fixture `BOM`, com "Agendamentos"/"Consulta marcada", é resposta simulada da IA e não depende dos pacotes — fica.)
-
-Run: `pnpm exec vitest run lib/onboarding/sugerir-funil.test.ts`
-Expected: FAIL — `expected 'generico' to be 'clientes_vinicola'`.
-
-- [ ] **Step 2: `lib/onboarding/pacotes-de-funil.ts`**
-
-Substitua os cinco pacotes de outros setores (ids `clinica`, `imobiliaria`, `servicos`, `curso`, `loja`, linhas 34-115) pelos três abaixo, mantendo o `generico` como último:
-
-```ts
-export const PACOTES: readonly PacoteDeFunil[] = [
-  {
-    id: "clientes_vinicola",
-    comoSeApresenta: "Vender para restaurantes, empórios e distribuidores",
-    proposta: {
-      nome: "Clientes da vinícola",
-      etapas: [
-        { nome: "Novo contato", passo: "new" },
-        { nome: "Já respondi", passo: "contacted" },
-        { nome: "Entendendo o negócio dele", passo: "qualifying" },
-        { nome: "Enviei tabela ou amostra", passo: "qualified" },
-        { nome: "Negociando pedido", passo: "negotiating" },
-        { nome: "Pedido fechado", passo: "won" },
-        { nome: "Não fechou", passo: "lost" },
-      ],
-    },
-  },
-  {
-    id: "enoturismo_interesse",
-    comoSeApresenta: "Enoturismo — visitas e degustações",
-    proposta: {
-      nome: "Visitas",
-      etapas: [
-        { nome: "Novo interessado", passo: "new" },
-        { nome: "Já respondi", passo: "contacted" },
-        { nome: "Tirando dúvidas", passo: "qualifying" },
-        { nome: "Quer visitar", passo: "qualified" },
-        { nome: "Combinando data", passo: "negotiating" },
-        { nome: "Encaminhado para reserva", passo: "won" },
-        { nome: "Desistiu", passo: "lost" },
-      ],
-    },
-  },
-  {
-    id: "consumidor_vinho",
-    comoSeApresenta: "Vender vinho direto ao consumidor",
-    proposta: {
-      nome: "Vendas ao consumidor",
-      etapas: [
-        { nome: "Novo contato", passo: "new" },
-        { nome: "Já respondi", passo: "contacted" },
-        { nome: "Entendendo o gosto", passo: "qualifying" },
-        { nome: "Indiquei rótulos", passo: "qualified" },
-        { nome: "Fechando pedido", passo: "negotiating" },
-        { nome: "Pedido pago", passo: "won" },
-        { nome: "Não comprou", passo: "lost" },
-      ],
-    },
-  },
-  {
-    id: "generico",
-```
-
-(o bloco do `generico` segue inalterado até o `] as const;`). No cabeçalho do arquivo (linha 15), troque "o que o dono de uma clínica chama as coisas" por "o que o dono de uma vinícola chama as coisas".
-
-- [ ] **Step 3: `lib/onboarding/sugerir-funil.ts:44-52`**
+- [ ] **Step 3: `sugerir-funil.ts`** — `escolherPacotePorTexto` (`:61`) é **primeiro que casa, na
+  ordem de `PISTAS`**. Ordem e regex:
 
 ```ts
 const PISTAS: Record<string, RegExp> = {
   clientes_vinicola:
     /\b(restaurant|emp[óo]ri|distribuid|revend|atacad|bares\b|bar\b|hot[ée]is|hotel|sommelier|carta de vinho)/i,
-  enoturismo_interesse: /\b(enoturism|visita|degusta[çc]|turist|passeio|tour\b|harmoniza[çc])/i,
-  consumidor_vinho: /\b(consumidor|cliente final|varej|loja virtual|e-?commerce|clube|delivery|venda direta)/i,
+  consumidor_vinho:
+    /\b(consumidor|cliente final|varej|loja virtual|loja online|e-?commerce|clube|assinatura|delivery|venda direta)/i,
+  enoturismo_interesse: /\b(enoturism|visita|degusta[çc]|turist|passeio|tour\b|harmoniza[çc]|vindima)/i,
 };
+
+/** Quem só diz que é vinícola, sem nomear o público, recebe o B2B (decisão do dono, 2026-09-15). */
+const PISTA_DE_VINICOLA = /\b(vin[íi]col|vinh|adega)/i;
 ```
 
-(O texto sem acento `EMPORIOS` casa `emp[óo]ri`; `degustacao` casa `degusta[çc]`.)
+  e, no fim do laço de `escolherPacotePorTexto`, antes de `return PACOTE_PADRAO`:
+  `if (PISTA_DE_VINICOLA.test(texto)) { const p = PACOTES.find((x) => x.id === "clientes_vinicola"); if (p) return p; }`.
+  Atualizar o comentário de desempate (`:56-58`) com a ordem e o porquê (canal de venda explícito vence visita).
 
-- [ ] **Step 4: Dicionário ES (`lib/i18n/dicionario.ts:5252-5258`)**
-
-```ts
-  // ─── Onboarding: funil — pacotes prontos (lib/onboarding/pacotes-de-funil.ts) ───
-  "Vender para restaurantes, empórios e distribuidores": {
-    es: "Vender a restaurantes, tiendas gourmet y distribuidores",
-  },
-  "Enoturismo — visitas e degustações": { es: "Enoturismo — visitas y degustaciones" },
-  "Vender vinho direto ao consumidor": { es: "Vender vino directo al consumidor" },
-  "Outro tipo de negócio": { es: "Otro tipo de negocio" },
-```
-
-- [ ] **Step 5: Comentário-espelho da agenda (`lib/agenda/tipos.ts:21-25`)**
-
-```ts
-/**
- * O que esta organização marca. Os códigos vêm do upstream e espelham o CHECK
- * da migration 0177; os nichos do onboarding do Bacco Adega CRM
- * (`lib/onboarding/pacotes-de-funil.ts`) são clientes da vinícola, enoturismo e
- * consumidor de vinho — visita e degustação caem em `visita`.
- */
-```
-
-- [ ] **Step 6: Verificar**
-
-Run: `pnpm exec vitest run lib/onboarding tests/unit/i18n-espanhol-cobre-a-tela.test.ts && pnpm typecheck`
-Expected: PASS — incluindo `proposta-de-funil.test.ts` (todos os pacotes passam no validador, sem jargão, ids únicos, `PACOTE_PADRAO.id === "generico"`).
-
-- [ ] **Step 7: Commit**
-
-```bash
-git add lib/onboarding lib/i18n/dicionario.ts lib/agenda/tipos.ts
-git commit -m "feat(bacco): funis exclusivos da vinícola no onboarding
-
-Clientes da vinícola, enoturismo e consumidor de vinho substituem os
-nichos de outros setores (spec §5.1).
-
-Co-Authored-By: Claude Opus 5 (1M context) <noreply@anthropic.com>"
-```
+- [ ] **Step 4: Dicionário** — `:5252-5258`: remover as 5 entradas antigas, incluir as 3 novas da v1
+  (Task 5 Step 4), manter `"Outro tipo de negócio"`.
+- [ ] **Step 5: `lib/agenda/tipos.ts:21-25`** — comentário da v1.
+- [ ] **Step 6:** `pnpm exec vitest run lib/onboarding tests/unit/i18n-espanhol-cobre-a-tela.test.ts tests/unit/selecao-por-pacote.test.ts && pnpm typecheck` → exit 0.
+  Commit `feat(bacco): funis exclusivos da vinícola no onboarding`.
 
 ---
 
-### Task 6: Copy de outros setores → vinho (onboarding, agenda, catálogo, agente)
+### Task 6: Copy de outros setores → vinho
 
 **Files:**
-- Modify: `app/onboarding/welcome/_form.tsx:75,94`
-- Modify: `app/app/agenda/_client.tsx:819`
-- Modify: `app/app/products/_client.tsx:210` (depois do link da planilha modelo)
-- Modify: `app/api/v1/products/import/route.ts:251-255`
-- Modify: `app/actions/onboarding/createDefaultAgent.ts:40-47`
-- Modify: `lib/i18n/dicionario.ts:4806-4811,6326`
+- Modify: `app/onboarding/welcome/_form.tsx:75,94`, `app/app/agenda/_client.tsx:819`,
+  `app/app/products/_client.tsx:203-211`, `app/api/v1/products/import/route.ts:251-255`,
+  `app/actions/onboarding/createDefaultAgent.ts` (`PROMPT_BODIES`), `lib/i18n/dicionario.ts:4806-4811,6326,7434`
 
-**Interfaces:**
-- Consumes: nada das tarefas anteriores.
-- Produces: textos novos com chave ES.
-
-- [ ] **Step 1: Welcome**
-
-`app/onboarding/welcome/_form.tsx:75`:
-
-```tsx
-          {t("É o nome que aparece para o seu time e nos relatórios. Pode ser o nome da vinícola, da adega ou da loja.")}
-```
-
-`:94`:
-
-```tsx
-          placeholder={t("Ex.: vinícola com loja própria, venda para restaurantes e visitas com degustação")}
-```
-
-`lib/i18n/dicionario.ts:4806-4811` (substitui as duas entradas antigas):
-
-```ts
-  "É o nome que aparece para o seu time e nos relatórios. Pode ser o nome da vinícola, da adega ou da loja.": {
-    es: "Es el nombre que aparece para tu equipo y en los reportes. Puede ser el nombre de la bodega, de la vinoteca o de la tienda.",
-  },
-  "O que vocês fazem?": { es: "¿A qué se dedican?" },
-  "Ex.: vinícola com loja própria, venda para restaurantes e visitas com degustação": {
-    es: "Ej.: bodega con tienda propia, venta a restaurantes y visitas con degustación",
-  },
-```
-
-- [ ] **Step 2: Agenda**
-
-`app/app/agenda/_client.tsx:819`:
-
-```tsx
-              placeholder={t("O cliente pediu para remarcar por telefone")}
-```
-
-`lib/i18n/dicionario.ts:6326`:
-
-```ts
-  "O cliente pediu para remarcar por telefone": { es: "El cliente pidió reprogramar por teléfono" },
-```
-
-- [ ] **Step 3: Catálogo — convenção de nome e planilha modelo**
-
-`app/app/products/_client.tsx`, logo após o `</a>` do link `modelo-planilha` (dentro do mesmo ramo `podeEditar`), envolvendo os dois num fragmento:
-
-```tsx
-      {podeEditar ? (
-        <>
-          <a
-            href="/api/v1/products/import"
-            download="modelo-catalogo.csv"
-            className="mb-4 inline-block text-xs text-muted-foreground underline"
-            data-testid="modelo-planilha"
-          >
-            {t("Baixar planilha modelo")}
-          </a>
-          <p className="mb-4 text-xs text-muted-foreground">
-            {t("Coloque safra, uva e volume no nome (ex.: Malbec Reserva 2021 750ml) — é pelo nome que o atendente encontra o vinho.")}
-          </p>
-        </>
-      ) : null}
-```
-
-`lib/i18n/dicionario.ts`, logo depois de `"Baixar planilha modelo"` (linha 7434):
-
-```ts
-  "Coloque safra, uva e volume no nome (ex.: Malbec Reserva 2021 750ml) — é pelo nome que o atendente encontra o vinho.": {
-    es: "Pon cosecha, uva y volumen en el nombre (ej.: Malbec Reserva 2021 750ml) — es por el nombre que el asistente encuentra el vino.",
-  },
-```
-
-`app/api/v1/products/import/route.ts:251-255`:
-
-```ts
-  const modelo = [
-    "codigo,nome,marca,categoria,preco,custo,estoque",
-    "MAL-RES-21,Malbec Reserva 2021 750ml,Vinícola Exemplo,Vinho tinto,129.90,62.00,24",
-    "ESP-BRU-NV,Espumante Brut 750ml,Vinícola Exemplo,Espumante,89.90,41.00,36",
-  ].join("\n");
-```
-
-- [ ] **Step 4: Agente padrão**
-
-`app/actions/onboarding/createDefaultAgent.ts:40-47` — substitua o bloco `PROMPT_BODIES` inteiro por:
-
-```ts
-/**
- * A regra de adega vale para os três tons: o atendente de uma vinícola não pode
- * inventar rótulo nem prometer vaga de visita — reserva não é feita no CRM
- * (spec §2, §5.4).
- */
-const REGRA_DA_ADEGA =
-  " Indique só vinhos que existem no catálogo — nunca invente rótulo, safra, preço ou estoque." +
-  " Para visitas e degustações, anote o interesse e diga que a equipe confirma data e vaga.";
-
-const PROMPT_BODIES: Record<PromptTemplate, (onde: string) => string> = {
-  ecommerce_friendly: (n) =>
-    `Você atende os clientes de ${n}. Fale de forma calorosa e próxima, como alguém que gosta de ajudar. Cumprimente, entenda o que a pessoa precisa e ofereça opções claras. Confirme os detalhes antes de agir.${REGRA_DA_ADEGA}`,
-  ecommerce_professional: (n) =>
-    `Você atende os clientes de ${n}. Fale de forma objetiva, cordial e profissional. Vá direto ao ponto, sem parecer frio, e sempre termine indicando o próximo passo.${REGRA_DA_ADEGA}`,
-  support_minimal: (n) =>
-    `Você atende os clientes de ${n}. Responda em frases curtas, peça apenas o que for necessário e chame uma pessoa do time assim que a dúvida sair do seu alcance.${REGRA_DA_ADEGA}`,
-};
-```
-
-- [ ] **Step 5: Verificar**
-
-Run: `pnpm exec vitest run tests/unit/i18n-espanhol-cobre-a-tela.test.ts app/api/v1/products tests/unit/onboarding-agente-nao-publicado.test.ts tests/unit/onboarding-setup-ai-aviso.test.tsx tests/unit/agente-pausado-nao-atende.test.ts && pnpm typecheck && pnpm lint`
-Expected: PASS. Conferência: `grep -rnE "paciente|cl[ií]nica odontol|corretor de im" app/onboarding app/app/agenda/_client.tsx` sem resultado em texto visível.
-
-- [ ] **Step 6: Commit**
+- [ ] **Steps 1–4:** textos, dicionário, planilha modelo e `PROMPT_BODIES` com `REGRA_DA_ADEGA` —
+  conteúdo da v1 (Task 6 Steps 1–4), nas linhas remedidas acima. As chaves de `PROMPT_BODIES`
+  continuam `ecommerce_friendly`/`ecommerce_professional`/`support_minimal`: são o id técnico de
+  `PromptTemplate` gravado em versão de agente; renomear exigiria migration e não muda o que o usuário lê.
+- [ ] **Step 5:** `pnpm exec vitest run tests/unit/i18n-espanhol-cobre-a-tela.test.ts app/api/v1/products tests/unit/onboarding-agente-nao-publicado.test.ts tests/unit/onboarding-setup-ai-aviso.test.tsx tests/unit/agente-pausado-nao-atende.test.ts && pnpm typecheck && pnpm lint` → exit 0.
+- [ ] **Step 6: Conferência larga e captação**
 
 ```bash
-git add app/onboarding/welcome/_form.tsx app/app/agenda/_client.tsx app/app/products/_client.tsx app/api/v1/products/import/route.ts app/actions/onboarding/createDefaultAgent.ts lib/i18n/dicionario.ts
-git commit -m "feat(bacco): textos de onboarding, agenda, catálogo e agente para vinícola
-
-Co-Authored-By: Claude Opus 5 (1M context) <noreply@anthropic.com>"
+grep -rnIE "paciente|cl[ií]nica|odontol|corretor|imobili|e-?commerce|iPhone|Perfume" app components lib \
+  --include=*.ts --include=*.tsx | grep -vE "\.test\.|/design/" > /tmp/copy-restante.txt; wc -l /tmp/copy-restante.txt
 ```
+  Classificar cada ocorrência em `evidence/bacco-rebrand/06-copy-restante.md`: **texto visível** (corrigir
+  aqui) × comentário × regex/corpus (`lib/opt-out/deteccao.ts`) × id técnico. Captação (webhooks, RD
+  Station, planilha de leads, ads) — medido em 2026-09-15:
+  `grep -rnIiE "paciente|cl[ií]nica|imobili|corretor|odonto|dentist|im[óo]ve(l|is)" app/app/webhooks app/app/ads app/app/leads app/app/contacts app/app/integrations`
+  → zero ocorrências; repetir e registrar o resultado.
+- [ ] **Step 7:** Commit `feat(bacco): textos de onboarding, agenda, catálogo e agente para vinícola`.
 
 ---
 
-### Task 7: Textos de produto (README, llms.txt, package, LICENSE, Dockerfile, docs/brand)
+### Task 7: Textos de produto
 
-**Files:**
-- Modify: `README.md` (bloco inicial até antes de `## ⚡ Instalar`)
-- Modify: `public/llms.txt:1`
-- Modify: `package.json` (`name`, `description`)
-- Modify: `LICENSE`
-- Modify: `Dockerfile:2-3,58`
-- Modify: `docs/brand/README.md`
-- Delete: `docs/brand/deskcomm-logo.svg`, `docs/brand/deskcomm-logo-dark.svg`, `docs/brand/deskcomm-icon.svg`
+**Files:** `README.md`, `public/llms.txt`, `package.json:2`, `LICENSE`, `Dockerfile:2-3,58`,
+`Dockerfile.worker:11`, `Dockerfile.scheduler:12`, `docs/brand/README.md`
 
-**Interfaces:**
-- Consumes: nome e tagline das Global Constraints.
+- [ ] **Step 1: `README.md`** — bloco inicial da v1 (Task 7 Step 1).
+- [ ] **Step 2: `public/llms.txt`** — reescrever **inteiro** (hoje `:1-27` descrevem o upstream e
+  linkam `github.com/melgarafael/DeskcommCRM`): título, descrição do Bacco Adega CRM (CRM exclusivo
+  para vinícolas; WhatsApp + agentes de IA; três públicos), fatos técnicos que continuam verdadeiros, e
+  **uma** linha de atribuição ao DeskcommCRM (MIT). Sem link para o repositório privado do fork.
+- [ ] **Step 3: `package.json`** — antes, `grep -rnE "package\.json" tests scripts hostgator-setup-kit .github | grep -iE "\.name|\"name\"|\bname\b"`;
+  se algum teste/script ler o `name`, parar e reportar. (`deskcomm-crm` também aparece como nome do MCP em
+  `branding.test.ts:234,240` e do contêiner em `scripts/test-db.sh` — não é o pacote, fica.) Senão `"name": "bacco-adega-crm"` e
+  `description` da v1. `version` **não muda**.
+- [ ] **Step 4: `LICENSE`** — acrescentar `Copyright (c) 2026 Bacco Sistemas` abaixo da linha original.
+- [ ] **Step 5: Dockerfiles** — `Dockerfile:2-3` (comentário e `-t bacco-adega-crm`), `:58`
+  `title="Bacco Adega CRM"`; `Dockerfile.worker:11` `title="Bacco Adega CRM worker"`; `Dockerfile.scheduler:12` `title="Bacco Adega CRM scheduler"`.
+- [ ] **Step 6: `docs/brand/README.md`** — seção da v1 (Task 7 Step 6). **Não apagar**
+  `docs/brand/deskcomm-*.svg`: `README.es.md:6-7` e `docs/brand/og-card.html` os referenciam.
+- [ ] **Step 7:** `pnpm lint && pnpm exec vitest run tests/unit/branding.test.ts` → exit 0.
+  Commit `docs(bacco): textos de produto e fonte da marca`.
 
-- [ ] **Step 1: `README.md`** — substitua tudo antes de `## ⚡ Instalar na sua VPS` por:
+---
+
+### Task 8: Fragmento de release
+
+**Files:** Create `.changes/bacco-marca-e-vinicola.md`
+
+- [ ] **Step 1:**
 
 ```markdown
-# Bacco Adega CRM
-
-**CRM exclusivo para vinícolas — relacionamento e atendimento inteligente.**
-
-Capta e converte clientes da vinícola (restaurantes, empórios, distribuidores), interessados em
-enoturismo e consumidores de vinho, com atendimento por WhatsApp e agentes de IA.
-
-Produto da **Bacco Sistemas**, construído sobre o [DeskcommCRM](https://github.com/melgarafael/DeskcommCRM)
-(licença MIT). Instalação e operação: ver `docs/superpowers/specs/2026-09-15-bacco-adega-crm-design.md` §6
-até o kit Bacco (Plano 4) substituir as instruções abaixo, que ainda são as do upstream.
-
 ---
+impacto: capacidade_nova
+secao: alterado
+titulo: Marca Bacco Adega CRM e funis de vinícola
+---
+
+A interface passa a ter a marca Bacco Adega CRM: accent borgonha, símbolo com as uvas,
+Inter na interface e Playfair Display nos títulos de entrada. O onboarding sugere os
+funis de clientes da vinícola, enoturismo e consumidor de vinho. Instalação existente
+não precisa fazer nada; marca configurada em Configurações › Marca continua valendo.
 ```
 
-- [ ] **Step 2: `public/llms.txt:1`** → `# Bacco Adega CRM`, e a linha de descrição seguinte (se houver) → `CRM exclusivo para vinícolas, com atendimento por WhatsApp e agentes de IA. Baseado no DeskcommCRM (MIT).`
-
-- [ ] **Step 3: `package.json`**
-
-```json
-  "name": "bacco-adega-crm",
-  "version": "0.1.0",
-  "private": true,
-  "description": "Bacco Adega CRM — CRM exclusivo para vinícolas, com WhatsApp e agentes de IA. Baseado no DeskcommCRM (MIT).",
-```
-
-- [ ] **Step 4: `LICENSE`** — acrescente abaixo da linha `Copyright (c) 2026 Rafael Melgaço` (que fica):
-
-```
-Copyright (c) 2026 Bacco Sistemas
-```
-
-- [ ] **Step 5: `Dockerfile`** — linhas 2-3: `# Bacco Adega CRM — imagem de produção (Next.js standalone).` / `# Build: docker build --build-arg NEXT_PUBLIC_SUPABASE_URL=... -t bacco-adega-crm .`; linha 58: `org.opencontainers.image.title="Bacco Adega CRM"`.
-
-- [ ] **Step 6: `docs/brand/README.md`** — substitua as seções sobre os SVGs Deskcomm por:
-
-```markdown
-## Marca do produto: Bacco Adega CRM
-
-Fonte: `docs/brand/bacco/` — arte oficial (`bacco-adega-crm-*.svg`), `preview.png` e o board
-`referencia-board-2026-09-15.png`. O app NÃO lê esses arquivos: a geometria vive em
-`lib/branding/desenho.ts`, **gerado** por `docs/brand/bacco/texto-para-path.py` (instruções no
-cabeçalho do script). Ao revisar a arte, troque os SVGs e rode o script de novo.
-
-Cores: borgonha `#4a0e1f`, creme `#f5f0e6`, ouro `#c49a4a`, grafite `#2e2e2e`.
-Fontes: Inter (interface), Playfair Display 600 (títulos), IBM Plex Mono (código).
-```
-
-e apague os três SVGs `docs/brand/deskcomm-*.svg`.
-
-- [ ] **Step 7: Verificar e commitar**
-
-Run: `pnpm gov:verify && pnpm test:shell`
-Expected: PASS, exceto falhas já listadas na Task 0. Se `test:shell` citar o nome do pacote (`deskcomm-crm`), reverta só o `name` do `package.json` e registre o motivo no commit.
-
-```bash
-git add -A README.md public/llms.txt package.json LICENSE Dockerfile docs/brand
-git commit -m "docs(bacco): textos de produto e fonte da marca
-
-Co-Authored-By: Claude Opus 5 (1M context) <noreply@anthropic.com>"
-```
+- [ ] **Step 2:** `pnpm exec vitest run tests/unit/fragmentos-de-release.test.ts && pnpm release:conferir` → exit 0
+  (valida a FORMA). O número que o `release:conferir` imprime (`1.28.0`, medido) **não é usado** — ver
+  Global Constraints, Versão do fork. Commit `chore(bacco): fragmento de release do rebrand`.
 
 ---
 
-### Task 8: Prova em tela (claro e escuro)
+### Task 9: CI, tag e imagens
 
-**Files:**
-- Create: `tests/e2e/bacco-evidencia.spec.ts`
-- Create: `evidence/bacco-rebrand/*.png`
+- [ ] **Step 1:** `git push --no-tags origin bacco:main`.
+- [ ] **Step 2:** acompanhar `ci`, `perf`, `publish-image` do commit (`gh run list -R lussandro/bacco-adega-crm -L 10`, filtro por `headSha` com `jq`; o `gh` local não tem `--branch`). No job `verify`, ler `Test Files`/`Tests`/`Errors` do log; no `Kit self-host (bash)`, conferir o caso `APP_ACCENT_HEX inválido cai no accent do produto`.
+  Vermelho = causa raiz, commit próprio, volta ao Step 1. Registrar runs em `evidence/bacco-rebrand/09-ci.md`.
+- [ ] **Step 3: Release `v26.9.1` à mão, no esquema do fork.** O `release.yml` (App
+  `deskcomm-release[bot]`, numeração do CHANGELOG do upstream) está desligado e não serve ao fork.
+  **Não** rodar `cortar-release.ts --escrever`. O fragmento fica em `.changes/` (histórico do que a
+  versão trouxe; o upstream não o conhece, então não conflita). Tag **anotada**, como a `v26.9.0` (medido
+  `git cat-file -t v26.9.0` = `tag`) e como o `release.yml:247` documenta para o `agent.sh`:
+  `git tag -a v26.9.1 -m "Bacco Adega CRM 26.9.1 — marca Bacco e funis de vinícola" <sha com ci success> && git push origin v26.9.1`
+  (uma tag, nunca `--tags`).
+- [ ] **Step 4:** `publish-image` do push da tag success; `ghcr.io/lussandro/deskcommcrm:26.9.1`,
+  `ghcr.io/lussandro/deskcomm-worker:26.9.1`, `ghcr.io/lussandro/deskcomm-scheduler:26.9.1` existem
+  (nomes da matriz de `publish-image.yml:111-117`, medidos em `evidence/bacco-deploy/01-ci.md`). Registrar em `09-ci.md`.
 
-**Interfaces:**
-- Consumes: `loginComoAdmin(page, creds)` de `tests/e2e/helpers/login-admin.ts:102`; credenciais do `scripts/seed-e2e-credentials.ts`.
+---
 
-- [ ] **Step 1: Subir o ambiente e2e (mesma ordem do CI, `.github/workflows/e2e.yml:646-889`)**
+### Task 10: Prova em tela na VPS
 
-```bash
-npx supabase start
-pnpm e2e:env
-pnpm e2e:build
-pnpm exec playwright install --with-deps chromium
-pnpm exec tsx scripts/seed-e2e-credentials.ts
-```
-Expected: cada comando sai com 0; `.env.e2e` existe.
+**Files:** Create `tests/e2e/bacco-evidencia.spec.ts`, `evidence/bacco-rebrand/10-*.png`, `evidence/bacco-rebrand/10-revisao.md`
 
-- [ ] **Step 2: Rodar as specs de marca existentes**
+- [ ] **Step 1: Atualizar a VPS para a versão nova** — comando de `update.sh` de
+  `docs/superpowers/plans/2026-09-15-bacco-plano-4-ci-deploy-vps.md` Task 7 Step 5, com `--to v$versao`.
+  Expected: `exit=0`; `curl -s https://adega-crm.baccosistemas.com.br/api/v1/health` ok;
+  `/icon` `200 image/png`; `docker logs` do app com `[telemetria] Desligada` (`SENTRY_DSN=off` sobreviveu).
 
-Run: `pnpm exec playwright test --workers=1 tests/e2e/icone-da-marca.spec.ts tests/e2e/marca-logo.spec.ts tests/e2e/logo-moldura-no-tema-escuro.spec.ts --reporter=list`
-Expected: PASS.
+- [ ] **Step 2: Cadastro aberto?** — a política vem de `platform_settings` acima do `.env`
+  (`lib/auth/politica-de-cadastro.ts`); `.env` da VPS não declara `SIGNUP_MODE` (medido). Conferir na
+  tela de cadastro (ou na tela de configurações da plataforma) que o modo é `aberto`. Se for `so_convite`: parar e perguntar ao dono.
 
-- [ ] **Step 3: Spec de evidência**
+- [ ] **Step 3: Conta QA** — o dono informa um e-mail de QA que ele lê. Cadastro por `/signup` dirigido
+  pelo Playwright; GoTrue exige confirmação (`ENABLE_EMAIL_AUTOCONFIRM=false`, medido) → o dono clica o
+  link. Credenciais só em `/root/.bacco_qa` (modo 600) na VPS, nunca no repo nem na conversa.
 
-Create `tests/e2e/bacco-evidencia.spec.ts`:
+- [ ] **Step 4: Spec de evidência, autocontida** — `tests/e2e/bacco-evidencia.spec.ts` só importa
+  `@playwright/test` (nenhum helper do repo, nenhum `playwright.config`); lê `BASE_URL`, `QA_EMAIL`,
+  `QA_SENHA` do ambiente; screenshots com caminho absoluto `/work/out/10-<tela>-<tema>.png`. **Um só
+  `test`, uma só sessão**, porque o onboarding só existe uma vez por organização
+  (`app/app/layout.tsx:108` manda para `/onboarding` sem `onboarded_at`; `app/onboarding/layout.tsx:25`
+  manda organização onboardada para `/app/inbox`). Tema trocado com `localStorage` `deskcomm-theme` +
+  `page.reload()`:
+  1. Deslogado: `/login` claro e escuro.
+  2. Login → `/onboarding/welcome` claro e escuro; preencher "Vendemos vinho para restaurantes e empórios" → `/onboarding/funil` claro e escuro (deve propor "Clientes da vinícola").
+  3. Seguir os passos até `done`, pulando WhatsApp e equipe pelos controles de pular que a tela oferecer
+     (medir no Step 5a quais são; se algum passo não puder ser pulado, parar e reportar).
+  4. `/app/inbox`, `/app/kanban`, `/app/products`, detalhe de um lead criado pela tela — cada um claro e escuro.
+  Em cada tela, **medir por ferramenta** (`getComputedStyle`): `background-color` do botão primário
+  (`rgb(74, 14, 31)` claro, `rgb(185, 130, 139)` escuro), `font-family` do `body` começando por Inter, do
+  título público (`<h1>`/`<h2>` com `font-display`) começando por Playfair, e do título da inbox **sem**
+  Playfair; `/icon` responde `image/png`. Asserções falham o teste; valores vão para o log.
 
-```ts
-import { expect, test } from "@playwright/test";
-
-import { lerCreds, loginComoAdmin } from "./helpers/login-admin";
-
-const TELAS = ["/login", "/app/inbox", "/app/kanban", "/app/products", "/admin/marca"] as const;
-const TEMAS = ["light", "dark"] as const;
-
-test.describe("evidência visual do rebrand Bacco", () => {
-  for (const tema of TEMAS) {
-    test(`telas principais no tema ${tema}`, async ({ page }) => {
-      await page.addInitScript((t) => window.localStorage.setItem("deskcomm-theme", t), tema);
-      await page.goto("/login");
-      await page.screenshot({ path: `evidence/bacco-rebrand/08-login-${tema}.png`, fullPage: true });
-      await loginComoAdmin(page, lerCreds());
-      for (const rota of TELAS.slice(1)) {
-        await page.goto(rota);
-        await expect(page.locator("body")).toBeVisible();
-        const nome = rota.replaceAll("/", "-").replace(/^-/, "");
-        await page.screenshot({ path: `evidence/bacco-rebrand/08-${nome}-${tema}.png`, fullPage: true });
-      }
-    });
-  }
-});
-```
-
-(`lerCreds(): CredsE2E` e `loginComoAdmin(page, creds)` são exports de `tests/e2e/helpers/login-admin.ts:42,102`.)
-
-Run: `pnpm exec playwright test --workers=1 tests/e2e/bacco-evidencia.spec.ts --reporter=list`
-Expected: PASS e 10 PNG em `evidence/bacco-rebrand/`.
-
-- [ ] **Step 4: Revisão visual**
-
-Abra cada PNG. Conferir: logotipo Bacco na barra lateral (claro: borgonha/ouro; escuro: creme/ouro), botões primários borgonha distinguíveis de botões de erro, fundo creme no claro, títulos `h1` em Playfair, corpo em Inter, favicon com o B e as uvas. Anote em `evidence/bacco-rebrand/08-revisao.md` o que foi visto por tela, incluindo defeitos, **citando cada um dos 10 PNG pelo caminho exato em crase** (liste com `ls evidence/bacco-rebrand/08-*.png` e copie os nomes; glob não conta como citação).
-
-Run: `pnpm exec vitest run tests/unit/evidencia-citada.test.ts`
-Expected: PASS.
-
-- [ ] **Step 5: Aprovação do dono**
-
-Mostre os PNG ao dono. **Paleta, hover e tema escuro só são "prontos" com o ok dele** (spec §4.2). Ajuste pedido → volte à Task 1, Step 4.
-
-- [ ] **Step 6: Commit**
+- [ ] **Step 5a: Fumaça do runner na VPS** (resolução de `@playwright/test` sem `node_modules` não é garantida — instalar explícito):
 
 ```bash
-git add tests/e2e/bacco-evidencia.spec.ts evidence/bacco-rebrand
-git commit -m "test(bacco): evidência visual do rebrand nos dois temas
-
-Co-Authored-By: Claude Opus 5 (1M context) <noreply@anthropic.com>"
+ssh root@2.25.222.110 'mkdir -p /root/bacco-e2e/out && cd /root/bacco-e2e && docker run --rm \
+  -v /root/bacco-e2e:/work -w /work mcr.microsoft.com/playwright:v1.63.0-noble \
+  sh -c "npm init -y >/dev/null && npm i -D @playwright/test@1.63.0 >/dev/null && npx playwright --version"'
 ```
+  Expected: `Version 1.63.0` (`pnpm-lock.yaml:1215`, medido). Depois, com o dono logado ou pela conta QA,
+  abrir `/onboarding` à mão uma vez e anotar os controles de pular dos passos WhatsApp e equipe.
+
+- [ ] **Step 5: Rodar na VPS**
+
+```bash
+scp tests/e2e/bacco-evidencia.spec.ts root@2.25.222.110:/root/bacco-e2e/
+ssh root@2.25.222.110 'set -a; . /root/.bacco_qa; set +a; docker run --rm --network host \
+  -e BASE_URL=https://adega-crm.baccosistemas.com.br -e QA_EMAIL -e QA_SENHA \
+  -v /root/bacco-e2e:/work -w /work mcr.microsoft.com/playwright:v1.63.0-noble \
+  npx playwright test bacco-evidencia.spec.ts --reporter=list'; echo "exit=$?"
+scp 'root@2.25.222.110:/root/bacco-e2e/out/10-*.png' evidence/bacco-rebrand/
+```
+  Expected: `exit=0`, 16 PNG (login 2 + welcome 2 + funil 2 + 4 telas × 2).
+
+- [ ] **Step 6: Revisão e aprovação** — `10-revisao.md` cita **cada** PNG pelo caminho completo em
+  crase, com os valores medidos e defeitos vistos. `pnpm exec vitest run tests/unit/evidencia-citada.test.ts` → exit 0.
+  Mostrar ao dono. **Paleta, hover e escuro só são "prontos" com o ok dele** (spec §4.2). Se reprovar o
+  escuro 300: trocar para 200 (medido nas Global Constraints), voltar à Task 1 Step 4 e repetir Tasks 9–10.
+
+- [ ] **Step 7:** Commit `test(bacco): evidência visual do rebrand na VPS`; push `--no-tags`.
+
+- [ ] **Step 8: Vault** — gotchas duráveis no `projetos/bacco-adega-crm/CLAUDE.md`: régua Sage congelada
+  como controle; grau do accent escuro medido (400 reprova 12, 300 passa); `font-display` só em telas
+  públicas. Atualizar `ultima_revisao`. Sem log de sessão.
 
 ---
 
 ## Fora deste plano
 
-- Guardrail de maioridade → Plano 2. Enforcement da suspensão → Plano 3. Kit, imagens GHCR e deploy → Plano 4.
-- Skill `deskcomm-cliente-novo` reescrita para os três públicos (spec §5.1): conteúdo de guia de operação, não bloqueia o produto — tarefa própria depois do Plano 1.
-- `VISION.md`, `README.en.md`, `README.es.md`: documentos do upstream; reescrita junto com o Plano 4 (instruções de instalação mudam lá).
-- Fonte Playfair nos e-mails: clientes de e-mail não carregam webfont de forma confiável; e-mails seguem com a pilha atual.
+- Guardrail de maioridade → Plano 2. Enforcement da suspensão → Plano 3.
+- Pendências do Plano 4: mensagem WhatsApp ponta a ponta, `update.sh --force` idempotente na mesma
+  versão, reboot da VPS, runbook `deploy-vps.md`.
+- Organização QA na produção: fica até o dono decidir apagar (dado de produção, não se apaga sem ok).
+- `docs/white-label.md` (cita Atkinson e "fonte não configurável"): tem tradução selada
+  (`scripts/selar-traducao.ts`); editar sem re-traduzir é o anti-pattern que o selo existe para barrar.
+  Reescrita junto com `VISION.md`, `README.en.md`, `README.es.md`.
+- Skill `deskcomm-cliente-novo` para os três públicos.
+- Fonte Playfair nos e-mails (webfont não é confiável em cliente de e-mail).
+- Títulos/matriz do `publish-image.yml` e `scripts/cortar-release.ts:27` citando o upstream.
