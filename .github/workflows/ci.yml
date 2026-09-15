@@ -28,7 +28,9 @@ permissions:
 jobs:
   verify:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    # Fork Bacco (repo privado): runner mais lento que o do upstream. Medido no
+    # run 34982794810: test:unit cancelado após 12m30s ainda rodando (job 15m).
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@v7
 

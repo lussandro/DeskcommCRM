@@ -49,8 +49,9 @@ const ACTION = join(process.cwd(), ".github/actions/preparar-node/action.yml");
  */
 const TETOS: Record<string, { minutos: number; razao: string }> = {
   "ci.yml::verify": {
-    minutos: 15,
-    razao: "trabalho real medido: p90 594s, máximo 609s em 51 verdes — folga de ~4m45",
+    minutos: 45,
+    razao:
+      "fork Bacco em repo privado (runner mais lento que o público do upstream): no run 34982794810 o test:unit foi cancelado após 12m30s ainda rodando; suíte local levou 1521s. Upstream media p90 594s no runner público",
   },
   "ci.yml::invariants": {
     minutos: 20,
