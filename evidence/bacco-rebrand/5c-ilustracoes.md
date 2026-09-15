@@ -9,9 +9,10 @@ cima para baixo em cada coluna: vinhedo, citação, rodapé).
 
 - `vinhedo`: `empty-state-vineyard-{light,dark}.png`, usado como vem (625x305 claro,
   625x285 escuro) — o fundo emenda com `--color-bg` do tema.
-- `citação`: `quote-card-image-{light,dark}.png`, usado como vem (142x120 nos dois
-  temas) — traz o glifo decorativo de aspas do próprio card, parte do desenho, não
-  texto de interface; a borda arredondada é suavizada por `mask-image` no CSS do
+- `citação`: `quote-card-image-{light,dark}.png`, recortado em x 0–134 (134x120 nos
+  dois temas). O arquivo do kit traz um sinal de aspas solto em x 136–141, linhas
+  38–45; o dono aprovou as ilustrações em 2026-09-15 pedindo para tirá-lo. A arte do
+  claro termina em x 132. A borda arredondada é suavizada por `mask-image` no CSS do
   componente que consome esta peça.
 - `rodapé`: `sidebar-footer-vineyard-{light,dark}.png`, recortado em x 0–100, y
   36–106 (100x70) — só a gravura do vinhedo, sem o texto "Configurações" (linhas
@@ -25,8 +26,7 @@ cima para baixo em cada coluna: vinhedo, citação, rodapé).
 
 Abri `evidence/bacco-rebrand/5c-ilustracoes.png` e cada peça ampliada 3x
 individualmente: nenhuma letra, filete de texto cortado ou pedaço de elemento de
-interface (botão, campo, ícone de UI) nas seis. O único traço não-paisagem é o
-glifo de aspas decorativo no canto da peça `citação`, que é o próprio desenho do
-card de citação (kit v2), não resíduo de captura.
+interface (botão, campo, ícone de UI) nas seis. Depois do recorte da `citação`,
+nenhuma peça tem glifo solto. Aprovadas pelo dono em 2026-09-15.
 
 Script gerador: `docs/brand/bacco/preparar-ilustracoes.py`.

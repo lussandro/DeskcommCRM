@@ -98,7 +98,7 @@ if __name__ == "__main__":
     main()
 ```
 
-- [ ] **Step 2:** `python3 docs/brand/bacco/preparar-ilustracoes.py` → 6 linhas: `vinhedo-claro 625x305`, `citacao-claro 142x120`, `rodape-claro 100x70`, `vinhedo-escuro 625x285`, `citacao-escuro 142x120`, `rodape-escuro 100x70`.
+- [ ] **Step 2:** `python3 docs/brand/bacco/preparar-ilustracoes.py` → 6 linhas: `vinhedo-claro 625x305`, `citacao-claro 134x120`, `rodape-claro 100x70`, `vinhedo-escuro 625x285`, `citacao-escuro 134x120`, `rodape-escuro 100x70`.
 - [ ] **Step 3: Evidência** — montar uma folha com as seis sobre o fundo do tema:
 
 ```bash
