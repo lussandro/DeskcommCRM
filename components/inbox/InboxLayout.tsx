@@ -28,6 +28,7 @@ import { ShortcutsHelpDialog } from "./ShortcutsHelpDialog";
 import { OpenConversationProvider } from "@/hooks/notifications/OpenConversationContext";
 // ADR-05: ícone de feature sai do mapa canônico, nunca do pacote direto.
 import { CaretLeft, ChatCircle, IdentificationCard } from "@/lib/ui/icons";
+import { EmptyState } from "@/components/empty";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import { cn } from "@/lib/utils";
@@ -504,10 +505,16 @@ export function InboxLayout({ initialSelectedId = null }: InboxLayoutProps = {})
             {t("Conversa não encontrada ou fora do seu acesso.")}
           </div>
         ) : (
-          <div className="flex h-full flex-col items-center justify-center gap-2 px-6 text-center">
-            <ChatCircle size={36} weight="thin" className="text-text-subtle" aria-hidden />
-            <p className="text-sm font-medium text-text-muted">{t("Selecione uma conversa")}</p>
-            <p className="text-xs text-text-muted">{t("Ou navegue com J e K")}</p>
+          <div className="flex h-full flex-col items-center justify-center overflow-y-auto px-6">
+            <EmptyState
+              icon={ChatCircle}
+              editorial
+              ilustracao="vinhedo"
+              headline="Selecione uma conversa"
+              subcopy="Converse com seus clientes, visitantes e parceiros. Aqui nascem grandes histórias."
+              citacao="Mais que clientes, apreciadores de boas histórias."
+            />
+            <p className="-mt-8 text-xs text-text-muted">{t("Ou navegue com J e K")}</p>
           </div>
         )}
       </div>

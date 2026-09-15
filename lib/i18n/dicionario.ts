@@ -4533,9 +4533,6 @@ export const DICIONARIO: Traducoes = {
     es: "No hay ningún embudo configurado en esta organización.",
   },
   "Não consegui ler estes dados.": { es: "No pude leer estos datos." },
-  "Selecione uma conversa para ver detalhes do contato.": {
-    es: "Selecciona una conversación para ver los detalles del contacto.",
-  },
 
   // ─── Inbox: layout, cabeçalho de conversa e thread ───
   "Conversa não encontrada ou fora do seu acesso.": {
@@ -6107,6 +6104,19 @@ export const DICIONARIO: Traducoes = {
   "Mais que vinhos, grandes histórias": { es: "Más que vinos, grandes historias" },
   "Vinhos · Pessoas · Resultados": { es: "Vinos · Personas · Resultados" },
   "Gestão que brinda ao seu crescimento": { es: "Gestión que brinda por tu crecimiento" },
+  // ─── Inbox e barra lateral editoriais (Plano 5C) ───
+  "Converse com seus clientes, visitantes e parceiros. Aqui nascem grandes histórias.": {
+    es: "Conversa con tus clientes, visitantes y socios. Aquí nacen grandes historias.",
+  },
+  "Mais que clientes, apreciadores de boas histórias.": { es: "Más que clientes, amantes de las buenas historias." },
+  "Selecione um contato": { es: "Selecciona un contacto" },
+  "Veja aqui os detalhes do cliente, as demandas abertas e a memória do contato.": {
+    es: "Mira aquí los detalles del cliente, las demandas abiertas y la memoria del contacto.",
+  },
+  "O vinho aproxima pessoas e transforma momentos em memórias.": {
+    es: "El vino acerca a las personas y transforma momentos en recuerdos.",
+  },
+  "Grandes vinhos criam grandes conexões.": { es: "Grandes vinos crean grandes conexiones." },
   "Criar conta": { es: "Crear cuenta" },
   "Senha": { es: "Contraseña" },
   "Confirmar senha": { es: "Confirmar contraseña" },

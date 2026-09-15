@@ -300,7 +300,7 @@ export function InboxFilters({ value, onChange }: Props) {
               >
                 {t(meta.label)}
                 {typeof count === "number" && count > 0 && (
-                  <span className="text-[11px] tabular-nums text-text-subtle">{count}</span>
+                  <span className="rounded-full bg-accent-soft px-1.5 text-[11px] font-medium tabular-nums text-accent-text">{count}</span>
                 )}
               </TabsTrigger>
             );

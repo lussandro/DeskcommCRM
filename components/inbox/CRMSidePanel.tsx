@@ -540,8 +540,22 @@ export function CRMSidePanel({ conversation }: Props) {
 
   if (!conversation) {
     return (
-      <aside className="flex h-full items-center justify-center border-l border-border p-4 text-center text-xs text-muted-foreground">
-        {t("Selecione uma conversa para ver detalhes do contato.")}
+      <aside className="flex h-full flex-col items-center justify-center gap-8 border-l border-border p-6 text-center">
+        <div className="space-y-2">
+          <h2 className="font-display text-xl font-semibold text-text">{t("Selecione um contato")}</h2>
+          <p className="text-sm text-text-muted">
+            {t("Veja aqui os detalhes do cliente, as demandas abertas e a memória do contato.")}
+          </p>
+        </div>
+        <figure className="relative w-full max-w-xs overflow-hidden rounded-lg border border-border bg-surface">
+          <div
+            aria-hidden="true"
+            className="absolute inset-y-0 left-0 w-2/5 bg-[url('/ilustracoes/citacao-claro.webp')] bg-cover bg-center [mask-image:linear-gradient(to_right,black_60%,transparent)] dark:bg-[url('/ilustracoes/citacao-escuro.webp')]"
+          />
+          <blockquote className="relative py-6 pl-[42%] pr-4 text-left font-display text-sm italic leading-relaxed text-text">
+            “{t("O vinho aproxima pessoas e transforma momentos em memórias.")}”
+          </blockquote>
+        </figure>
       </aside>
     );
   }
