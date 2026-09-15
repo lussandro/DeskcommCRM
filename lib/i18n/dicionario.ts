@@ -6098,6 +6098,15 @@ export const DICIONARIO: Traducoes = {
 
   // ─── Auth: login, cadastro, recuperação de senha, MFA, códigos de recuperação ───
   "Entrar": { es: "Entrar" },
+  // ─── Fachada de acesso Bacco (app/(public)/layout.tsx, components/auth/) ───
+  "Acesse sua conta no": { es: "Accede a tu cuenta en" },
+  "ou": { es: "o" },
+  "seu@email.com": { es: "tu@email.com" },
+  "Sua senha": { es: "Tu contraseña" },
+  "Mostrar": { es: "Mostrar" },
+  "Mais que vinhos, grandes histórias": { es: "Más que vinos, grandes historias" },
+  "Vinhos · Pessoas · Resultados": { es: "Vinos · Personas · Resultados" },
+  "Gestão que brinda ao seu crescimento": { es: "Gestión que brinda por tu crecimiento" },
   "Criar conta": { es: "Crear cuenta" },
   "Senha": { es: "Contraseña" },
   "Confirmar senha": { es: "Confirmar contraseña" },

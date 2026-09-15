@@ -142,4 +142,7 @@ export {
   GoogleLogo,
   MapPin,
   ArrowsOutSimple,
+  // fachada de acesso: ícone do campo de e-mail e "ocultar senha"
+  Envelope,
+  EyeSlash,
 } from "@phosphor-icons/react/dist/ssr";
