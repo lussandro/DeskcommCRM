@@ -140,7 +140,8 @@ describe("o favicon segue a mesma regra", () => {
 
   it("desenha o símbolo quando a marca é a do produto, e a inicial quando não é", () => {
     expect(icone).toMatch(/marcaEhADoProduto\(\{ name: marca\.nome, logoUrl: marca\.logoUrl \}\)/);
-    expect(icone).toMatch(/<path d=\{SIMBOLO\.d\}/);
+    expect(icone).toMatch(/SIMBOLO\.corpo\.map/);
+    expect(icone).toMatch(/SIMBOLO\.uvas\.map/);
     expect(icone).toMatch(/letraDoIcone\(marca\.nome\)/);
   });
 });

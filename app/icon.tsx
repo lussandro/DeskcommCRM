@@ -79,8 +79,8 @@ export default async function Icon() {
   const marca = await marcaDaSaida(null);
 
   if (marcaEhADoProduto({ name: marca.nome, logoUrl: marca.logoUrl })) {
-    // 78% da aresta: o D ocupa ~75% do próprio viewBox, então sobra o mesmo
-    // respiro que a letra tem no ramo de baixo.
+    // 78% da aresta: o viewBox do símbolo já é recortado pelo bbox real (margem
+    // de 4%), então sobra o mesmo respiro que a letra tem no ramo de baixo.
     const lado = Math.round(size.width * 0.78);
     return new ImageResponse(
       (
@@ -95,9 +95,15 @@ export default async function Icon() {
           }}
         >
           <svg viewBox={SIMBOLO.viewBox} width={lado} height={lado}>
-            <g fill={CORES_DA_MARCA.claro.simbolo} transform={SIMBOLO.transform}>
-              <path d={SIMBOLO.d} />
-              <rect {...SIMBOLO.modulo} />
+            <g fill={CORES_DA_MARCA.claro.corpo}>
+              {SIMBOLO.corpo.map((d, i) => (
+                <path key={i} d={d} />
+              ))}
+            </g>
+            <g fill={CORES_DA_MARCA.claro.uvas}>
+              {SIMBOLO.uvas.map((u, i) => (
+                <circle key={i} cx={u.cx} cy={u.cy} r={u.r} />
+              ))}
             </g>
           </svg>
         </div>

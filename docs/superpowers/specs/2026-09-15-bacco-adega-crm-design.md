@@ -95,6 +95,7 @@ Montserrat), que fica como referência da marca-mãe.
 | Tagline (no logo) | "Relacionamento e atendimento inteligente" — substitui a do board |
 | Posicionamento (copy) | "CRM exclusivo para vinícolas" |
 | Símbolo | **B** serifado (Playfair Display 600) com folha de videira em borgonha no topo e cacho de 6 uvas em ouro — substitui a gota-balão do board |
+| Logotipo da barra (app) | B + uvas · "Bacco" · "ADEGA" em borgonha · "CRM" em ouro, gerado do SVG horizontal. **Omite de propósito** a linha separadora e a tagline (ilegíveis na altura da barra) e a folha (o SVG horizontal não a tem) — Plano 1 v2.1, Task 3 |
 
 Assinaturas do board para copy: "Conexões que maturam resultados", "Vinhos movem pessoas.
 Dados aproximam.", "Tradição encontra inteligência para um brinde mais longe."
