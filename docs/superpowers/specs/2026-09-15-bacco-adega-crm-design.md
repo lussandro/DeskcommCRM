@@ -33,8 +33,14 @@ Achados que determinam a estratégia (verificados no código da `v1.27.0`):
 
 - Produção aplica **`supabase/baseline.sql`** (pg_dump idempotente, ~1,2 MB), não a pasta
   `migrations/` (`hostgator-setup-kit/install.sh:1775-1828`, `update.sh:139-175`).
-- `docker-compose.prod.yml:35,92,212` usa `ghcr.io/melgarafael/deskcomm*:stable` por padrão; o
-  `update.sh` do upstream puxa essas imagens e **apagaria o rebrand**.
+- O kit fixa o namespace das imagens em `hostgator-setup-kit/_common.sh:453`
+  `IMG_NS="ghcr.io/melgarafael"` e o `update.sh` **regrava** `APP_IMAGE`/`WORKER_IMAGE`/
+  `SCHEDULER_IMAGE` a partir dele (`update.sh:233-237`); os defaults também apontam para o
+  upstream em `docker-compose.prod.yml:35,92,212` e `.env.hostgator.example:32,39,41`.
+  Sem trocar esses pontos, a primeira atualização volta a rodar a imagem do upstream e
+  **apaga o rebrand**. Também apontam para o upstream: `REPO_URL` em `install.sh:18`,
+  `comecar.sh:16`, `_common.sh:470`, e as URLs `raw.githubusercontent.com` em `comecar.sh:12`,
+  `diagnostico.sh:22`.
 - Ritmo do upstream: 39 tags de 2026-07-27 a 2026-09-15.
 
 Decisões:
@@ -47,8 +53,15 @@ Decisões:
 3. **Kit de instalação próprio**: `install.sh`/`update.sh`/`comecar.sh`/`diagnostico.sh`
    apontam para o repo e registry Bacco; saem os links de afiliado HostGator e as URLs
    `raw.githubusercontent.com/melgarafael/...`.
-4. **Schema próprio** (quando existir) em `supabase/bacco.sql`, idempotente, aplicado **depois**
-   do `baseline.sql` pelo kit Bacco. Nunca editar `baseline.sql`. A v1 não prevê schema novo.
+4. **Schema próprio segue a doutrina do upstream** (revisado após review Codex, 2026-09-15):
+   o kit só aplica `supabase/baseline.sql` (`install.sh:1775-1827`, `update.sh:149-156`) e
+   `tests/unit/manifest-x-migrations.test.ts` cobra o MANIFEST. Toda mudança de schema Bacco
+   sai como a **tripla** de `CLAUDE.md:464-495`: arquivo em `supabase/migrations/`, linha no
+   `MANIFEST.md`, apêndice idempotente rotulado no fim do `baseline.sql`
+   (`-- ---- <coisa> (migration NNNN, bacco) ----`). ~~`bacco.sql` separado~~ descartado: exigiria
+   kit divergente e ficaria fora dos gates. Custo aceito: conflito no fim do `baseline.sql` a
+   cada merge de tag — resolve-se mantendo os dois apêndices (ambos idempotentes) e rodando
+   `pnpm test:db`. A v1 **tem** schema novo (§5.5).
 5. `LICENSE` mantém o copyright original (exigência MIT); acrescenta-se o da Bacco Sistemas.
 
 ## 4. Rebrand
@@ -102,6 +115,22 @@ kanban nos dois temas.
 
 ### 4.4 Marca do produto
 
+- **Fork com marca de produto, deliberado** (review Codex, 2026-09-15). A doutrina do
+  upstream (`CLAUDE.md:147-153`) é "uma imagem serve todas as marcas; marca vem de
+  `platform_branding`". Isso cobre nome/logo/cor de accent, **não** paleta completa,
+  tipografia e símbolo em duas cores — que é o que o dono pediu. Portanto o Bacco Adega CRM
+  troca a marca **do produto** (imagem própria, §3.2), e os testes-doutrina mudam no mesmo
+  commit, com a razão escrita no teste:
+  - `tests/unit/marca-do-produto-nao-se-edita-no-codigo.test.ts:57` `MARCA_DO_PRODUTO`;
+  - `tests/unit/branding.test.ts:146` prefixo `deskcommcrm` → `bacco-adega-crm`, e a catraca
+    `MARCA_CONGELADA` (~`:210`) reconciliada com o que sobrar de "deskcomm";
+  - `branding-contraste.test.ts:61,63`, `branding-rampa.test.ts:113,116`,
+    `branding-pares-pintados.test.ts:340` (âncoras Sage `#506d48`/`#161510`);
+  - fixtures com `#506d48` literal (`app/api/v1/ai/providers/route.test.ts:52`,
+    `app/email-templates/[modelo]/route.test.ts:22`, `lib/email/templates/acesso-gotrue.test.ts:21`);
+  - `supabase/templates/{confirmation,recovery}.html` e `hostgator-setup-kit/marca-emails.sh:140`
+    (fallback `#506d48`).
+  A instância Bacco continua podendo receber marca por organização (logo da vinícola).
 - `lib/branding.ts:19` `DEFAULT_APP_NAME = "Bacco Adega CRM"`.
 - **Arte oficial recebida em 2026-09-15**, guardada em `docs/brand/bacco/`:
   `bacco-adega-crm-simbolo.svg` (512×512), `bacco-adega-crm-logo-principal.svg` (1200×620,
@@ -244,8 +273,33 @@ guardrail disso (busca por idade/álcool em `lib` e `app`: zero).
   ⚠️ **Texto da mensagem de encerramento: pendente do dono (§8).** Sem ele, o contato é marcado
   e bloqueado, mas nada é enviado.
 - Enquanto não houver resposta "Sim", o guardrail bloqueia oferta (falha fechado), nunca libera.
-- Onde gravar a confirmação: medir no plano se `contacts` já tem campo/atributo adequado
-  (ex.: `contact_ai_authorization`, migration 0206) antes de propor coluna em `bacco.sql`.
+- **Fatos medidos no código (2026-09-15) que restringem a implementação:**
+  - Motor que responde WhatsApp é `lib/agent-engine` (worker), não `lib/ai/runtime`
+    (`@deprecated`, `agent.ts:1-4`). Turno: `inbound-turn.ts` `executarTurnoDoAgente` (`:1588`).
+  - **`contacts.is_blocked` NÃO serve para o menor**: bloqueia também o envio humano pela inbox
+    (`app/api/v1/messages/_handler.ts:378-385` → 403). Como a conversa precisa seguir com o
+    humano, o menor ganha **campo próprio** — não existe hoje (`contacts` não tem
+    `attributes`/`metadata`; `ai_authorized_at` da 0206 é outro conceito). ⇒ migration (tripla,
+    §3.4).
+  - Interceptação da resposta ANTES do LLM segue o padrão já existente de handoff/opt-out
+    ambíguo (`inbound-turn.ts:2059-2125`): detectar, enviar texto fixo, `return` sem modelo.
+    Envio de texto fixo pelo mesmo caminho de saída (pacing, janela, LGPD, ledger):
+    padrão `avisarLeadDaEscalacao` (`lib/agent-engine/agent/aviso-de-escalacao.ts:88`).
+  - Gate de envio: `Gate { name; evaluate(ctx): GateVerdict }` síncrono e puro
+    (`before-send.ts:280`). Gate novo exige atualizar `ORDEM_ESPERADA` em
+    `tests/unit/before-send-chain-shape.test.ts:26-45` e subir
+    `BEFORE_SEND_CHAIN_VERSION` (`before-send.ts:691`, hoje 7) no mesmo commit. Posição, nome,
+    trace e comportamento em follow-up/automação definidos no Plano 2.
+  - Mover para perdido: `encerraDemanda` (`lib/leads/encerramento.ts:73`); o trigger
+    `fn_validate_lost_reason_required` (`baseline.sql:851-878`) **recusa motivo não cadastrado**
+    — "Menor de 18 anos" precisa existir em `organizations.settings.lost_reasons` de toda org
+    (seed na criação da organização).
+- **LGPD da declaração** (review Codex): gravar o mínimo (resposta, data/hora, conversa,
+  mensagem de origem — sem data de nascimento), com `audit()`; incluir no export e na
+  anonimização LGPD do contato; visível na timeline do lead; **reversível só por humano com
+  papel `manager`+, auditado** (ex.: o responsável corrige um "2" digitado por engano) — o
+  "permanente" do bloqueio vale para agente e automações, não impede correção humana
+  auditada. Base legal e retenção: texto jurídico do dono (§8).
 - Teste unitário do guardrail: sem confirmação → bloqueia; com confirmação → libera; texto
   ausente → bloqueia e registra motivo.
 
@@ -260,8 +314,9 @@ guardrail disso (busca por idade/álcool em `lib` e `app`: zero).
     ⚠️ O plano antigo do vault (`projetos/bacco-crm/_root_docs/plano-supabase-selfhosted.md`)
     desligava o Realtime — **não copiar essa otimização aqui**. Studio, analytics e imgproxy
     podem ficar desligados em produção.
-  - Extensões exigidas pelo baseline: `vector`, `citext`, `pg_trgm`, `pgcrypto`
-    (`update.sh:146`, `install.sh:1783`).
+  - Extensões: o kit cria `vector`, `citext`, `pg_trgm` antes do baseline
+    (`install.sh:1787-1789`, `update.sh:146`); `pgcrypto` é criada pelo próprio
+    `baseline.sql:6171-6175`.
   - Upstream testa em pg15 (`CLAUDE.md:446`) e o kit roda `psql` do `postgres:17-alpine` como
     cliente; a versão do Postgres da stack Supabase escolhida precisa passar `pnpm test:db`
     antes do install.
@@ -310,6 +365,43 @@ Decisões do dono em 2026-09-15.
 
 - **v1: manual.** Platform admin cria a organização, e suspende/reativa inadimplente pela tela
   de admin existente. Nenhum código de cobrança no CRM.
+- ⚠️ **Suspensão do upstream é só de tela** (medido por leitura em 2026-09-15, não executado):
+  `POST /api/v1/admin/tenants/:id/suspend` grava `organizations.status='suspended'`, mas o
+  único efeito é o redirect de `app/app/layout.tsx:109` para `/account-suspended`.
+  `fn_user_org_ids()` (`baseline.sql:788-794`) filtra só `user_organizations.revoked_at`, não o
+  status da organização; nenhum ponto de `lib/agent-engine`, `workers/`, `app/api/v1/webhooks`,
+  `app/api/mcp` ou `app/api/v1` (fora de admin) lê `organizations.status`. **Uma vinícola
+  suspensa continua com agente respondendo WhatsApp, automações, campanhas, API e MCP.**
+- Matriz que a suspensão da v1 precisa cobrir, cada linha com prova (teste ou execução):
+
+  | Superfície | Hoje | Exigido suspensa |
+  |---|---|---|
+  | Login / telas `app/app` | redirect ✅ | redirect |
+  | API `/api/v1/*` com cookie | responde | 403 |
+  | API/MCP com token `tok_` | responde | 401/403 |
+  | Webhook WAHA inbound | ingere | ingere e guarda (não perder mensagem), sem despachar agente |
+  | Agente (worker `inbound_turn`) | responde | não responde |
+  | Follow-up, automações, campanhas, crons | disparam | não disparam |
+  | Envio humano pela inbox | envia | bloqueado (tela já redireciona) |
+  | Reativação | — | tudo volta sem perda, sem reenvio em massa |
+
+  **Decisão do dono (2026-09-15): código de enforcement na v1.** Uma checagem central de
+  `organizations.status` aplicada em cada superfície da matriz, com teste por linha; mensagem
+  inbound de org suspensa é guardada sem despachar agente; reativação sem perda e sem reenvio
+  em massa. O redirect de tela existente continua. Plano próprio (§10).
+
+## 10. Planos de implementação
+
+A spec vira quatro planos independentes, cada um entregando software testável sozinho, cada
+um passando por refutador (agente Claude) e `codex review` antes da aprovação do dono e de
+novo sobre o código entregue:
+
+| Plano | Escopo | Depende de |
+|---|---|---|
+| 1. Rebrand + vertical | §4 (paleta, fontes, marca, testes-doutrina), §5.1–§5.4 (funis, captação, catálogo, agente) | nada externo |
+| 2. Maioridade | §5.5 (pergunta fixa, resposta numerada, campo próprio, gate, LGPD) | texto de encerramento do menor (§8) para o envio ao menor |
+| 3. Enforcement da suspensão | §6a matriz de suspensão | nada externo |
+| 4. Kit, imagens e deploy | §3 (imagens GHCR Bacco, kit sem upstream/afiliado), §6 (Supabase próprio, VPS) | VPS com Ubuntu 24.04; org/token GHCR (§8) |
 - O campo `plan` (`standard/pro/enterprise`, `lib/schemas/tenant-creation.ts:14`) **é só
   rótulo**: vai para o audit (`admin/tenants/route.ts:222`) e não limita nada. Não fingir que
   limita: na v1 o plano é registrado, não imposto.
@@ -327,14 +419,18 @@ Decisões do dono em 2026-09-15.
 
 Nada é "pronto" sem ter rodado. A v1 está pronta quando houver evidência de:
 
-1. `pnpm gov:verify` e `pnpm test:db` verdes na branch `bacco`.
+1. `pnpm gov:verify`, `pnpm test:db` e `pnpm test:shell` verdes na branch `bacco`
+   (`test:shell` é o único gate do kit, `CLAUDE.md:552`); fragmento em `.changes/` para mudança
+   visível ao operador, conferido com `pnpm release:conferir` (`CLAUDE.md:560-565`).
+   Linha de base medida na `v1.27.0` intacta antes de qualquer mudança, para separar falha
+   pré-existente de regressão nossa.
 2. Imagens próprias construídas e subidas pelo kit Bacco num **install limpo** na VPS.
 3. Playwright nas telas login, onboarding, inbox, kanban, detalhe de lead, catálogo e
    `/admin/marca`, temas claro e escuro — screenshots em `evidence/bacco-rebrand/`.
 4. `grep` de "deskcomm" em texto visível ao usuário final: zero (fora dos identificadores
    técnicos listados em §2).
 5. Fluxo ponta a ponta executado na VPS: mensagem real no WhatsApp (WAHA) → lead criado no
-   funil `vinho_venda` → agente pede maioridade antes de ofertar → move de etapa.
+   funil `consumidor_vinho` → agente pede maioridade antes de ofertar → move de etapa.
 
 ## 8. Pendências do dono (bloqueiam partes, não o todo)
 
@@ -344,6 +440,7 @@ Nada é "pronto" sem ter rodado. A v1 está pronta quando houver evidência de:
 | Upgrade da VPS para KVM 2 + reinstalação Ubuntu 24.04 (apaga a VPS atual, vazia) | §6 install |
 | Termos de uso + contrato de tratamento de dados (Bacco operadora × vinícola controladora) | §6a onboarding de cliente |
 | Contrato de licença por organização no Bacco-Licenças | §6a cobrança v1.1 |
+| Reinstalar a VPS com Ubuntu 24.04 (hardware KVM 2 já medido, SO ainda CentOS Stream 10) | §6 install |
 | GHCR da Bacco (decidido): nome da org/conta GitHub + token de leitura de pacotes para a VPS | §3.2 deploy |
 
 Resolvidas em 2026-09-15: Supabase próprio (§6); nichos exclusivos de vinícola (§5.1);
