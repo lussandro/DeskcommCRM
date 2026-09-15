@@ -211,6 +211,19 @@ Expected: `10.231.0.0/24`. O app receberá `10.231.0.3`.
 
 Todos os comandos compose desta task usam: `C="docker compose -f docker-compose.yml -f docker-compose.pg15.yml -f docker-compose.bacco.yml"` (em `/opt/supabase/docker`).
 
+⚠️ **Medido na execução (2026-09-15) — antes de subir qualquer contêiner:** a imagem da Hostinger grava `dns-search=localhost;` na conexão `cloud-init eth0`; o Docker propaga `search localhost` para os contêineres e, em imagem glibc, `db` vira `db.localhost` → `::1`, derrubando o `realtime` (crash loop, `tcp connect (db:5432): connection refused`). Corrigir no host:
+
+```bash
+ssh root@2.25.222.110 'set -e
+con=$(nmcli -g NAME,DEVICE con show --active | awk -F: "\$2==\"eth0\"{print \$1}")
+uuid=$(nmcli -g connection.uuid con show "$con"); f=$(grep -rl "^uuid=$uuid" /etc/NetworkManager/system-connections/ | head -1)
+cp -a "$f" "/root/$(basename "$f").bak-$(date +%Y%m%d%H%M%S)"
+nmcli con mod "$con" ipv4.dns-search "" ipv6.dns-search "" && nmcli device reapply eth0
+printf "network: {config: disabled}\n" > /etc/cloud/cloud.cfg.d/99-bacco-disable-network-config.cfg
+grep ^search /etc/resolv.conf'
+```
+Expected: `search baccosistemas.com.br` (sem `localhost`). Contêineres criados antes da correção precisam de `up -d --force-recreate`.
+
 - [ ] **Step 1: Código fixado**
 
 ```bash
