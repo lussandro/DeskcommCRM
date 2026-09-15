@@ -47,9 +47,15 @@ Decisões:
 
 1. **Merge só por tag de release** (`git merge vX.Y.Z`), nunca da `main`. Cada merge exige
    `pnpm gov:verify` e `pnpm test:db` verdes antes de gerar imagem.
-2. **Imagens próprias** para app, worker e scheduler, construídas nesta máquina (19 GB RAM) ou
-   em CI do fork, publicadas num registry da Bacco. `.env` da VPS fixa `APP_IMAGE`,
-   `WORKER_IMAGE`, `SCHEDULER_IMAGE`. A VPS nunca compila.
+2. **Imagens próprias** para app, worker e scheduler, construídas no **GitHub Actions** do fork e
+   publicadas no **GHCR** (decisão do dono, 2026-09-15). Repo privado na **conta pessoal** do dono
+   por ora; migrar para org Bacco depois troca remote e `IMG_NS`. `.env` da VPS fixa `APP_IMAGE`,
+   `WORKER_IMAGE`, `SCHEDULER_IMAGE`. Nem a VPS nem a máquina local compilam.
+   **Gates estáticos** (`typecheck`, `lint`, `test:unit`, `test:db`, `test:shell`) rodam no CI do
+   GitHub. **Teste a quente** (app, Supabase, WhatsApp, e2e, screenshots) roda **na VPS com
+   Docker** — nunca na máquina local (decisão do dono, 2026-09-15). A linha de base oficial é a
+   primeira execução do CI sobre a `v1.27.0` sem mudanças: a medida local (7 falhas em 9065
+   casos, todas ≥15 s — suspeita de timeout por carga) não vale como referência.
 3. **Kit de instalação próprio**: `install.sh`/`update.sh`/`comecar.sh`/`diagnostico.sh`
    apontam para o repo e registry Bacco; saem os links de afiliado HostGator e as URLs
    `raw.githubusercontent.com/melgarafael/...`.
@@ -96,8 +102,17 @@ diferentes, o SVG ganha.
 - Editar **diretamente** os tokens de `app/globals.css` (`:root` e `[data-theme="dark"]`).
   Arquivo separado não serve: `lib/branding/regua-do-produto.ts` é gerado do `globals.css`
   e `lib/branding/contraste.ts` extrai a régua dele; override por fora dessincroniza a derivação.
-- Rampa accent de 11 tons a partir do bordô; neutros quentes a partir do creme; dourado como
-  cor secundária (destaques, marca), não como accent de ação.
+- Rampa accent de 11 tons a partir do bordô (`rampaDeSemente("#4a0e1f")`); dourado como cor
+  secundária (destaques, marca), não como accent de ação.
+- **Neutros e superfícies do upstream mantidos na v1** (decisão do dono, 2026-09-15): fundo
+  `#faf9f6`, escala neutra e superfícies intactas nos dois temas. Motivo medido pelo refutador:
+  trocar `--color-bg` para o creme `#f5f0e6` deixa `surface-elevated` (`#f5f3ee`, luminância
+  0,8969) mais claro que o fundo (0,8745) e quebra a monotonicidade da rampa neutra. O creme
+  `#f5f0e6` fica na **marca** (logo, login/onboarding, e-mails), não no fundo do app.
+- Testes de **algoritmo** de branding (`branding-contraste`, `branding-pares-pintados`,
+  `branding-rampa`) que usam a Sage como controle positivo passam a ler uma **régua Sage
+  congelada como fixture** do teste, e não a do `globals.css`; só as asserções sobre a paleta
+  **do produto** mudam para borgonha. Colar números novos em controle positivo desarma o teste.
 - Dark mode desenhado à parte (padrão do upstream: "Light + dark drawn separately").
 - `--color-danger` precisa ficar **distinguível** do accent bordô (botão primário não pode
   parecer destrutivo): verificar par accent × danger também sob simulação de dicromacia
@@ -346,7 +361,10 @@ guardrail disso (busca por idade/álcool em `lib` e `app`: zero).
 - **VPS atual medida em 2026-09-15** (`ssh root@2.25.222.110`, acesso por chave OK): Hostinger
   `srv1982512.hstgr.cloud`, KVM, **1 vCPU / 3,6 GB / 50 GB / CentOS Stream 10 / sem Docker /
   sem swap**, portas ocupadas só 22 e 9090 (Cockpit). **Não atende.** Decisão do dono: upgrade
-  para **Hostinger KVM 2 (2 vCPU / 8 GB / 100 GB) + reinstalar Ubuntu 24.04** — piso de
+  para **Hostinger KVM 2 (2 vCPU / 8 GB / 100 GB) + reinstalar Debian 12 (bookworm)** (trocado de
+  Ubuntu 24.04 pelo dono em 2026-09-15; família Debian é a que os docs do compose do upstream
+  pressupõem, mas o caminho *testado* pelo upstream é Ubuntu — primeira execução do kit no
+  Debian 12 é verificação, não suposição) — piso de
   **piloto** com poucas vinícolas, abaixo da estimativa de 4 vCPU / 160 GB. Consequências:
   medir `docker stats` e disco no primeiro install; swap obrigatório; Studio/analytics/imgproxy
   do Supabase desligados; limite de sessões WhatsApp simultâneas (~150 MB cada) definido pela
