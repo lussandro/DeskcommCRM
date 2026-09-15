@@ -266,7 +266,7 @@ export function SidebarContent({
                           className={cn(
                             "relative flex items-center gap-3 rounded-md px-3 py-1 text-sm transition-colors",
                             isActive
-                              ? "bg-accent text-accent-foreground"
+                              ? "bg-accent-soft font-medium text-accent-text"
                               : "text-muted-foreground hover:bg-accent/50 hover:text-foreground",
                             collapsed && "justify-center px-2",
                           )}
@@ -292,7 +292,7 @@ export function SidebarContent({
                         className={cn(
                           "flex items-center gap-3 rounded-md px-3 py-1 text-sm transition-colors",
                           pathname === group.hub.href
-                            ? "bg-accent text-accent-foreground"
+                            ? "bg-accent-soft font-medium text-accent-text"
                             : "text-muted-foreground hover:bg-accent/50 hover:text-foreground",
                           collapsed && "justify-center px-2",
                         )}
@@ -309,6 +309,17 @@ export function SidebarContent({
         })}
       </nav>
       <div className="border-t p-2">
+        {!collapsed && (
+          <div
+            aria-hidden="true"
+            className="hidden items-end gap-2 px-2 pb-2 [@media(min-height:1000px)]:flex"
+          >
+            <div className="h-12 w-16 shrink-0 bg-[url('/ilustracoes/rodape-claro.webp')] bg-contain bg-bottom bg-no-repeat [mask-image:linear-gradient(to_right,black_70%,transparent)] dark:bg-[url('/ilustracoes/rodape-escuro.webp')]" />
+            <p className="font-display text-[11px] italic leading-tight text-text-muted">
+              {t("Grandes vinhos criam grandes conexões.")}
+            </p>
+          </div>
+        )}
         {rodape && (
           <Link
             href={rodape.href}
@@ -318,7 +329,7 @@ export function SidebarContent({
             className={cn(
               "mb-1 flex items-center gap-3 rounded-md px-3 py-1 text-sm transition-colors",
               pathname.startsWith(rodape.href)
-                ? "bg-accent text-accent-foreground"
+                ? "bg-accent-soft font-medium text-accent-text"
                 : "text-muted-foreground hover:bg-accent/50 hover:text-foreground",
               collapsed && "justify-center px-2",
             )}
@@ -375,7 +386,7 @@ export function Sidebar({ collapsed }: { collapsed: boolean }) {
         //
         // `shrink-0` porque item de flex encolhe por padrão, e uma barra de 60
         // espremida para caber é o mesmo defeito por outro caminho.
-        "sticky top-0 z-30 flex h-screen shrink-0 flex-col border-r bg-card transition-[width] duration-200",
+        "sticky top-0 z-30 flex h-screen shrink-0 flex-col border-r bg-sidebar transition-[width] duration-200",
         collapsed ? "w-16" : "w-60",
       )}
     >
