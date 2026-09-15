@@ -19,9 +19,10 @@
 import type { ActivityType } from "@/lib/leads/activity-vocabulary";
 
 /**
- * O que esta organização marca. Espelha os nichos que o onboarding já usa
- * (`lib/onboarding/pacotes-de-funil.ts`): clínica, imobiliária, serviços,
- * curso, loja, genérico.
+ * O que esta organização marca. Os códigos vêm do upstream e espelham o CHECK
+ * da migration 0177; os nichos do onboarding do Bacco Adega CRM
+ * (`lib/onboarding/pacotes-de-funil.ts`) são clientes da vinícola, enoturismo e
+ * consumidor de vinho — visita e degustação caem em `visita`.
  */
 export const CATEGORIAS_DE_AGENDAMENTO = [
   "consulta",

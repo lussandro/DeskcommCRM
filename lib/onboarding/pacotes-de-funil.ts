@@ -12,7 +12,7 @@
  * 2. São a RÉGUA. É contra estes exemplos que a sugestão da IA é pedida e
  *    comparada. Sem um alvo concreto, "sugira um funil" devolve cinco colunas
  *    com nomes de manual de vendas ("Prospecção", "MQL", "Fundo de funil") que
- *    não são o que o dono de uma clínica chama as coisas.
+ *    não são o que o dono de uma vinícola chama as coisas.
  *
  * ⚠️ TODA ETAPA CARREGA O PASSO. Um pacote que só desse os nomes trocaria um
  * quadro errado por um quadro certo e igualmente parado — ver o cabeçalho de
@@ -33,80 +33,48 @@ export interface PacoteDeFunil {
 
 export const PACOTES: readonly PacoteDeFunil[] = [
   {
-    id: "clinica",
-    comoSeApresenta: "Clínica, consultório ou salão",
+    id: "clientes_vinicola",
+    comoSeApresenta: "Vender para restaurantes, empórios e distribuidores",
     proposta: {
-      nome: "Agendamentos",
+      nome: "Clientes da vinícola",
       etapas: [
         { nome: "Novo contato", passo: "new" },
         { nome: "Já respondi", passo: "contacted" },
-        { nome: "Entendendo o caso", passo: "qualifying" },
-        { nome: "Quer agendar", passo: "qualified" },
-        { nome: "Escolhendo horário", passo: "negotiating" },
-        { nome: "Consulta marcada", passo: "won" },
-        { nome: "Não vai marcar", passo: "lost" },
-      ],
-    },
-  },
-  {
-    id: "imobiliaria",
-    comoSeApresenta: "Imobiliária ou corretor",
-    proposta: {
-      nome: "Interessados",
-      etapas: [
-        { nome: "Novo interessado", passo: "new" },
-        { nome: "Já respondi", passo: "contacted" },
-        { nome: "Entendendo o que procura", passo: "qualifying" },
-        { nome: "Sei o que oferecer", passo: "qualified" },
-        { nome: "Visitando imóveis", passo: "negotiating" },
-        { nome: "Fechou negócio", passo: "won" },
-        { nome: "Desistiu", passo: "lost" },
-      ],
-    },
-  },
-  {
-    id: "servicos",
-    comoSeApresenta: "Serviços, agência ou obra",
-    proposta: {
-      nome: "Orçamentos",
-      etapas: [
-        { nome: "Pedido novo", passo: "new" },
-        { nome: "Já respondi", passo: "contacted" },
-        { nome: "Entendendo o projeto", passo: "qualifying" },
-        { nome: "Orçamento enviado", passo: "qualified" },
-        { nome: "Negociando", passo: "negotiating" },
-        { nome: "Fechou", passo: "won" },
+        { nome: "Entendendo o negócio dele", passo: "qualifying" },
+        { nome: "Enviei tabela ou amostra", passo: "qualified" },
+        { nome: "Negociando pedido", passo: "negotiating" },
+        { nome: "Pedido fechado", passo: "won" },
         { nome: "Não fechou", passo: "lost" },
       ],
     },
   },
   {
-    id: "curso",
-    comoSeApresenta: "Curso, mentoria ou infoproduto",
+    id: "enoturismo_interesse",
+    comoSeApresenta: "Enoturismo — visitas e degustações",
     proposta: {
-      nome: "Matrículas",
+      nome: "Visitas",
       etapas: [
         { nome: "Novo interessado", passo: "new" },
         { nome: "Já respondi", passo: "contacted" },
         { nome: "Tirando dúvidas", passo: "qualifying" },
-        { nome: "Quer entrar", passo: "qualified" },
-        { nome: "Fechando condições", passo: "negotiating" },
-        { nome: "Matriculado", passo: "won" },
+        { nome: "Quer visitar", passo: "qualified" },
+        { nome: "Combinando data", passo: "negotiating" },
+        { nome: "Encaminhado para reserva", passo: "won" },
         { nome: "Desistiu", passo: "lost" },
       ],
     },
   },
   {
-    id: "loja",
-    comoSeApresenta: "Loja — online ou de rua",
+    id: "consumidor_vinho",
+    comoSeApresenta: "Vender vinho direto ao consumidor",
     proposta: {
-      nome: "Vendas",
+      nome: "Vendas ao consumidor",
       etapas: [
         { nome: "Novo contato", passo: "new" },
         { nome: "Já respondi", passo: "contacted" },
-        { nome: "Escolhendo o produto", passo: "qualifying" },
-        { nome: "Vai levar", passo: "qualified" },
-        { nome: "Aguardando pagamento", passo: "negotiating" },
+        { nome: "Entendendo o gosto", passo: "qualifying" },
+        { nome: "Indiquei rótulos", passo: "qualified" },
+        { nome: "Fechando pedido", passo: "negotiating" },
         { nome: "Pedido pago", passo: "won" },
         { nome: "Não comprou", passo: "lost" },
       ],

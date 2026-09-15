@@ -5250,11 +5250,11 @@ export const DICIONARIO: Traducoes = {
   "a resposta não veio no formato esperado": { es: "la respuesta no vino en el formato esperado" },
 
   // ─── Onboarding: funil — pacotes prontos (lib/onboarding/pacotes-de-funil.ts) ───
-  "Clínica, consultório ou salão": { es: "Clínica, consultorio o salón" },
-  "Imobiliária ou corretor": { es: "Inmobiliaria o corredor" },
-  "Serviços, agência ou obra": { es: "Servicios, agencia u obra" },
-  "Curso, mentoria ou infoproduto": { es: "Curso, mentoría o infoproducto" },
-  "Loja — online ou de rua": { es: "Tienda — en línea o física" },
+  "Vender para restaurantes, empórios e distribuidores": {
+    es: "Vender a restaurantes, tiendas gourmet y distribuidores",
+  },
+  "Enoturismo — visitas e degustações": { es: "Enoturismo — visitas y degustaciones" },
+  "Vender vinho direto ao consumidor": { es: "Vender vino directo al consumidor" },
   "Outro tipo de negócio": { es: "Otro tipo de negocio" },
 
   // ─── Onboarding: tool catalog (capacidades) usadas em "Ele já vem sabendo" ───

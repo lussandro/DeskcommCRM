@@ -42,20 +42,24 @@ export interface ContextoDoNegocio {
  * estão na cabeça de quem atende no WhatsApp.
  */
 const PISTAS: Record<string, RegExp> = {
-  clinica:
-    /\b(cl[ií]nic|consult[óo]ri|dentist|odonto|m[ée]dic|terapeut|psic[óo]log|fisioterap|est[ée]tic|sal[ãa]o|barbear|petshop|veterin[áa]ri|nutricion)/i,
-  imobiliaria: /\b(imobili[áa]ri|corret|im[óo]ve|apartament|alugu[ée]|loteament|terren)/i,
-  servicos:
-    /\b(ag[êe]nci|consultori|advocac|advogad|contabil|arquitet|engenhar|reform|obra|marcenar|servi[çc]o|manuten[çc]|instala[çc])/i,
-  curso: /\b(curso|mentori|infoprodut|aula|treinament|workshop|escola|ensino|coach)/i,
-  loja: /\b(loja|e-?commerce|revend|distribuidor|atacad|varej|vend[oa] produt|boutique|moda)/i,
+  clientes_vinicola:
+    /\b(restaurant|emp[óo]ri|distribuid|revend|atacad|bares\b|bar\b|hot[ée]is|hotel|sommelier|carta de vinho)/i,
+  consumidor_vinho:
+    /\b(consumidor|cliente final|varej|loja virtual|loja online|e-?commerce|clube|assinatura|delivery|venda direta)/i,
+  enoturismo_interesse: /\b(enoturism|visita|degusta[çc]|turist|passeio|tour\b|harmoniza[çc]|vindima)/i,
 };
+
+/** Quem só diz que é vinícola, sem nomear o público, recebe o B2B (decisão do dono, 2026-09-15). */
+const PISTA_DE_VINICOLA = /\b(vin[íi]col|vinh|adega)/i;
 
 /**
  * O pacote cujo vocabulário mais se parece com o do negócio.
  *
  * Empate resolve pela ordem de `PISTAS`, que é estável — não por sorteio nem
- * por ordem de chave de objeto sobre entrada do usuário.
+ * por ordem de chave de objeto sobre entrada do usuário. A ordem é de propósito:
+ * quem nomeia um CANAL de venda (restaurante, loja virtual, clube) é classificado
+ * por ele antes de uma menção a visita — "vinícola com visitas e loja virtual"
+ * vende ao consumidor. Só depois vem a pista genérica de vinho.
  */
 export function escolherPacotePorTexto(texto: string): PacoteDeFunil {
   for (const [id, pista] of Object.entries(PISTAS)) {
@@ -63,6 +67,10 @@ export function escolherPacotePorTexto(texto: string): PacoteDeFunil {
       const p = PACOTES.find((x) => x.id === id);
       if (p) return p;
     }
+  }
+  if (PISTA_DE_VINICOLA.test(texto)) {
+    const p = PACOTES.find((x) => x.id === "clientes_vinicola");
+    if (p) return p;
   }
   return PACOTE_PADRAO;
 }

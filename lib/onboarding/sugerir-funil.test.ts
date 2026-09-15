@@ -17,7 +17,7 @@ import {
 } from "@/lib/onboarding/sugerir-funil";
 import { PACOTE_PADRAO } from "@/lib/onboarding/pacotes-de-funil";
 
-const CTX = { nome: "Clínica Bem Viver", oQueFaz: "Atendimento odontológico" };
+const CTX = { nome: "Vinícola Serra Alta", oQueFaz: "Vendemos vinho para restaurantes e empórios" };
 
 const BOM = JSON.stringify({
   nome: "Agendamentos",
@@ -33,39 +33,48 @@ const BOM = JSON.stringify({
 const responde = (texto: string): Gerar => vi.fn(async () => texto);
 
 describe("escolher o pacote pelo que o dono escreveu", () => {
-  it("reconhece o ramo pelas palavras que ele usaria", () => {
-    expect(escolherPacotePorTexto("Consultório odontológico").id).toBe("clinica");
-    expect(escolherPacotePorTexto("Sou corretor de imóveis").id).toBe("imobiliaria");
-    expect(escolherPacotePorTexto("Agência de arquitetura").id).toBe("servicos");
-    expect(escolherPacotePorTexto("Curso online de inglês").id).toBe("curso");
-    expect(escolherPacotePorTexto("Loja de roupas").id).toBe("loja");
+  // O dono digita no celular: sem acento, em maiúscula, no plural, no feminino.
+  it.each([
+    ["Vendemos para restaurantes e empórios", "clientes_vinicola"],
+    ["distribuidora de vinhos", "clientes_vinicola"],
+    ["Venda para hotéis e bares", "clientes_vinicola"],
+    ["RESTAURANTES E EMPORIOS", "clientes_vinicola"],
+    ["Recebemos turistas para degustação", "enoturismo_interesse"],
+    ["degustacoes e visitas guiadas", "enoturismo_interesse"],
+    ["enoturismo", "enoturismo_interesse"],
+    ["Loja virtual de vinhos para o consumidor", "consumidor_vinho"],
+    // Canal de venda nomeado vence a menção a degustação/visita.
+    ["clube de assinatura com degustação", "consumidor_vinho"],
+    ["vinícola com visitas e loja virtual", "consumidor_vinho"],
+    // Só "vinícola"/"vinho", sem público: B2B (decisão do dono, 2026-09-15).
+    ["vinícola", "clientes_vinicola"],
+    ["VINICOLA", "clientes_vinicola"],
+    ["vendemos vinho", "clientes_vinicola"],
+  ])("%s → %s", (texto, id) => {
+    expect(escolherPacotePorTexto(texto).id).toBe(id);
   });
 
   it("cai no genérico quando não reconhece — nunca em nada", () => {
     expect(escolherPacotePorTexto("xyzzy").id).toBe(PACOTE_PADRAO.id);
     expect(escolherPacotePorTexto("").id).toBe(PACOTE_PADRAO.id);
-  });
-
-  it("não se importa com acento nem caixa", () => {
-    // O dono digita no celular, sem acento e em minúscula.
-    expect(escolherPacotePorTexto("CLINICA DE ESTETICA").id).toBe("clinica");
-    expect(escolherPacotePorTexto("clinica").id).toBe("clinica");
+    // Outro setor não é mais nicho do produto.
+    expect(escolherPacotePorTexto("consultório odontológico").id).toBe(PACOTE_PADRAO.id);
   });
 });
 
 describe("o pedido", () => {
   it("leva o exemplo do ramo, não uma descrição do formato em prosa", () => {
     // Descrever o formato produz JSON válido com conteúdo de manual de vendas.
-    const { prompt } = pedidoDeSugestao(CTX, escolherPacotePorTexto("clínica"));
-    expect(prompt).toContain("Consulta marcada");
-    expect(prompt).toContain("Clínica Bem Viver");
-    expect(prompt).toContain("Atendimento odontológico");
+    const { prompt } = pedidoDeSugestao(CTX, escolherPacotePorTexto("restaurante"));
+    expect(prompt).toContain("Pedido fechado");
+    expect(prompt).toContain("Vinícola Serra Alta");
+    expect(prompt).toContain("Vendemos vinho para restaurantes e empórios");
   });
 
   it("manda não copiar o exemplo", () => {
-    // Sem isto o modelo devolve o exemplo de volta, e toda clínica do mundo
+    // Sem isto o modelo devolve o exemplo de volta, e toda vinícola do mundo
     // termina com o mesmo quadro.
-    const { prompt } = pedidoDeSugestao(CTX, escolherPacotePorTexto("clínica"));
+    const { prompt } = pedidoDeSugestao(CTX, escolherPacotePorTexto("restaurante"));
     expect(prompt).toMatch(/não copie/i);
   });
 
@@ -102,11 +111,11 @@ describe("sugerir", () => {
   });
 
   it("cai no pacote do RAMO quando o modelo não responde JSON", async () => {
-    // E o pacote é o da clínica, não o genérico: quem já disse o que faz não
-    // deve receber o quadro de "outro tipo de negócio".
+    // E o pacote é o de clientes da vinícola, não o genérico: quem já disse o que
+    // faz não deve receber o quadro de "outro tipo de negócio".
     const s = await sugerirFunil(CTX, responde("Desculpe, não entendi."));
     expect(s.origem).toBe("pacote");
-    expect(s.origem === "pacote" && s.pacote.id).toBe("clinica");
+    expect(s.origem === "pacote" && s.pacote.id).toBe("clientes_vinicola");
     expect(s.origem === "pacote" && s.porque).toBeTruthy();
   });
 
