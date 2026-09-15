@@ -47,6 +47,15 @@ vi.mock("@/lib/agenda/consulta", async (original) => {
   return { ...real, horariosLivresDaOrg: vi.fn() };
 });
 
+// O handler chama `void audit(...)`, que tenta gravar num Supabase inalcançável
+// (host `.invalid` do setup) e só registra `console.error` segundos depois, com o
+// teste já encerrado. No runner lento do fork isso chegou com o worker fechando:
+// `Closing rpc while "onUserConsoleLog" was pending` (run 34984735984).
+vi.mock("@/lib/audit", async (orig) => ({
+  ...(await orig<Record<string, unknown>>()),
+  audit: vi.fn(async () => undefined),
+}));
+
 const { alterarAgendamentoHandler } = await import("@/app/api/v1/agenda/agendamentos/_handler");
 const { ApiError } = await import("@/lib/api/types");
 
