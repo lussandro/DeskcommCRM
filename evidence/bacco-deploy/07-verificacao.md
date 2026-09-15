@@ -36,6 +36,23 @@ de fora: porta 9090 fechada
 
 Superfície pública final: 22 (SSH), 80 e 443 (Nginx).
 
-## Steps 3–7
+## Step 3 — login e onboarding
 
-Pendentes: login e onboarding pelo dono; WhatsApp ponta a ponta (QR, mensagem, foto, inbox em tempo real); atualização idempotente (`update.sh --to v26.9.0 --force`); reboot e nova medição.
+Dono entrou com o admin criado no install e concluiu o onboarding (relato do dono, 2026-09-15: "feito e conectado"). Telemetria e Cockpit desligados antes do login (ver acima e `evidence/bacco-deploy/06-install.md`).
+
+## Step 4 — WhatsApp
+
+Conexão pelo QR feita pelo dono. Medido no banco logo depois:
+
+```
+channel_sessions | waha | WORKING | 1
+organizations    | 1
+conversations    | 0
+contacts         | 0
+```
+
+Sessão conectada. **Mensagem de ponta a ponta ainda não provada**: nenhuma conversa nem contato no banco — falta enviar mensagem + foto de outro número e conferir inbox sem recarregar, contato criado e mídia abrindo (Storage).
+
+## Steps 5–7
+
+Pendentes: Step 4 (mensagem ponta a ponta); atualização idempotente (`update.sh --to v26.9.0 --force`); reboot e nova medição dos binds/serviços.
