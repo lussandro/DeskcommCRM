@@ -88,4 +88,24 @@ describe("a casca das telas de acesso", () => {
     // qualquer outra coisa aqui seria inventar um tenant para pintar a fachada.
     expect(marcaDaSaida).toHaveBeenCalledWith(null);
   });
+
+  it("o fundo fotográfico é decorativo e em CSS — nunca <img>", async () => {
+    const html = await fachada(MARCA);
+    expect(html).not.toContain("<img");
+    expect(html).toContain("/fachada/lateral-esquerda.webp");
+    expect(html).toContain("/fachada/lateral-direita.webp");
+    // As duas laterais e os véus não são lidos por leitor de tela.
+    const decorativos = html.match(/aria-hidden="true"[^>]*data-fachada="fundo"|data-fachada="fundo"[^>]*aria-hidden="true"/g) ?? [];
+    expect(decorativos.length).toBeGreaterThanOrEqual(2);
+  });
+
+  it("as frases são texto real e o nome é o da marca resolvida", async () => {
+    const html = await fachada(MARCA);
+    expect(html).toContain("Mais que vinhos, grandes histórias");
+    expect(html).toContain("Vinhos · Pessoas · Resultados");
+    expect(html).toContain("Gestão que brinda ao seu crescimento");
+    expect(html).toContain("Vendas Turbo");
+    expect(html).not.toContain("Bacco Adega CRM");
+    expect(html).toContain("formulário");
+  });
 });

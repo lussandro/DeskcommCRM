@@ -3,6 +3,8 @@ import { marcaEhADoProduto } from "@/lib/branding";
 import { marcaDaSaida } from "@/lib/branding/saida";
 import { createClient } from "@/lib/supabase/server";
 import { IdiomaProvider } from "@/lib/i18n/IdiomaProvider";
+import { traduzir } from "@/lib/i18n/dicionario";
+import { normalizarIdioma } from "@/lib/i18n/idiomas";
 
 /**
  * A casca das telas de acesso — login, cadastro, recuperação, MFA.
@@ -35,6 +37,12 @@ import { IdiomaProvider } from "@/lib/i18n/IdiomaProvider";
  * resoluções independentes (o título da aba, que lê o banco, contra o texto sob
  * o "Entrar", que lê o `.env`). Trocar o texto para este mesmo resolvedor
  * deixaria a spec verde medindo nada.
+ *
+ * ── Fachada Bacco (Plano 5B) ──────────────────────────────────────────────────
+ *
+ * Fundo em `background-image` com `aria-hidden` (a fachada sem logo não pode ter
+ * `<img>`); frases em texto traduzido com o nome da marca RESOLVIDA; card com
+ * borda ouro. Laterais geradas por `docs/brand/bacco/limpar-laterais-login.py`.
  */
 export default async function PublicLayout({ children }: { children: React.ReactNode }) {
   const marca = await marcaDaSaida(null);
@@ -48,11 +56,52 @@ export default async function PublicLayout({ children }: { children: React.React
     data: { user },
   } = await supabase.auth.getUser();
   const locale = (user?.user_metadata?.locale as string | undefined) ?? null;
+  const t = (texto: string) => traduzir(texto, normalizarIdioma(locale));
 
   return (
     <IdiomaProvider locale={locale}>
-      <div className="flex min-h-screen items-center justify-center bg-background p-6">
-        <div className="w-full max-w-sm space-y-6">
+      <div className="relative flex min-h-screen items-center justify-center overflow-hidden bg-bg p-6">
+        {/* Fundo — decorativo, em CSS (nunca <img>: a fachada sem logo não tem imagem). */}
+        <div
+          data-fachada="fundo"
+          aria-hidden="true"
+          className="pointer-events-none absolute inset-y-0 left-0 hidden w-[27vw] max-w-[390px] bg-[url('/fachada/lateral-esquerda.webp')] bg-cover bg-right lg:block"
+        />
+        <div
+          data-fachada="fundo"
+          aria-hidden="true"
+          className="pointer-events-none absolute inset-y-0 right-0 hidden w-[31vw] max-w-[448px] bg-[url('/fachada/lateral-direita.webp')] bg-cover bg-left lg:block"
+        />
+        {/* Véu: clareia as fotos no tema claro; no escuro some. O gradiente funde as bordas no fundo. */}
+        <div
+          data-fachada="fundo"
+          aria-hidden="true"
+          className="pointer-events-none absolute inset-0 hidden bg-bg/70 lg:block dark:bg-transparent"
+        />
+        <div
+          data-fachada="fundo"
+          aria-hidden="true"
+          className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_at_center,var(--color-bg)_40%,transparent_78%)]"
+        />
+
+        {/* Frases — texto real, só em tela larga. */}
+        <p className="pointer-events-none absolute right-[5vw] top-1/2 hidden max-w-[12rem] -translate-y-1/2 font-display text-sm uppercase leading-8 tracking-[0.35em] text-gold-text xl:block">
+          {t("Mais que vinhos, grandes histórias")}
+          <span aria-hidden="true" className="mt-4 block h-px w-14 bg-gold" />
+        </p>
+        <p className="pointer-events-none absolute bottom-10 left-10 hidden font-display text-xs uppercase tracking-[0.3em] text-gold-text xl:block">
+          <span aria-hidden="true" className="mb-3 block h-px w-10 bg-gold" />
+          {t("Vinhos · Pessoas · Resultados")}
+        </p>
+        <p className="pointer-events-none absolute bottom-10 right-10 hidden text-right font-display text-xs uppercase tracking-[0.3em] text-gold-text xl:block">
+          <span aria-hidden="true" className="mb-3 ml-auto block h-px w-10 bg-gold" />
+          {marca.nome}
+          <span className="mt-1 block text-muted-foreground">{t("Gestão que brinda ao seu crescimento")}</span>
+        </p>
+
+        {/* Card */}
+        {/* Títulos editoriais da fachada: borgonha-ação no claro, creme no escuro (spec §4.4). */}
+        <div className="relative z-10 w-full max-w-md space-y-6 rounded-lg border border-gold bg-surface p-8 shadow-lg [&_.font-display]:text-accent-text dark:[&_.font-display]:text-text">
           {marca.logoUrl ? (
             <div className="flex justify-center">
               {/*
@@ -91,6 +140,7 @@ export default async function PublicLayout({ children }: { children: React.React
               <LogotipoDoProduto nome={marca.nome} className="h-12 w-auto" />
             </div>
           ) : null}
+          <div aria-hidden="true" className="mx-auto h-px w-12 bg-gold" />
           {children}
         </div>
       </div>
