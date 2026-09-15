@@ -112,6 +112,15 @@ jobs:
     # do gate sem razão declarada é a dívida voltando pela porta de serviço.
     # ─────────────────────────────────────────────────────────────────────────
     #
+    # ═══ `bacco-evidencia` e `bacco-qa-cadastro`: RODAM NA VPS, CONTRA A PRODUÇÃO ═══
+    #
+    # Fork Bacco (Plano 1 v2.1, Task 10). As duas specs são a prova em tela do rebrand
+    # na instalação real: dirigem `https://adega-crm.baccosistemas.com.br` com uma conta
+    # QA cujas credenciais só existem em `/root/.bacco_qa` na VPS, e rodam num contêiner
+    # `mcr.microsoft.com/playwright:v1.63.0-noble` sem `playwright.config` do repo. No
+    # runner não há nem a URL nem a conta — e apontá-las para o Supabase local mediria
+    # outra instalação. Evidência e medidas: `evidence/bacco-rebrand/10-revisao.md`.
+    #
     # ═══ `cadastro-sem-confirmacao-de-email`: A PRECONDIÇÃO É DO PROVEDOR ═══
     #
     # Ela mede o cadastro com "Confirm email" DESLIGADO no provedor de auth — o
@@ -610,6 +619,8 @@ jobs:
         vps-fresh-onboarding.spec.ts
         inbox-tempo-real.spec.ts
         cadastro-sem-confirmacao-de-email.spec.ts
+        bacco-evidencia.spec.ts
+        bacco-qa-cadastro.spec.ts
     steps:
       - uses: actions/checkout@v7
 
