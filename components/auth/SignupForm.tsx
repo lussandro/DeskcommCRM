@@ -15,6 +15,7 @@ import {
 } from "@/lib/auth/schemas";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { CampoDeAcesso } from "@/components/auth/CampoDeAcesso";
 import { Label } from "@/components/ui/label";
 import { signUp } from "@/app/actions/auth/signUp";
 
@@ -200,10 +201,12 @@ export function SignupForm({ convite }: { convite?: ConviteDoSignup }) {
       )}
       <div className="space-y-1.5">
         <Label htmlFor="email">Email</Label>
-        <Input
+        <CampoDeAcesso
+          icone="email"
           id="email"
           type="email"
           autoComplete="email"
+          placeholder={t("seu@email.com")}
           // O convite vale para UM endereço. Deixar editável convidaria a
           // trocar e receber "email_divergente" depois de preencher tudo.
           readOnly={Boolean(convite)}
@@ -216,9 +219,9 @@ export function SignupForm({ convite }: { convite?: ConviteDoSignup }) {
       </div>
       <div className="space-y-1.5">
         <Label htmlFor="password">{t("Senha")}</Label>
-        <Input
+        <CampoDeAcesso
+          icone="senha"
           id="password"
-          type="password"
           autoComplete="new-password"
           aria-invalid={errors.password ? true : undefined}
           {...register("password")}
@@ -229,9 +232,9 @@ export function SignupForm({ convite }: { convite?: ConviteDoSignup }) {
       </div>
       <div className="space-y-1.5">
         <Label htmlFor="password_confirm">{t("Confirmar senha")}</Label>
-        <Input
+        <CampoDeAcesso
+          icone="senha"
           id="password_confirm"
-          type="password"
           autoComplete="new-password"
           aria-invalid={errors.password_confirm ? true : undefined}
           {...register("password_confirm")}

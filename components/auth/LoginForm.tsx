@@ -4,13 +4,15 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useTransition, useState } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 
 import { useT } from "@/hooks/i18n/useT";
 import { loginSchema, type LoginInput } from "@/lib/auth/schemas";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import { CampoDeAcesso } from "@/components/auth/CampoDeAcesso";
 import { Label } from "@/components/ui/label";
 import { signInWithPassword } from "@/app/actions/auth/signInWithPassword";
+import { ArrowRight } from "@/lib/ui/icons";
 
 export function LoginForm({ next }: { next?: string }) {
   const t = useT();
@@ -61,11 +63,13 @@ export function LoginForm({ next }: { next?: string }) {
     <form method="post" onSubmit={handleSubmit(onSubmit)} className="space-y-4" noValidate>
       <div className="space-y-1.5">
         <Label htmlFor="email">Email</Label>
-        <Input
+        <CampoDeAcesso
+          icone="email"
           id="email"
           type="email"
           autoComplete="email"
           autoFocus
+          placeholder={t("seu@email.com")}
           aria-invalid={errors.email ? true : undefined}
           {...register("email")}
         />
@@ -75,16 +79,25 @@ export function LoginForm({ next }: { next?: string }) {
       </div>
       <div className="space-y-1.5">
         <Label htmlFor="password">{t("Senha")}</Label>
-        <Input
+        <CampoDeAcesso
+          icone="senha"
           id="password"
-          type="password"
           autoComplete="current-password"
+          placeholder={t("Sua senha")}
           aria-invalid={errors.password ? true : undefined}
           {...register("password")}
         />
         {errors.password && (
           <p className="text-xs text-destructive">{t(errors.password.message ?? "")}</p>
         )}
+      </div>
+      <div className="flex justify-end">
+        <Link
+          href="/login/forgot"
+          className="text-sm text-gold-text underline decoration-dotted underline-offset-4 hover:decoration-solid"
+        >
+          {t("Esqueci minha senha")}
+        </Link>
       </div>
       {serverError && (
         <div
@@ -95,7 +108,14 @@ export function LoginForm({ next }: { next?: string }) {
         </div>
       )}
       <Button type="submit" className="w-full" disabled={isPending}>
-        {isPending ? t("Entrando...") : t("Entrar")}
+        {isPending ? (
+          t("Entrando...")
+        ) : (
+          <>
+            {t("Entrar")}
+            <ArrowRight aria-hidden size={18} className="ml-2" />
+          </>
+        )}
       </Button>
     </form>
   );

@@ -31,7 +31,9 @@ export default async function LoginPage({
     <div className="space-y-6">
       <div className="space-y-1.5 text-center">
         <h1 className="font-display text-2xl font-semibold tracking-tight">{t("Entrar")}</h1>
-        <p className="text-sm text-muted-foreground">{branding().name}</p>
+        <p className="text-sm text-muted-foreground">
+          {t("Acesse sua conta no")} <strong className="font-medium text-text">{branding().name}</strong>
+        </p>
       </div>
       {reset === "success" && (
         <div
@@ -99,25 +101,17 @@ export default async function LoginPage({
         </div>
       )}
       <LoginForm next={next} />
-      <div className="space-y-2 text-center text-sm">
-        <p>
-          <Link
-            href="/login/forgot"
-            className="text-muted-foreground underline underline-offset-4 hover:text-foreground"
-          >
-            {t("Esqueci minha senha")}
-          </Link>
-        </p>
-        <p className="text-muted-foreground">
-          {t("Não tem conta?")}{" "}
-          <Link
-            href="/signup"
-            className="font-medium text-foreground underline underline-offset-4"
-          >
-            {t("Criar conta")}
-          </Link>
-        </p>
+      <div className="flex items-center gap-3 text-xs text-muted-foreground" aria-hidden>
+        <span className="h-px flex-1 bg-border" />
+        {t("ou")}
+        <span className="h-px flex-1 bg-border" />
       </div>
+      <p className="text-center text-sm text-muted-foreground">
+        {t("Não tem conta?")}{" "}
+        <Link href="/signup" className="font-medium text-gold-text underline underline-offset-4">
+          {t("Criar conta")}
+        </Link>
+      </p>
     </div>
   );
 }

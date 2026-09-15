@@ -8,6 +8,7 @@ import { useT } from "@/hooks/i18n/useT";
 import { resetPasswordSchema, type ResetPasswordInput } from "@/lib/auth/schemas";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { CampoDeAcesso } from "@/components/auth/CampoDeAcesso";
 import { Label } from "@/components/ui/label";
 import { updatePassword } from "@/app/actions/auth/updatePassword";
 
@@ -60,9 +61,9 @@ export function ResetPasswordForm() {
     <form method="post" onSubmit={handleSubmit(onSubmit)} className="space-y-4" noValidate>
       <div className="space-y-1.5">
         <Label htmlFor="password">{t("Nova senha")}</Label>
-        <Input
+        <CampoDeAcesso
+          icone="senha"
           id="password"
-          type="password"
           autoComplete="new-password"
           autoFocus
           aria-invalid={errors.password ? true : undefined}
@@ -74,9 +75,9 @@ export function ResetPasswordForm() {
       </div>
       <div className="space-y-1.5">
         <Label htmlFor="password_confirm">{t("Confirmar nova senha")}</Label>
-        <Input
+        <CampoDeAcesso
+          icone="senha"
           id="password_confirm"
-          type="password"
           autoComplete="new-password"
           aria-invalid={errors.password_confirm ? true : undefined}
           {...register("password_confirm")}

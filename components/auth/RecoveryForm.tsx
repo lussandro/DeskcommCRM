@@ -5,6 +5,7 @@ import { useState, useTransition } from "react";
 import { useT } from "@/hooks/i18n/useT";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { CampoDeAcesso } from "@/components/auth/CampoDeAcesso";
 import { Label } from "@/components/ui/label";
 import { useRecoveryCode as submitRecoveryCode } from "@/app/actions/auth/useRecoveryCode";
 
@@ -42,7 +43,8 @@ export function RecoveryForm({ next }: RecoveryFormProps) {
     <form method="post" onSubmit={onSubmit} className="space-y-4" noValidate>
       <div className="space-y-1.5">
         <Label htmlFor="email">Email</Label>
-        <Input
+        <CampoDeAcesso
+          icone="email"
           id="email"
           type="email"
           autoComplete="email"

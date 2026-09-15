@@ -7,7 +7,7 @@ import { useTransition, useState } from "react";
 import { useT } from "@/hooks/i18n/useT";
 import { forgotPasswordSchema, type ForgotPasswordInput } from "@/lib/auth/schemas";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import { CampoDeAcesso } from "@/components/auth/CampoDeAcesso";
 import { Label } from "@/components/ui/label";
 import { requestPasswordReset } from "@/app/actions/auth/requestPasswordReset";
 
@@ -62,11 +62,13 @@ export function ForgotPasswordForm() {
     <form method="post" onSubmit={handleSubmit(onSubmit)} className="space-y-4" noValidate>
       <div className="space-y-1.5">
         <Label htmlFor="email">Email</Label>
-        <Input
+        <CampoDeAcesso
+          icone="email"
           id="email"
           type="email"
           autoComplete="email"
           autoFocus
+          placeholder={t("seu@email.com")}
           aria-invalid={errors.email ? true : undefined}
           {...register("email")}
         />
