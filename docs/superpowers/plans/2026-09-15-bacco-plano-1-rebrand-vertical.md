@@ -24,6 +24,7 @@
 - Todo texto novo passado a `t(...)` ganha entrada `es` em `lib/i18n/dicionario.ts` (senão `tests/unit/i18n-espanhol-cobre-a-tela.test.ts:471` falha).
 - Mensagem de commit termina com `Co-Authored-By: Claude Opus 5 (1M context) <noreply@anthropic.com>`.
 - Nada é "pronto" sem o comando de verificação rodado e a saída observada.
+- **Evidência versionada precisa de citação exata** (`tests/unit/evidencia-citada.test.ts`): toda imagem commitada em `evidence/` tem de aparecer, em crase e com o caminho completo (sem glob, sem `${}`), em algum `.md` versionado — senão o teste reprova como órfã. Em crase, nome de imagem sem barra é resolvido contra a pasta do próprio documento: escreva sempre o caminho completo.
 
 ## Mapa de arquivos
 
@@ -662,10 +663,15 @@ rsvg-convert -b '#f5f0e6' -h 160 "$S/logotipo.svg" -o evidence/bacco-rebrand/03-
 ```
 Expected: abrir os dois PNG e comparar com `docs/brand/bacco/preview.png` (B com folha e cacho no símbolo; "B + uvas · Bacco · ADEGA CRM" no logotipo). Símbolo centrado, sem corte.
 
+Registre a conferência em `evidence/bacco-rebrand/03-revisao.md`, citando as duas imagens geradas no comando acima (símbolo e logotipo) pelo caminho exato em crase, com uma linha do que foi visto em cada uma. (Este plano não as cita pelo nome porque ainda não existem — o teste reprovaria o próprio plano.) Depois:
+
+Run: `pnpm exec vitest run tests/unit/evidencia-citada.test.ts`
+Expected: PASS.
+
 - [ ] **Step 7: Commit**
 
 ```bash
-git add docs/brand/bacco/texto-para-path.py lib/branding/desenho.ts components/branding/MarcaDoProduto.tsx app/icon.tsx tests/unit/marca-do-produto.test.tsx evidence/bacco-rebrand/03-*.png
+git add docs/brand/bacco/texto-para-path.py lib/branding/desenho.ts components/branding/MarcaDoProduto.tsx app/icon.tsx tests/unit/marca-do-produto.test.tsx evidence/bacco-rebrand/03-*.png evidence/bacco-rebrand/03-revisao.md
 git commit -m "feat(bacco): símbolo e logotipo Bacco em duas cores
 
 desenho.ts passa a ser gerado dos SVGs oficiais (texto em paths) e o
@@ -1238,7 +1244,10 @@ Expected: PASS e 10 PNG em `evidence/bacco-rebrand/`.
 
 - [ ] **Step 4: Revisão visual**
 
-Abra cada PNG. Conferir: logotipo Bacco na barra lateral (claro: borgonha/ouro; escuro: creme/ouro), botões primários borgonha distinguíveis de botões de erro, fundo creme no claro, títulos `h1` em Playfair, corpo em Inter, favicon com o B e as uvas. Anote em `evidence/bacco-rebrand/08-revisao.md` o que foi visto por tela, incluindo defeitos.
+Abra cada PNG. Conferir: logotipo Bacco na barra lateral (claro: borgonha/ouro; escuro: creme/ouro), botões primários borgonha distinguíveis de botões de erro, fundo creme no claro, títulos `h1` em Playfair, corpo em Inter, favicon com o B e as uvas. Anote em `evidence/bacco-rebrand/08-revisao.md` o que foi visto por tela, incluindo defeitos, **citando cada um dos 10 PNG pelo caminho exato em crase** (liste com `ls evidence/bacco-rebrand/08-*.png` e copie os nomes; glob não conta como citação).
+
+Run: `pnpm exec vitest run tests/unit/evidencia-citada.test.ts`
+Expected: PASS.
 
 - [ ] **Step 5: Aprovação do dono**
 

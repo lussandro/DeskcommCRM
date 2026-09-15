@@ -138,14 +138,14 @@ kanban nos dois temas.
   A instância Bacco continua podendo receber marca por organização (logo da vinícola).
 - `lib/branding.ts:19` `DEFAULT_APP_NAME = "Bacco Adega CRM"`.
 - **Arte oficial recebida em 2026-09-15**, guardada em `docs/brand/bacco/`:
-  `bacco-adega-crm-simbolo.svg` (512×512), `bacco-adega-crm-logo-principal.svg` (1200×620,
-  empilhado, borgonha+ouro+grafite), `bacco-adega-crm-logo-bordo.svg` (1600×420, horizontal
-  monocromático) e `preview.png` (6 aplicações).
+  `docs/brand/bacco/bacco-adega-crm-simbolo.svg` (512×512), `docs/brand/bacco/bacco-adega-crm-logo-principal.svg` (1200×620,
+  empilhado, borgonha+ouro+grafite), `docs/brand/bacco/bacco-adega-crm-logo-bordo.svg` (1600×420, horizontal
+  monocromático) e `docs/brand/bacco/preview.png` (6 aplicações).
 - ⚠️ Os SVGs recebidos usam `<text>` com `font-family` — renderizam diferente em cada máquina
   e o `satori` do favicon não os lê. **Converter texto em paths** com as fontes reais
   (Playfair Display wght 600/400, Inter wght 400 opsz 14, OFL, `google/fonts`) via fontTools.
   Viabilidade **medida** em spike (2026-09-15): os três convertidos com zero `<text>` e o
-  render `rsvg-convert` bate com o `preview.png`. Pendências da conversão: sem kerning
+  render `rsvg-convert` bate com o `docs/brand/bacco/preview.png`. Pendências da conversão: sem kerning
   (fontTools puro — conferir contra o preview no plano), arredondar coordenadas (logos com
   tagline saíram com ~70 KB).
 - **O contrato de `desenho.ts` muda.** Hoje o símbolo é 1 `path` + 1 `rect` numa cor só,
@@ -156,11 +156,11 @@ kanban nos dois temas.
   `tests/unit/marca-do-produto.test.tsx` acompanha.
 - Cores por tema: claro = corpo `#4A0E1F`, uvas `#C49A4A`, nome `#4A0E1F`, sufixo `#C49A4A`;
   escuro = corpo/nome creme `#F5F0E6`, uvas/sufixo `#C49A4A` (como o negativo sobre borgonha
-  do `preview.png`).
+  do `docs/brand/bacco/preview.png`).
 - Favicon (`app/icon.tsx`): o símbolo não está centrado no `viewBox` 512 (sobra à direita e
   embaixo) — recortar pelo bbox real antes de reduzir a 32/64 px, e conferir legibilidade das
   uvas nesse tamanho.
-- Variantes que aparecem no `preview.png` mas **não vieram como arquivo**: horizontal colorida
+- Variantes que aparecem no `docs/brand/bacco/preview.png` mas **não vieram como arquivo**: horizontal colorida
   ("CRM" em ouro), ícone de app (fundo borgonha em gradiente, B creme, folha ouro) e negativo
   sobre borgonha. Derivar dos SVGs recebidos só trocando `fill` para os valores do preview;
   nenhuma geometria nova.
