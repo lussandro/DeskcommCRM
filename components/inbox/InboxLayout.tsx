@@ -505,7 +505,7 @@ export function InboxLayout({ initialSelectedId = null }: InboxLayoutProps = {})
             {t("Conversa não encontrada ou fora do seu acesso.")}
           </div>
         ) : (
-          <div className="flex h-full flex-col items-center justify-center overflow-y-auto px-6">
+          <div className="flex h-full flex-col items-center justify-center-safe overflow-y-auto px-6">
             <EmptyState
               icon={ChatCircle}
               editorial

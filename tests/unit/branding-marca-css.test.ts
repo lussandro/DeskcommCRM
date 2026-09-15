@@ -99,6 +99,7 @@ describe("serialização — os dois blocos", () => {
         "--color-accent-fg",
         "--color-accent-hover",
         "--color-accent-soft",
+        "--color-accent-text",
       ].sort(),
     );
     expect(claro["--color-brand"]).toBe("#2563eb");
@@ -168,6 +169,17 @@ describe("o escopo da organização", () => {
     // zero erro no console, e a cor escura da organização simplesmente ausente.
     expect(ESCURO).not.toMatch(/body\[data-theme/);
     expect(ESCURO).toMatch(/\[data-theme="dark"\]\s+body/);
+  });
+
+  it("--color-accent-text é reemitido no <body>, com a rampa da organização", () => {
+    // No globals.css ele é `var(--color-accent-600|300)` no `:root`, e `var()`
+    // resolve no elemento que declara: sem esta linha o `<body>` herdaria o texto
+    // da instalação sobre o `bg-accent-soft` da organização.
+    for (const hex of SEMENTES) {
+      const blocos = lerBlocos(cssDaMarca(corDe(hex), ESCOPO_DA_ORGANIZACAO).css ?? "");
+      expect(blocos[CLARO]?.["--color-accent-text"], hex).toBe(blocos[CLARO]?.["--color-accent-600"]);
+      expect(blocos[ESCURO]?.["--color-accent-text"], hex).toBe(blocos[ESCURO]?.["--color-accent-300"]);
+    }
   });
 
   it("o default continua sendo o escopo da instalação", () => {

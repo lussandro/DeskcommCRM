@@ -51,6 +51,7 @@
  */
 
 import { GRAUS, stop } from "./rampa";
+import { REGUA_DO_PRODUTO } from "./regua-do-produto";
 import type { CorResolvida } from "./resolve";
 
 export type CodigoDoCss =
@@ -169,6 +170,17 @@ function declaracoesDoTema(cor: CorResolvida, tema: "claro" | "escuro"): Declara
     ["--color-accent-hover", t.accentHover],
     ["--color-accent-soft", t.accentSoft],
   );
+
+  // `--color-accent-text` é `var(--color-accent-600|300)` no `:root` do
+  // globals.css, e `var()` resolve no elemento que DECLARA: no escopo da
+  // organização (`<body>`) o `<body>` herdaria o valor já resolvido com a rampa
+  // da instalação — fundo `bg-accent-soft` da organização com texto
+  // `text-accent-text` da instalação, par que ninguém mede. O grau vem da régua,
+  // não de um número repetido aqui.
+  const papelDoTexto = REGUA_DO_PRODUTO[tema].papeis.find((p) => p.token === "--color-accent-text");
+  if (papelDoTexto?.fonte.tipo === "grau") {
+    saida.push(["--color-accent-text", stop(derivada.rampa, papelDoTexto.fonte.indice + t.deslocamento)]);
+  }
   return saida;
 }
 

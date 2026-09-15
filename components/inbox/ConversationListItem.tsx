@@ -234,7 +234,7 @@ export function ConversationListItem({
           >
             {displayName}
           </span>
-          <span className="shrink-0 text-[11px] tabular-nums text-text-subtle">{time}</span>
+          <span className={cn("shrink-0 text-[11px] tabular-nums", isSelected ? "text-text-muted" : "text-text-subtle")}>{time}</span>
         </div>
 
         <div className="mt-0.5 flex items-center justify-between gap-2">
