@@ -144,7 +144,7 @@ kanban nos dois temas.
   troca a marca **do produto** (imagem própria, §3.2), e os testes-doutrina mudam no mesmo
   commit, com a razão escrita no teste:
   - `tests/unit/marca-do-produto-nao-se-edita-no-codigo.test.ts:57` `MARCA_DO_PRODUTO`;
-  - `tests/unit/branding.test.ts:146` prefixo `deskcommcrm` → `bacco-adega-crm`, e a catraca
+  - `tests/unit/branding.test.ts:134` prefixo `deskcommcrm` → `bacco-adega-crm`, e a catraca
     `MARCA_CONGELADA` (~`:210`) reconciliada com o que sobrar de "deskcomm";
   - `branding-contraste.test.ts:61,63`, `branding-rampa.test.ts:113,116`,
     `branding-pares-pintados.test.ts:340` (âncoras Sage `#506d48`/`#161510`);
@@ -187,9 +187,11 @@ kanban nos dois temas.
   sobre borgonha. Derivar dos SVGs recebidos só trocando `fill` para os valores do preview;
   nenhuma geometria nova.
 - `docs/brand/` com os SVGs novos; `app/icon.tsx` e `app/manifest.ts` herdam de `desenho.ts`.
-- Literais visíveis a trocar: `lib/email/templates/ai-budget-alarm.tsx:35` (é a única DIVIDA
-  da catraca `MARCA_CONGELADA`, `tests/unit/branding.test.ts:482` — usar o nome de
-  `marcaDaSaida()` e remover a entrada), `app/design/page.tsx:51,110`,
+- `lib/email/templates/ai-budget-alarm.tsx:35` **fica** como a DIVIDA da catraca
+  `MARCA_CONGELADA` (revisado 2026-09-15): `buildBudgetAlarmEmail` não tem chamador e é
+  síncrono sem organização, então não há onde chamar `marcaDaSaida()`; trocar por
+  `DEFAULT_APP_NAME` violaria a doutrina de saída sem DOM. Quem ligar o alarme paga a dívida.
+- Literais visíveis a trocar: `app/design/page.tsx:51,110`,
   `app/design/layout.tsx:7`, `public/llms.txt`, `Dockerfile:58`.
 - **Ficam como estão** (revisado 2026-09-15), entradas PROTOCOLO/INFRA da catraca:
   `lib/agenda/google/evento.ts:60,63` (`SUFIXO_ICAL_UID`/`PREFIXO_PROPRIEDADE`) — o prefixo
@@ -200,8 +202,11 @@ kanban nos dois temas.
   ligada, trocar por contato da Bacco antes** (§8).
   A lista é re-medida no início da implementação com
   `grep -rIni deskcomm app components lib hooks workers public Dockerfile*`.
-- `README*.md`, `VISION.md`, `package.json` (`name`, `description`) reescritos para o
-  posicionamento vinho.
+- `README.md` (bloco inicial), `public/llms.txt`, `package.json` (`name`, `description`)
+  reescritos para o posicionamento vinho no Plano 1. `README.en.md`, `README.es.md`, `VISION.md` e
+  `docs/white-label.md` (tradução selada) saem para um plano de docs.
+- Kit: padrão do `APP_NAME` no `install.sh` e fallback de nome do `marca-emails.sh` passam a
+  "Bacco Adega CRM" — com o padrão antigo a VPS nasceu com `platform_branding.app_name = 'DeskcommCRM'`.
 
 ### 4.5 Configuração por instalação
 

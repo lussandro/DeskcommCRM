@@ -338,6 +338,10 @@ refutador: roda, gera 16 KB, typecheck verde, render conferido. Mudanças em rel
 **Files:**
 - Modify: `lib/branding.ts:19`, `app/design/page.tsx:51,110`, `app/design/layout.tsx:7`,
   `docs/superpowers/specs/2026-09-15-bacco-adega-crm-design.md` §4.4
+- Modify (achado na execução): `hostgator-setup-kit/install.sh:1261` (padrão do `APP_NAME`) e
+  `hostgator-setup-kit/marca-emails.sh:112` (fallback do nome nos e-mails de acesso) → "Bacco Adega CRM".
+  Mensagens de operador do kit que citam "DeskcommCRM" e têm teste em `test-validators.sh`
+  (`install.sh:1018-1041`, `diagnostico.sh`, `supabase-provision.sh`) ficam para o plano de docs/kit.
 - Modify (testes): `tests/unit/marca-do-produto-nao-se-edita-no-codigo.test.ts:57,67,79`,
   `tests/unit/branding.test.ts:15,134,326-331`,
   `tests/unit/branding-marca-resolve.test.ts:224`, `tests/unit/branding-saida.test.ts:194,217`,
@@ -534,6 +538,15 @@ não precisa fazer nada; marca configurada em Configurações › Marca continua
   `docs/superpowers/plans/2026-09-15-bacco-plano-4-ci-deploy-vps.md` Task 7 Step 5, com `--to v$versao`.
   Expected: `exit=0`; `curl -s https://adega-crm.baccosistemas.com.br/api/v1/health` ok;
   `/icon` `200 image/png`; `docker logs` do app com `[telemetria] Desligada` (`SENTRY_DSN=off` sobreviveu).
+
+- [ ] **Step 1b: Marca gravada no banco da VPS** — medido em 2026-09-15: `.env` com
+  `APP_NAME="DeskcommCRM"` (padrão antigo do `install.sh:1261`, trocado nesta entrega) e
+  `platform_branding.app_name = 'DeskcommCRM'`, `seeded_from_env = true`. O banco vence o `.env`
+  (`lib/branding/instalacao.ts`), então sem corrigir a tela segue dizendo "DeskcommCRM" e
+  `marcaEhADoProduto` não desenha o símbolo. **Com ok do dono** (dado de produção): trocar o nome
+  pela tela `/admin/marca` (dono é platform admin) para "Bacco Adega CRM" — ou limpar —, e ajustar
+  `APP_NAME="Bacco Adega CRM"` no `.env` (piso de rollback) + recriar `app`. Conferir com o `select`
+  de `platform_branding` antes/depois e registrar em `10-revisao.md`.
 
 - [ ] **Step 2: Cadastro aberto?** — a política vem de `platform_settings` acima do `.env`
   (`lib/auth/politica-de-cadastro.ts`); `.env` da VPS não declara `SIGNUP_MODE` (medido). Conferir na
