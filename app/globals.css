@@ -25,8 +25,9 @@
 @custom-variant dark (&:where([data-theme="dark"], [data-theme="dark"] *));
 
 /* ─────────────────────────────────────────────────────────────────────────
-   DeskcommCRM — Design System tokens (Sage palette · density Aerada)
-   Source of truth: /app/design/lib/tokens.ts (PALETTES.sage)
+   Bacco Adega CRM — Design System tokens (accent Borgonha · density Aerada)
+   Accent: rampaDeSemente("#4a0e1f"); neutros e superfícies do upstream (DeskcommCRM).
+   Graus do tema escuro medidos em docs/superpowers/plans/anexos/medir-grau-escuro.ts.
    Light + dark drawn separately (NOT inverted).
    ───────────────────────────────────────────────────────────────────────── */
 
@@ -46,22 +47,23 @@
   --color-border: #e7e3da;
   --color-border-strong: #d2cdbf;
 
-  /* Accent — Sage (11 stops) */
-  --color-accent-50:  #f3f6f1;
-  --color-accent-100: #e4ebe0;
-  --color-accent-200: #c8d6c1;
-  --color-accent-300: #a4ba9a;
-  --color-accent-400: #82a077;
-  --color-accent-500: #67885d;
-  --color-accent-600: #506d48;
-  --color-accent-700: #41573b;
-  --color-accent-800: #374731;
-  --color-accent-900: #2f3c2b;
-  --color-accent-950: #171f15;
+  /* Accent — Borgonha Bacco (rampaDeSemente("#4a0e1f"), 11 stops) */
+  --color-accent-50:  #fbf2f3;
+  --color-accent-100: #f1dddf;
+  --color-accent-200: #dab5ba;
+  --color-accent-300: #b9828b;
+  --color-accent-400: #985461;
+  --color-accent-500: #752f3f;
+  --color-accent-600: #4a0e1f;
+  --color-accent-700: #40131e;
+  --color-accent-800: #39161d;
+  --color-accent-900: #33171d;
+  --color-accent-950: #291619;
   --color-accent: var(--color-accent-600);
   --color-accent-fg: #ffffff;
   --color-accent-soft: var(--color-accent-100);
-  --color-accent-hover: var(--color-accent-700);
+  /* Hover CLAREIA: a semente já é escura e os graus 700–950 colapsam no 600. */
+  --color-accent-hover: var(--color-accent-500);
 
   /* Neutrals — greige (11 stops, light) */
   --color-neutral-50:  #faf9f6;
@@ -262,7 +264,7 @@
   --color-accent: var(--color-accent-600);
   --color-accent-fg: #ffffff;
   --color-accent-soft: var(--color-accent-100);
-  --color-accent-hover: var(--color-accent-700);
+  --color-accent-hover: var(--color-accent-500);
   --color-neutral-50: #faf9f6;
   --color-neutral-100: #f3f1ec;
   --color-neutral-200: #e7e3da;
@@ -342,22 +344,24 @@
   --color-border: #33312a;
   --color-border-strong: #444239;
 
-  /* Accent stays same hex stops; default shifts up for dark contrast */
-  --color-accent-50:  #f3f6f1;
-  --color-accent-100: #e4ebe0;
-  --color-accent-200: #c8d6c1;
-  --color-accent-300: #a4ba9a;
-  --color-accent-400: #82a077;
-  --color-accent-500: #67885d;
-  --color-accent-600: #506d48;
-  --color-accent-700: #41573b;
-  --color-accent-800: #374731;
-  --color-accent-900: #2f3c2b;
-  --color-accent-950: #171f15;
-  --color-accent: var(--color-accent-400);
+  /* Accent stays same hex stops; default shifts up for dark contrast.
+     Borgonha: grau 400 reprova 12 pares a 3:1 (surface-elevated e soft composto);
+     grau 300 passa todos — medido, ver cabeçalho. */
+  --color-accent-50:  #fbf2f3;
+  --color-accent-100: #f1dddf;
+  --color-accent-200: #dab5ba;
+  --color-accent-300: #b9828b;
+  --color-accent-400: #985461;
+  --color-accent-500: #752f3f;
+  --color-accent-600: #4a0e1f;
+  --color-accent-700: #40131e;
+  --color-accent-800: #39161d;
+  --color-accent-900: #33171d;
+  --color-accent-950: #291619;
+  --color-accent: var(--color-accent-300);
   --color-accent-fg: #161510;
-  --color-accent-soft: rgba(130, 160, 119, 0.16);
-  --color-accent-hover: var(--color-accent-300);
+  --color-accent-soft: rgba(152, 84, 97, 0.16);
+  --color-accent-hover: var(--color-accent-200);
 
   /* Neutrals — greige (11 stops, dark) */
   --color-neutral-50:  #f5f4ef;
@@ -411,7 +415,7 @@
   --destructive-foreground: #ffffff;
   --border: var(--color-border);
   --input: var(--color-border);
-  --ring: var(--color-accent-400);
+  --ring: var(--color-accent-300);
   /* ---- Agenda · cor de pessoa (tema escuro) ----------------------------
    * Mais claras e menos saturadas que as do claro: sobre `#161510` a versão
    * escura de cada matiz sumiria. Mesma ordem, mesmos nomes.
@@ -728,7 +732,7 @@
     border-radius: var(--radius-sm);
   }
   [data-theme="dark"] :focus-visible {
-    outline-color: var(--color-accent-400);
+    outline-color: var(--color-accent-300);
   }
 
   /* Modo de alto contraste do sistema (Windows High Contrast / forced-colors).

@@ -26,9 +26,18 @@ import type { Regua, TemaDaRegua } from "@/lib/branding/contraste";
 import { deltaEOklab, hexParaOklch, rampaDeSemente } from "@/lib/branding/rampa";
 import type { Rampa } from "@/lib/branding/rampa";
 
+import { REGUA_SAGE } from "../fixtures/branding/regua-sage";
+
 const RAIZ = process.cwd();
 const CSS = fs.readFileSync(path.join(RAIZ, "app/globals.css"), "utf8");
-const REGUA: Regua = extrairRegua(CSS);
+/** A régua do PRODUTO (Bacco: accent borgonha). Só a extração e os pisos do produto a leem. */
+const REGUA_DO_CSS: Regua = extrairRegua(CSS);
+/**
+ * Os testes de ALGORITMO medem contra a Sage congelada — ver o cabeçalho de
+ * `tests/fixtures/branding/regua-sage.ts`. Os números abaixo (razões, 13 caminhadas,
+ * 23 movimentos, reconciliação) foram medidos nela.
+ */
+const REGUA: Regua = REGUA_SAGE;
 
 const rampaChapada = (hex: string): Rampa =>
   Array.from({ length: 11 }, () => hex) as unknown as Rampa;
@@ -56,9 +65,13 @@ const FIXTURE = [
 ] as const;
 
 describe("extrairRegua — os pares saem do globals.css, nunca de lista à mão", () => {
+  // Aqui a pergunta é sobre a EXTRAÇÃO do arquivo real; os dois `it` de razões e pisos
+  // da Sage, mais abaixo, leem `REGUA_SAGE` explicitamente.
+  const REGUA = REGUA_DO_CSS;
+
   it("acha os dois temas, a rampa do produto e os neutros", () => {
     expect(REGUA.rampaDoProduto).toHaveLength(11);
-    expect(REGUA.rampaDoProduto[6]).toBe("#506d48");
+    expect(REGUA.rampaDoProduto[6]).toBe("#4a0e1f");
     expect(REGUA.claro.neutros).toHaveLength(11);
     expect(REGUA.escuro.neutros[9]).toBe("#161510");
     expect(REGUA.claro.base.map((b) => b.chave)).toEqual([
@@ -78,7 +91,8 @@ describe("extrairRegua — os pares saem do globals.css, nunca de lista à mão"
     expect(foco?.fonte).toMatchObject({ tipo: "grau", indice: 5 });
 
     const focoEscuro = REGUA.escuro.papeis.find((p) => p.token.includes(":focus-visible"));
-    expect(focoEscuro?.fonte).toMatchObject({ tipo: "grau", indice: 4 });
+    // Bacco: o anel do escuro pinta o grau 300 da borgonha (o 400 do upstream reprova 3:1).
+    expect(focoEscuro?.fonte).toMatchObject({ tipo: "grau", indice: 3 });
   });
 
   it("classifica -fg como texto e -soft como superfície", () => {
@@ -115,7 +129,7 @@ describe("extrairRegua — os pares saem do globals.css, nunca de lista à mão"
   });
 
   it("reproduz as razões medidas à mão no design system", () => {
-    const pares = medirPares(REGUA.claro, REGUA.rampaDoProduto, 0);
+    const pares = medirPares(REGUA_SAGE.claro, REGUA_SAGE.rampaDoProduto, 0);
     const razao = (papel: string, superficie: string) =>
       pares.find((p) => p.papel === papel && p.superficie === superficie)?.razao ?? 0;
 
@@ -124,7 +138,17 @@ describe("extrairRegua — os pares saem do globals.css, nunca de lista à mão"
     expect(razao(":focus-visible/outline", "--color-surface-elevated")).toBeCloseTo(3.6, 2);
   });
 
-  it("a Sage inteira, como está no CSS, cabe nos pisos", () => {
+  it("a Sage inteira, congelada, cabe nos pisos", () => {
+    for (const tema of [REGUA_SAGE.claro, REGUA_SAGE.escuro]) {
+      const reprovas = medirPares(tema, REGUA_SAGE.rampaDoProduto, 0).filter((p) => !p.passa);
+      expect(reprovas, `${tema.nome}: ${JSON.stringify(reprovas)}`).toEqual([]);
+    }
+  });
+
+  it("a paleta do produto, como está no CSS, cabe nos pisos", () => {
+    // O gate real da paleta Bacco: sem deslocamento nenhum, todo papel pintado sobre
+    // toda superfície passa. Foi assim que o accent escuro saiu do grau 400 (12 pares
+    // abaixo de 3:1) para o 300 — docs/superpowers/plans/anexos/medir-grau-escuro.ts.
     for (const tema of [REGUA.claro, REGUA.escuro]) {
       const reprovas = medirPares(tema, REGUA.rampaDoProduto, 0).filter((p) => !p.passa);
       expect(reprovas, `${tema.nome}: ${JSON.stringify(reprovas)}`).toEqual([]);

@@ -1,14 +1,13 @@
-import fs from "node:fs";
-import path from "node:path";
-
 import { describe, expect, it } from "vitest";
 
-import { PISOS, extrairRegua, melhorFrenteSobre, razaoDeContraste } from "@/lib/branding/contraste";
+import { PISOS, melhorFrenteSobre, razaoDeContraste } from "@/lib/branding/contraste";
 import type { Fonte, TemaDaRegua } from "@/lib/branding/contraste";
 import { cssDaMarca } from "@/lib/branding/css";
 import { GRAUS, compor, normalizarHex, rgbParaHex } from "@/lib/branding/rampa";
 import { REGUA_DO_PRODUTO } from "@/lib/branding/regua-do-produto";
 import { camadaDoAmbiente, resolverMarca, type CorResolvida } from "@/lib/branding/resolve";
+
+import { REGUA_SAGE } from "../fixtures/branding/regua-sage";
 
 /**
  * A guarda que faltava: os pares que o produto REALMENTE PINTA.
@@ -35,9 +34,13 @@ import { camadaDoAmbiente, resolverMarca, type CorResolvida } from "@/lib/brandi
  * baixa, não a cópia.
  */
 
-const RAIZ = process.cwd();
-const CSS = fs.readFileSync(path.join(RAIZ, "app/globals.css"), "utf8");
-const REGUA = extrairRegua(CSS);
+/**
+ * Fork Bacco: os números deste arquivo foram medidos contra a Sage. Com a paleta do
+ * produto trocada para borgonha, eles leem a régua Sage CONGELADA
+ * (`tests/fixtures/branding/regua-sage.ts`) — mesma forma do `extrairRegua(globals.css)`
+ * do upstream. A marca do produto tem o seu próprio `describe` no fim do arquivo.
+ */
+const REGUA = REGUA_SAGE;
 
 /** A mesma fixture adversarial versionada de `branding-contraste.test.ts`. */
 const SEMENTES = [
@@ -55,7 +58,7 @@ const TEMAS = [
 ];
 
 const corDe = (hex: string): CorResolvida => {
-  const cor = resolverMarca([camadaDoAmbiente({ APP_ACCENT_HEX: hex })], REGUA_DO_PRODUTO).cor;
+  const cor = resolverMarca([camadaDoAmbiente({ APP_ACCENT_HEX: hex })], REGUA_SAGE).cor;
   if (!cor) throw new Error(`fixture ${hex} não resolveu — o teste mediria nada`);
   return cor;
 };
@@ -383,6 +386,33 @@ describe("a navy #0f172a — o defeito que a prova em tela achou", () => {
     expect(foco(p.escuro, "--color-surface-elevated")).toBeCloseTo(4.39, 2);
     for (const superficie of ["--color-bg", "--color-surface-elevated"] as const) {
       expect(foco(p.escuro, superficie), superficie).toBeGreaterThanOrEqual(PISOS.componente);
+    }
+  });
+});
+
+describe("a marca do produto, sem instalação configurada", () => {
+  it("a borgonha Bacco não desloca nem reprova par pintado, nos dois temas", () => {
+    // A semente do produto sobre a régua DO PRODUTO: se o `globals.css` e a derivação
+    // concordam, nada anda e todo par pintado passa. Sem números colados — o que se
+    // prova é a propriedade, não uma medição que envelhece.
+    const cor = resolverMarca([camadaDoAmbiente({ APP_ACCENT_HEX: "#4a0e1f" })], REGUA_DO_PRODUTO).cor;
+    if (!cor) throw new Error("#4a0e1f não resolveu — o teste mediria nada");
+    expect(cor.derivada?.claro.deslocamento).toBe(0);
+    expect(cor.derivada?.escuro.deslocamento).toBe(0);
+
+    const { css } = cssDaMarca(cor);
+    if (css === null) throw new Error("o emissor recusou a borgonha — não há tela para medir");
+    const blocos = lerBlocos(css);
+    for (const { nome, seletor } of TEMAS) {
+      const bloco = blocos[seletor];
+      if (!bloco) throw new Error(`o CSS emitido não tem o bloco ${seletor}`);
+      const pares = paresPintados(REGUA_DO_PRODUTO[nome], bloco);
+      expect(pares.length, `${nome}: nenhum par medido`).toBeGreaterThan(0);
+      const reprovas = pares.filter((p) => !p.passa);
+      expect(
+        reprovas,
+        `${nome}: ${reprovas.map((r) => `${r.papel}×${r.superficie}=${r.razao.toFixed(2)}<${r.piso}`).join(" | ")}`,
+      ).toEqual([]);
     }
   });
 });

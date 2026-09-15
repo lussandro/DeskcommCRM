@@ -14,6 +14,8 @@ import {
   FORMATO_ATUAL,
 } from "@/lib/branding/schema";
 
+import { REGUA_SAGE } from "../fixtures/branding/regua-sage";
+
 const REGUA = REGUA_DO_PRODUTO;
 
 /** Envelope da versão de hoje, com os campos que o teste quiser trocar. */
@@ -264,7 +266,9 @@ describe("diagnóstico não vaza identidade", () => {
     // que aparecer no diagnóstico de outra.
     const sementes = ["#f5c518", "#808080", "#0f172a", "#dc2626"];
     for (const hex of sementes) {
-      const marca = resolverMarca([camadaDoAmbiente({ APP_ACCENT_HEX: hex })], REGUA);
+      // Régua Sage congelada: é teste de ALGORITMO (as sementes geram motivo sobre a
+      // Sage; sobre a borgonha do produto `#0f172a` não gera nenhum — medido).
+      const marca = resolverMarca([camadaDoAmbiente({ APP_ACCENT_HEX: hex })], REGUA_SAGE);
       expect(marca.motivos.length).toBeGreaterThan(0);
       for (const m of marca.motivos) {
         expect(`${m.detalhe} ${m.alvo ?? ""}`).not.toContain(hex);

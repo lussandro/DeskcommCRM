@@ -20,6 +20,8 @@ import {
   rgbParaHex,
 } from "@/lib/branding/rampa";
 
+import { REGUA_SAGE } from "../fixtures/branding/regua-sage";
+
 const RAIZ = process.cwd();
 const CSS = fs.readFileSync(path.join(RAIZ, "app/globals.css"), "utf8");
 
@@ -48,7 +50,7 @@ function blocoRoot(css: string): string {
   return css.slice(i, fim);
 }
 
-function stopsSageDoCss(): string[] {
+function stopsDoProdutoNoCss(): string[] {
   const raiz = blocoRoot(CSS);
   return GRAUS.map((g) => {
     const m = new RegExp(`--color-accent-${g}:\\s*(#[0-9a-f]{6})`, "i").exec(raiz);
@@ -103,22 +105,35 @@ describe("conversões de cor", () => {
 });
 
 describe("rampaDeSemente — catraca de calibração contra o design system", () => {
-  const esperados = stopsSageDoCss();
+  const esperados = stopsDoProdutoNoCss();
 
   it("lê 11 stops distintos do globals.css (guarda de vacuidade)", () => {
     // Sem isto, um regex quebrado devolveria lista vazia e a comparação abaixo passaria
     // por não ter o que comparar — instrumento morto tem cara de teste verde.
     expect(esperados).toHaveLength(11);
     expect(new Set(esperados).size).toBe(11);
-    expect(esperados[K]).toBe("#506d48");
+    expect(esperados[K]).toBe("#4a0e1f");
   });
 
-  it("reproduz os 11 stops Sage a partir de #506d48 com Δ ≤ 2/255 por canal", () => {
-    const derivada = rampaDeSemente("#506d48");
+  it("reproduz os 11 stops do produto (borgonha Bacco) a partir de #4a0e1f com Δ ≤ 2/255 por canal", () => {
+    const derivada = rampaDeSemente("#4a0e1f");
     const distancias = esperados.map((esperado, i) => distanciaPorCanal(esperado, derivada[i]!));
     expect(
       Math.max(...distancias),
       `derivada: ${derivada.join(" ")}\nesperada: ${esperados.join(" ")}\nΔ: ${distancias.join(",")}`,
+    ).toBeLessThanOrEqual(2);
+  });
+
+  it("reproduz os 11 stops Sage congelados a partir de #506d48 com Δ ≤ 2/255 por canal", () => {
+    // CONTROLE da calibração: a tabela de lightness de `rampa.ts` foi medida na Sage.
+    // Depois que o CSS do produto virou borgonha, é esta âncora que continua provando
+    // que o algoritmo reproduz um design system desenhado à mão.
+    const esperadosSage = REGUA_SAGE.rampaDoProduto;
+    const derivada = rampaDeSemente("#506d48");
+    const distancias = esperadosSage.map((esperado, i) => distanciaPorCanal(esperado, derivada[i]!));
+    expect(
+      Math.max(...distancias),
+      `derivada: ${derivada.join(" ")}\nesperada: ${esperadosSage.join(" ")}\nΔ: ${distancias.join(",")}`,
     ).toBeLessThanOrEqual(2);
   });
 
