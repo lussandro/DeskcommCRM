@@ -1,5 +1,5 @@
 import type { Metadata, Viewport } from "next";
-import { Atkinson_Hyperlegible, IBM_Plex_Mono } from "next/font/google";
+import { IBM_Plex_Mono, Inter, Playfair_Display } from "next/font/google";
 import { headers } from "next/headers";
 import { Toaster } from "sonner";
 import { coresDaBarraDoNavegador } from "@/lib/branding/barra-do-navegador";
@@ -25,11 +25,22 @@ import { Providers } from "./providers";
 import { PublicEnvScript } from "./public-env-script";
 import "./globals.css";
 
-const atkinson = Atkinson_Hyperlegible({
+// Marca Bacco (spec §4.3): Inter na interface; Playfair Display só nos títulos
+// das telas públicas (login, cadastro, onboarding), pelo utilitário `font-display`.
+const inter = Inter({
   subsets: ["latin", "latin-ext"],
-  weight: ["400", "700"],
   display: "swap",
-  variable: "--font-atkinson",
+  variable: "--font-inter",
+});
+
+// `--font-playfair`, e não `--font-display`: o token do `@theme inline` se chama
+// `--font-display`, e uma variável do next/font com o mesmo nome faria o token
+// apontar para si mesmo.
+const playfair = Playfair_Display({
+  subsets: ["latin", "latin-ext"],
+  weight: ["600"],
+  display: "swap",
+  variable: "--font-playfair",
 });
 
 const plexMono = IBM_Plex_Mono({
@@ -278,7 +289,7 @@ export default function RootLayout({
       lang="pt-BR"
       data-theme="light"
       suppressHydrationWarning
-      className={`${atkinson.variable} ${plexMono.variable}`}
+      className={`${inter.variable} ${playfair.variable} ${plexMono.variable}`}
     >
       <head>
         {/* Primeiro de tudo: a cor da instalação, antes do CSS e do script de tema. */}

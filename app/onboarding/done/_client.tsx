@@ -23,7 +23,7 @@ export function DoneClient({
   return (
     <div className="space-y-6 rounded-lg border bg-background p-6">
       <div className="space-y-1 text-center">
-        <h2 className="text-2xl font-semibold tracking-tight">{t("Tudo pronto!")}</h2>
+        <h2 className="font-display text-2xl font-semibold tracking-tight">{t("Tudo pronto!")}</h2>
         <p className="text-sm text-muted-foreground">
           {pendentes.length === 0
             ? t("Seu funcionário está montado. Daqui em diante é só acompanhar.")

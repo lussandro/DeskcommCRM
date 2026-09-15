@@ -12,7 +12,7 @@ export default async function InviteTeamPage() {
   return (
     <div className="space-y-6">
       <header>
-        <h2 className="text-2xl font-semibold tracking-tight">{traduzir("Quem trabalha com ele", idioma)}</h2>
+        <h2 className="font-display text-2xl font-semibold tracking-tight">{traduzir("Quem trabalha com ele", idioma)}</h2>
         <p className="text-sm text-muted-foreground">
           {traduzir(
             "Seu funcionário não trabalha sozinho: quando ele passar uma conversa adiante, é uma dessas pessoas que atende.",
