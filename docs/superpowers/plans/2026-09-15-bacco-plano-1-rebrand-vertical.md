@@ -1,5 +1,21 @@
 # Bacco Adega CRM — Plano 1: Rebrand + vertical vinícola
 
+> ⛔ **NÃO EXECUTAR ESTA VERSÃO.** Revisada por refutador (agente Claude, com experimentos em cópia) e por `codex exec` em 2026-09-15; os achados abaixo foram **verificados no código** e exigem reescrita. A ordem aprovada pelo dono é Plano 4 (CI + deploy na VPS) antes deste. Decisões posteriores à escrita: neutros e fundo do upstream ficam (só accent muda); gates rodam no CI do GitHub; teste a quente e evidência visual rodam na VPS com Docker, nunca local.
+>
+> **Correções obrigatórias na reescrita:**
+> 1. **Task 1:** remover troca de `--color-bg`/`--color-text`/`neutral-50/900` (decisão do dono). Os testes de algoritmo que usam a Sage como controle positivo (`branding-contraste`: razões medidas, "Sage inteira cabe nos pisos", "caminhada anda", "Sage pura nasce colidida", `movimentosNoRun`, "separável do neutro"; `branding-pares-pintados`: "caminhada anda", "Sage pintada", "anel de foco") passam a ler régua Sage **congelada como fixture**, não `globals.css` — colar número novo desarma o teste. Remeter o grau do accent escuro **por medição** (grau 300 medido pior: 11 falhas). Números de linha: `--color-text` `:41`, accent escuro `:357`, soft `:359`, hover `:360`, `--ring` claro também em `:164` e `:311`.
+> 2. **Task 1 Step 7:** `hostgator-setup-kit/test-validators.sh:1028` exige `background: #506d48; background: #506d48` — atualizar junto com `marca-emails.sh:140` (e o comentário `:115`), senão `test:shell` reprova.
+> 3. **Task 2:** `h1` global aplica Playfair em 51 `<h1>` inclusive inbox/kanban — contraria spec §4.3. Aplicar `font-display` só em login, onboarding e marca.
+> 4. **Task 3:** manter o script (medido: roda, 16 KB, typecheck verde, render conferido). Registrar que o logotipo da barra **omite** separador e tagline de propósito (ilegível no tamanho da barra) e atualizar spec §4.1. Nits: `desenho.ts:101-102`, `MarcaDoProduto.tsx:9` e comentários "Sage" em `rampa.ts:13`, `saida.ts:80`, `env.ts:339`.
+> 5. **Task 4:** incluir `tests/unit/branding.test.ts:15` (`initial: "D"`) e `:134` (não `:146`), `tests/unit/branding-marca-resolve.test.ts:224`, `tests/unit/branding-saida.test.ts:194,217`, `tests/unit/lgpd-pdf-meet.test.ts:126` (garante que o PDF LGPD não leva a marca — trocar para "Bacco Adega CRM", não remover) e `tests/e2e/signup-journey.spec.ts:46`.
+> 6. **Task 5:** PISTAS classificam errado frases comuns ("clube de assinatura com degustação" → enoturismo; "vinícola com visitas e loja virtual" → enoturismo; "vinícola", "vendemos vinho" → genérico). Revisar ordem/regex e adicionar esses casos ao teste (plural, feminino, sem acento).
+> 7. **Task 6:** slugs `ecommerce_*` de `PROMPT_TEMPLATES` ficam (id técnico) — declarar. Conferência final por grep mais larga (`paciente|cl[ií]nica|odontol|corretor|imobili|e-?commerce|iPhone|Perfume`).
+> 8. **Task 7:** reescrever `public/llms.txt` inteiro (linhas 17-27 citam upstream); incluir `Dockerfile.worker:11`, `Dockerfile.scheduler:12`; `publish-image.yml` matrix/títulos vão para o Plano 4. Não apagar `docs/brand/deskcomm-*.svg` sem ajustar `README.es.md:6-7` e `docs/brand/og-card.html`.
+> 9. **Task 0 e verificação:** usar rodapé `Test Files`/`Tests`/`Errors` + exit code, nunca `grep FAIL` (`CLAUDE.md:328-369`); linha de base = primeira execução do CI no GitHub, não a local.
+> 10. **Task 8:** sai deste plano — evidência visual roda na VPS (Plano 4 entrega o ambiente). `/admin/marca` exige platform admin (`e2e-dono` via `seed-e2e-system-update.ts`, que revoga `e2e-admin`); incluir onboarding e detalhe de lead.
+> 11. **Tarefas faltando (spec §5.2, §7):** fragmento `.changes/` + `pnpm release:conferir`; revisão dos textos de captação (webhooks, RD Station, planilha de leads, ads).
+> 12. Nit: `ACCENT_DO_PRODUTO` está em `lib/branding/saida.ts:90`.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Trocar a marca do produto DeskcommCRM pela Bacco Adega CRM (paleta, fontes, símbolo, nome) e trocar os nichos do onboarding pelos três públicos da vinícola, com todos os gates do upstream verdes.

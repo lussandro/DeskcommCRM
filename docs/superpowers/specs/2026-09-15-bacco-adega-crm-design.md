@@ -438,6 +438,10 @@ A spec vira quatro planos independentes, cada um entregando software testável s
 um passando por refutador (agente Claude) e `codex review` antes da aprovação do dono e de
 novo sobre o código entregue:
 
+**Ordem de execução aprovada pelo dono (2026-09-15): 4 → 1 → 2 → 3.** O Plano 4 sobe o fork
+ainda sem rebrand na VPS Debian 12 (base funcionando e medida); o rebrand (Plano 1) é validado a
+quente sobre essa base.
+
 | Plano | Escopo | Depende de |
 |---|---|---|
 | 1. Rebrand + vertical | §4 (paleta, fontes, marca, testes-doutrina), §5.1–§5.4 (funis, captação, catálogo, agente) | nada externo |
