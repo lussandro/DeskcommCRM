@@ -204,7 +204,7 @@ fundo, superfície e barra lateral = tokens; ação principal = kit; título edi
 do texto secundário ≥ 4,5 medido na tela; em 400 px as laterais do login ausentes. Capturas citadas em
 `evidence/`, aprovação do dono.
 
-**Exceção na prova em tela: Verificação em duas etapas (`/login/mfa`) — pendente de ciência do dono.** Das seis
+**Exceção na prova em tela: Verificação em duas etapas (`/login/mfa`) — dono ciente em 2026-09-15.** Das seis
 telas de acesso, cinco são provadas em tela; `/login/mfa` fica fora. Para capturá-la seria preciso ativar um
 fator TOTP na conta QA de produção, uma ação sensível de segurança que muda como essa conta entra e deixa um
 segredo de segundo fator para guardar. O que cobre a tela: ela usa a mesma casca `app/(public)/layout.tsx`
