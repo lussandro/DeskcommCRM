@@ -350,6 +350,16 @@ function lerNeutros(decls: readonly Declaracao[]): Rampa {
   return stops as unknown as Rampa;
 }
 
+/**
+ * Spec Bacco §5.3 — POLÍTICA DO PRODUTO, não regra de extração. No tema ESCURO a ação principal
+ * do kit é um vinho profundo que mede ~1,6:1 contra as superfícies, de propósito (decisão do dono,
+ * 2026-09-15). O botão é identificado pelo texto (`--color-accent-fg`, medido a 4,5) e o foco pelo
+ * anel (medido a 3,0). A extração continua medindo estes tokens como componente: a mesma régua
+ * deriva a marca própria das organizações, e ela NÃO herda a exceção. Quem aplica a exceção é o
+ * teste que mede a paleta do `globals.css` (`tests/unit/tokens-do-kit-bacco.test.ts`).
+ */
+export const PAPEIS_DE_FILL_NO_ESCURO = ["--color-accent", "--color-accent-hover"] as const;
+
 function montarTema(
   nome: Tema,
   decls: readonly Declaracao[],
@@ -391,7 +401,9 @@ function montarTema(
       continue;
     }
     if (fonte.tipo === "grau") {
-      papeis.push({ token: d.prop, tipo: "componente", fonte, contra: null });
+      // `-text` é a ação usada como TEXTO/borda (`text-accent-text`): mede como texto.
+      const tipo = d.prop.endsWith("-text") ? "texto" : "componente";
+      papeis.push({ token: d.prop, tipo, fonte, contra: null });
     }
   }
 

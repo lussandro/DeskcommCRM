@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { PISOS, melhorFrenteSobre, razaoDeContraste } from "@/lib/branding/contraste";
+import { PAPEIS_DE_FILL_NO_ESCURO, PISOS, medirPares, melhorFrenteSobre, razaoDeContraste } from "@/lib/branding/contraste";
 import type { Fonte, TemaDaRegua } from "@/lib/branding/contraste";
 import { cssDaMarca } from "@/lib/branding/css";
 import { GRAUS, compor, normalizarHex, rgbParaHex } from "@/lib/branding/rampa";
@@ -391,28 +391,13 @@ describe("a navy #0f172a — o defeito que a prova em tela achou", () => {
 });
 
 describe("a marca do produto, sem instalação configurada", () => {
-  it("a borgonha Bacco não desloca nem reprova par pintado, nos dois temas", () => {
-    // A semente do produto sobre a régua DO PRODUTO: se o `globals.css` e a derivação
-    // concordam, nada anda e todo par pintado passa. Sem números colados — o que se
-    // prova é a propriedade, não uma medição que envelhece.
-    const cor = resolverMarca([camadaDoAmbiente({ APP_ACCENT_HEX: "#4a0e1f" })], REGUA_DO_PRODUTO).cor;
-    if (!cor) throw new Error("#4a0e1f não resolveu — o teste mediria nada");
-    expect(cor.derivada?.claro.deslocamento).toBe(0);
-    expect(cor.derivada?.escuro.deslocamento).toBe(0);
-
-    const { css } = cssDaMarca(cor);
-    if (css === null) throw new Error("o emissor recusou a borgonha — não há tela para medir");
-    const blocos = lerBlocos(css);
-    for (const { nome, seletor } of TEMAS) {
-      const bloco = blocos[seletor];
-      if (!bloco) throw new Error(`o CSS emitido não tem o bloco ${seletor}`);
-      const pares = paresPintados(REGUA_DO_PRODUTO[nome], bloco);
-      expect(pares.length, `${nome}: nenhum par medido`).toBeGreaterThan(0);
-      const reprovas = pares.filter((p) => !p.passa);
-      expect(
-        reprovas,
-        `${nome}: ${reprovas.map((r) => `${r.papel}×${r.superficie}=${r.razao.toFixed(2)}<${r.piso}`).join(" | ")}`,
-      ).toEqual([]);
+  it("o vinho do kit, direto do globals.css, só reprova no fill escuro (exceção do produto)", () => {
+    // Sem instalação configurada não há bloco emitido: a tela é o globals.css. Medir via
+    // resolverMarca trataria o vinho como marca própria — que mantém o piso (spec §5.3).
+    for (const nome of ["claro", "escuro"] as const) {
+      const pares = medirPares(REGUA_DO_PRODUTO[nome], REGUA_DO_PRODUTO.rampaDoProduto, 0);
+      const fora = pares.filter((p) => !p.passa && !(nome === "escuro" && (PAPEIS_DE_FILL_NO_ESCURO as readonly string[]).includes(p.papel)));
+      expect(fora, nome).toEqual([]);
     }
   });
 });

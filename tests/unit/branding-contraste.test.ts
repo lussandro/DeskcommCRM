@@ -5,6 +5,7 @@ import { describe, expect, it } from "vitest";
 import {
   DICROMACIAS,
   LIMIAR_ACROMATICO,
+  PAPEIS_DE_FILL_NO_ESCURO,
   PISOS,
   PISO_DE_CROMA,
   PISO_DE_SEPARACAO_DO_NEUTRO,
@@ -71,9 +72,9 @@ describe("extrairRegua — os pares saem do globals.css, nunca de lista à mão"
 
   it("acha os dois temas, a rampa do produto e os neutros", () => {
     expect(REGUA.rampaDoProduto).toHaveLength(11);
-    expect(REGUA.rampaDoProduto[6]).toBe("#4a0e1f");
+    expect(REGUA.rampaDoProduto[6]).toBe("#6a1730");
     expect(REGUA.claro.neutros).toHaveLength(11);
-    expect(REGUA.escuro.neutros[9]).toBe("#161510");
+    expect(REGUA.escuro.neutros[9]).toBe("#13110f");
     expect(REGUA.claro.base.map((b) => b.chave)).toEqual([
       "--color-bg",
       "--color-surface",
@@ -91,18 +92,17 @@ describe("extrairRegua — os pares saem do globals.css, nunca de lista à mão"
     expect(foco?.fonte).toMatchObject({ tipo: "grau", indice: 5 });
 
     const focoEscuro = REGUA.escuro.papeis.find((p) => p.token.includes(":focus-visible"));
-    // Bacco: o anel do escuro pinta o grau 300 da borgonha (o 400 do upstream reprova 3:1).
-    expect(focoEscuro?.fonte).toMatchObject({ tipo: "grau", indice: 3 });
+    // Bacco (kit v2): o anel do escuro pinta o grau 400 do vinho, 3,63 no pior fundo.
+    expect(focoEscuro?.fonte).toMatchObject({ tipo: "grau", indice: 4 });
   });
 
   it("classifica -fg como texto e -soft como superfície", () => {
     const fg = REGUA.claro.papeis.find((p) => p.token === "--color-accent-fg");
     expect(fg?.tipo).toBe("texto");
     expect(REGUA.claro.tingidas.map((t) => t.chave)).toEqual(["--color-accent-soft"]);
-    // No escuro o token é o literal `rgba(130,160,119,0.16)` — verde Sage cru, sem
-    // referência à rampa. É por isso que ele precisa ser REANCORADO na derivação.
-    expect(REGUA.escuro.indices.soft).toBeNull();
-    expect(REGUA.escuro.alfaDoSoft).toBeCloseTo(0.16, 6);
+    // No kit o soft do escuro é o grau 900, opaco: aponta pra rampa, não é literal cru.
+    expect(REGUA.escuro.indices.soft).toBe(9);
+    expect(REGUA.escuro.alfaDoSoft).toBe(1);
   });
 
   it("enumera o conjunto esperado de papéis e pares (guarda de vacuidade)", () => {
@@ -113,19 +113,20 @@ describe("extrairRegua — os pares saem do globals.css, nunca de lista à mão"
       "--color-accent",
       "--color-accent-fg",
       "--color-accent-hover",
+      "--color-accent-text",
       "--ring",
       "::selection/color",
       ":focus-visible/outline",
     ]);
-    expect(REGUA.escuro.papeis).toHaveLength(6);
+    expect(REGUA.escuro.papeis).toHaveLength(7);
 
     expect(superficiesDoTema(REGUA.claro, REGUA.rampaDoProduto, 0)).toHaveLength(4);
-    // 6 no escuro e não 4: o `-soft` translúcido compõe sobre CADA base, e as três
-    // razões diferem (4,99 · 4,59 · 4,02). Medir uma só escolheria a mais folgada.
-    expect(superficiesDoTema(REGUA.escuro, REGUA.rampaDoProduto, 0)).toHaveLength(6);
+    // 4 no escuro também: no kit o `-soft` é o grau 900 opaco (aponta pra rampa), e
+    // compõe uma única superfície — não translúcido sobre cada base como no upstream.
+    expect(superficiesDoTema(REGUA.escuro, REGUA.rampaDoProduto, 0)).toHaveLength(4);
 
-    expect(medirPares(REGUA.claro, REGUA.rampaDoProduto, 0)).toHaveLength(18);
-    expect(medirPares(REGUA.escuro, REGUA.rampaDoProduto, 0)).toHaveLength(26);
+    expect(medirPares(REGUA.claro, REGUA.rampaDoProduto, 0)).toHaveLength(22);
+    expect(medirPares(REGUA.escuro, REGUA.rampaDoProduto, 0)).toHaveLength(22);
   });
 
   it("reproduz as razões medidas à mão no design system", () => {
@@ -147,10 +148,12 @@ describe("extrairRegua — os pares saem do globals.css, nunca de lista à mão"
 
   it("a paleta do produto, como está no CSS, cabe nos pisos", () => {
     // O gate real da paleta Bacco: sem deslocamento nenhum, todo papel pintado sobre
-    // toda superfície passa. Foi assim que o accent escuro saiu do grau 400 (12 pares
-    // abaixo de 3:1) para o 300 — docs/superpowers/plans/anexos/medir-grau-escuro.ts.
+    // toda superfície passa — exceto o fill escuro (PAPEIS_DE_FILL_NO_ESCURO), exceção DO
+    // PRODUTO (spec §5.3): a marca própria não herda, ela usa esta mesma régua sem filtro.
     for (const tema of [REGUA.claro, REGUA.escuro]) {
-      const reprovas = medirPares(tema, REGUA.rampaDoProduto, 0).filter((p) => !p.passa);
+      const reprovas = medirPares(tema, REGUA.rampaDoProduto, 0)
+        .filter((p) => !p.passa)
+        .filter((p) => !(PAPEIS_DE_FILL_NO_ESCURO as readonly string[]).includes(p.papel));
       expect(reprovas, `${tema.nome}: ${JSON.stringify(reprovas)}`).toEqual([]);
     }
   });
