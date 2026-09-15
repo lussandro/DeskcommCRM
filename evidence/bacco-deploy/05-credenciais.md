@@ -40,4 +40,18 @@ Enviada de `~/bacco-controle/apps/api/.env` por pipe no SSH: `/root/.resend_key`
 
 ## GHCR
 
-Pendente: login só-leitura pelo device flow do GitHub (escopo `read:packages`), autorizado pelo dono.
+Login só-leitura pelo **device flow** do GitHub, rodado na própria VPS (o token nasce e fica lá; nunca impresso). `gh auth login` não serve: sempre soma `repo`, `read:org`, `gist`. Chamada direta a `POST https://github.com/login/device/code` com o client ID público do GitHub CLI e `scope=read:packages`; o dono autorizou em `github.com/login/device`.
+
+Primeira tentativa (código `E2FB-17FE`) expirou sem autorização; segunda (código `B625-3AA9`, gerado 15:06:46 UTC) — o GitHub respondeu "couldn't find anything" na primeira digitação e aceitou na seguinte.
+
+```
+ESCOPOS=read:packages          # cabeçalho X-OAuth-Scopes de api.github.com
+Login Succeeded
+PULL_OK ghcr.io/lussandro/deskcommcrm:latest
+$ jq -r ".auths | keys[]" /root/.docker/config.json
+ghcr.io
+$ docker images | grep ghcr.io/lussandro
+ghcr.io/lussandro/deskcommcrm:latest 748MB
+```
+
+O token é recusado se o escopo vier diferente de exatamente `read:packages`.
