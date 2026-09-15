@@ -344,6 +344,9 @@ guardrail disso (busca por idade/álcool em `lib` e `app`: zero).
   `2.25.222.110` (a VPS), sem AAAA; NS `*.ns.cloudflare.com`. A resposta é o IP da VPS, não da
   Cloudflare, logo o registro está **DNS-only** — manter assim até o TLS ser emitido (proxy
   laranja da Cloudflare intercepta o desafio HTTP do Caddy).
+- **Domínio da API do Supabase próprio:** `api-adega.baccosistemas.com.br` (dono, 2026-09-15).
+  O instalador exige URL `https` que responda em `/auth/v1/health` (`install.sh:228-245`): o Kong
+  do Supabase é publicado nesse domínio pelo mesmo proxy que serve o app.
 - **Supabase próprio (self-hosted)** — decisão do dono em 2026-09-15.
   - O kit do upstream **aceita** Supabase próprio mas **não o instala**
     (`.env.hostgator.example:119-127`): subir a stack Supabase oficial em Docker antes, e
@@ -367,10 +370,12 @@ guardrail disso (busca por idade/álcool em `lib` e `app`: zero).
 - **VPS atual medida em 2026-09-15** (`ssh root@2.25.222.110`, acesso por chave OK): Hostinger
   `srv1982512.hstgr.cloud`, KVM, **1 vCPU / 3,6 GB / 50 GB / CentOS Stream 10 / sem Docker /
   sem swap**, portas ocupadas só 22 e 9090 (Cockpit). **Não atende.** Decisão do dono: upgrade
-  para **Hostinger KVM 2 (2 vCPU / 8 GB / 100 GB) + reinstalar Debian 12 (bookworm)** (trocado de
-  Ubuntu 24.04 pelo dono em 2026-09-15; família Debian é a que os docs do compose do upstream
-  pressupõem, mas o caminho *testado* pelo upstream é Ubuntu — primeira execução do kit no
-  Debian 12 é verificação, não suposição) — piso de
+  para **Hostinger KVM 2 (2 vCPU / 8 GB / 100 GB) no SO que já está nela** (decisão do dono, 2026-09-15:
+  "usa o que está"). Medido após o upgrade: **CentOS Stream 10**, kernel 6.12, SELinux
+  `disabled`, firewalld/nftables inativos, sem Docker e sem `git`; repositório oficial
+  `download.docker.com/linux/centos/10` responde (repodata 200). O caminho testado pelo upstream
+  é Ubuntu e o kit só instala Docker via `get.docker.com` — a primeira execução no CentOS
+  Stream 10 é verificação, não suposição — piso de
   **piloto** com poucas vinícolas, abaixo da estimativa de 4 vCPU / 160 GB. Consequências:
   medir `docker stats` e disco no primeiro install; swap obrigatório; Studio/analytics/imgproxy
   do Supabase desligados; limite de sessões WhatsApp simultâneas (~150 MB cada) definido pela
@@ -439,7 +444,7 @@ um passando por refutador (agente Claude) e `codex review` antes da aprovação 
 novo sobre o código entregue:
 
 **Ordem de execução aprovada pelo dono (2026-09-15): 4 → 1 → 2 → 3.** O Plano 4 sobe o fork
-ainda sem rebrand na VPS Debian 12 (base funcionando e medida); o rebrand (Plano 1) é validado a
+ainda sem rebrand na VPS (CentOS Stream 10, como está) — base funcionando e medida; o rebrand (Plano 1) é validado a
 quente sobre essa base.
 
 | Plano | Escopo | Depende de |
