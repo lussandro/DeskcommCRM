@@ -1025,7 +1025,7 @@ fi
 #     do produto, que é o mesmo piso de lib/branding/saida.ts.
 SUPABASE_ACCESS_TOKEN= APP_NAME='Marca Torta' APP_ACCENT_HEX='verde-limão' \
   bash ./marca-emails.sh --env /dev/null --render-em "$ME_TMP/torto" >/dev/null 2>&1
-if grep -q 'background: #4a0e1f; background: #4a0e1f' "$ME_TMP/torto/confirmation.html" 2>/dev/null; then
+if grep -q 'background: #6a1730; background: #6a1730' "$ME_TMP/torto/confirmation.html" 2>/dev/null; then
   printf '  ✓ APP_ACCENT_HEX inválido cai no accent do produto\n'
 else
   printf '  ✗ APP_ACCENT_HEX inválido virou CSS inválido: %s\n' \
