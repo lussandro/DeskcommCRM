@@ -93,12 +93,13 @@ acima do botão; botão "Entrar →"; separador "ou"; "Não tem conta? Criar con
 |---|---|---|
 | fundo / superfície / superfície suave | `#FBF8F2` / `#FFFDF8` / `#F5F0E6` | — |
 | texto | `#2E2A27` | 12,52 |
-| texto secundário | `#746C65` (kit `#776F68`, ajustado) | 4,54 |
+| texto secundário | `#6C645D` (kit `#776F68`, ajustado; `#746C65` reprovava 4,02 sobre a seleção `--color-accent-soft`) | 4,53 |
 | borda | `#E8DED1` | decorativa |
 | ação principal / hover | `#6A1730` / `#541025`, texto branco | 11,81 |
 | ouro (traço, ícone) / ouro-texto | `#C49A4A` / `#8E6603` (ajustado) | — / 4,56 |
-| sucesso (ícone, badge) / sucesso-texto | `#5A8A63` / `#497852` (ajustado) | — / 4,52 |
-| perigo | `#A94452` | 5,09 |
+| sucesso (ícone, badge) / sucesso-texto | `#5A8A63` / `#406F4A` (ajustado; `#497852` reprovava 3,98 sobre o fundo translúcido da badge) | — / 4,54 |
+| perigo / perigo-texto | `#A94452` / `#A5404F` (ajustado; 4,30 sobre a badge) | 5,09 / 4,54 |
+| ação como texto e borda (`--color-accent-text`, novo) | grau 600 da rampa (`#6A1730`) | 9,21 |
 | barra lateral (token novo) | `#FAF6F0` (captura clara) | — |
 
 **Escuro**
@@ -110,8 +111,10 @@ acima do botão; botão "Entrar →"; separador "ou"; "Não tem conta? Criar con
 | borda | `#332C27` | decorativa |
 | ação principal / hover | `#7C1D3A` / `#962749`, texto branco | 10,03 |
 | ouro (inclusive texto) | `#C49A4A` | 6,43 |
-| sucesso | `#719E76` | 5,46 |
-| perigo-texto / botão de perigo | `#CE646E` / `#BE5561` com texto branco (ajustados) | 4,52 / 4,51 |
+| sucesso / sucesso-texto | `#719E76` / `#78A57D` (ajustado; 4,16 sobre a badge) | 5,46 / 4,54 |
+| perigo-texto / botão de perigo | `#DE737C` (ajustado; `#CE646E` reprovava 3,74 sobre a badge) / `#BE5561` com texto branco | 4,51 / 4,51 |
+| ação principal (fill) | grau 600 da rampa (`#6A1730`), decisão do dono 2026-09-15 no lugar de `#7C1D3A` (uma rampa só) | texto branco 11,81 |
+| ação como texto e borda (`--color-accent-text`, novo) | grau 300 da rampa (`#CE8693`) | 5,33 |
 | barra lateral (token novo) | `#1D0F12` (captura escura, tingida de vinho) | — |
 
 Medições: `pnpm exec tsx` sobre `lib/branding/contraste.ts` (`razaoDeContraste`, `deltaESimulado`) em
@@ -138,6 +141,12 @@ Hoje o produto exige accent × superfície ≥ 3:1. No escuro a ação principal
 só no escuro e só para o fill da ação principal: **texto sobre o fill ≥ 4,5:1** e **anel de foco ≥ 3:1
 contra as superfícies**. O botão se identifica pelo texto; quem navega por teclado vê o anel. A exceção
 fica declarada no teste com esta razão, e qualquer outro papel continua no piso atual.
+
+**Fill × texto (medido na implementação):** `--color-accent` era usado ao mesmo tempo como fill
+(`bg-accent`, 87 usos) e como texto/borda (`text-accent` 36 + 3, `border-accent` 21, `ring-accent` 4,
+`outline-accent` 2). No escuro o vinho de fill mede 1,6:1 como texto. Por isso nasce
+`--color-accent-text` (claro grau 600, escuro grau 300), medido pela régua como papel de TEXTO contra todas
+as superfícies, e os usos de texto/borda migram para ele por codemod com lista conferida.
 
 ### 5.4 Componentes-padrão
 
