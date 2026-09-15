@@ -288,7 +288,10 @@ export function InboxFilters({ value, onChange }: Props) {
         onValueChange={(v) => onChange({ ...value, tab: v as InboxTab })}
         className="px-3"
       >
-        <TabsList className="h-auto w-full justify-between gap-2 rounded-none bg-transparent p-0 [scrollbar-width:none]">
+        {/* gap-1, não gap-2: na coluna de 247px (1366px de tela) os cinco rótulos com gap-2
+            somavam 258px e "Automático" saía cortado — medido na prova da v26.9.2
+            (evidence/bacco-rebrand/5c-medidas.jsonl, abas.conteudo × abas.visivel). */}
+        <TabsList className="h-auto w-full justify-between gap-1 rounded-none bg-transparent p-0 [scrollbar-width:none]">
           {tabs.map((tab) => {
             const meta = INBOX_TABS.find((t) => t.value === tab)!;
             const count = countFor[tab];
