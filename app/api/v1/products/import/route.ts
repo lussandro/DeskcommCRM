@@ -250,8 +250,8 @@ export async function GET(): Promise<Response> {
 
   const modelo = [
     "codigo,nome,marca,categoria,preco,custo,estoque",
-    "IP15-128,iPhone 15 128GB,Apple,Celular,5499.00,4100.00,3",
-    "PERF-212,212 VIP Men 100ml,Carolina Herrera,Perfume,449.90,280.00,7",
+    "MAL-RES-21,Malbec Reserva 2021 750ml,Vinícola Exemplo,Vinho tinto,129.90,62.00,24",
+    "ESP-BRU-NV,Espumante Brut 750ml,Vinícola Exemplo,Espumante,89.90,41.00,36",
   ].join("\n");
 
   return new Response(`﻿${modelo}\n`, {

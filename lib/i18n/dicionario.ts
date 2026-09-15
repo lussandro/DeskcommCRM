@@ -4803,12 +4803,12 @@ export const DICIONARIO: Traducoes = {
   },
   "Pular tudo (DEV)": { es: "Saltar todo (DEV)" },
   "Como se chama o seu negócio?": { es: "¿Cómo se llama tu negocio?" },
-  "É o nome que aparece para o seu time e nos relatórios. Pode ser clínica, loja, escritório — o que for seu.": {
-    es: "Es el nombre que aparece para tu equipo y en los reportes. Puede ser clínica, tienda, oficina — lo que sea tuyo.",
+  "É o nome que aparece para o seu time e nos relatórios. Pode ser o nome da vinícola, da adega ou da loja.": {
+    es: "Es el nombre que aparece para tu equipo y en los reportes. Puede ser el nombre de la bodega, de la vinoteca o de la tienda.",
   },
   "O que vocês fazem?": { es: "¿A qué se dedican?" },
-  "Ex.: clínica odontológica, ou venda de roupa fitness pelo WhatsApp": {
-    es: "Ej.: clínica dental, o venta de ropa deportiva por WhatsApp",
+  "Ex.: vinícola com loja própria, venda para restaurantes e visitas com degustação": {
+    es: "Ej.: bodega con tienda propia, venta a restaurantes y visitas con degustación",
   },
   "Uma linha basta. É com isso que seu funcionário aprende com quem ele está falando — e que a gente monta o quadro de clientes do seu jeito.": {
     es: "Con una línea basta. Con eso tu empleado aprende con quién está hablando — y armamos el tablero de clientes a tu manera.",
@@ -6323,7 +6323,7 @@ export const DICIONARIO: Traducoes = {
   "Próximo período": { es: "Período siguiente" },
   "Tipo de agendamento": { es: "Tipo de cita" },
   "Por que está cancelando?": { es: "¿Por qué estás cancelando?" },
-  "O paciente pediu para remarcar por telefone": { es: "El paciente pidió reprogramar por teléfono" },
+  "O cliente pediu para remarcar por telefone": { es: "El cliente pidió reprogramar por teléfono" },
   "Sincronizar com o Google ainda não está disponível": { es: "Sincronizar con Google todavía no está disponible" },
   "Esta instalação não tem as credenciais do Google cadastradas — não é nada que você tenha feito. Quem instalou o sistema precisa configurar": { es: "Esta instalación no tiene las credenciales de Google registradas — no es nada que hayas hecho. Quien instaló el sistema necesita configurar" },
   "E, no console do Google, registrar este endereço de retorno —": { es: "Y, en la consola de Google, registrar esta dirección de retorno —" },
@@ -7432,6 +7432,9 @@ export const DICIONARIO: Traducoes = {
   "Novo produto": { es: "Nuevo producto" },
   "Importar planilha": { es: "Importar planilla" },
   "Baixar planilha modelo": { es: "Descargar planilla modelo" },
+  "Coloque safra, uva e volume no nome (ex.: Malbec Reserva 2021 750ml) — é pelo nome que o atendente encontra o vinho.": {
+    es: "Pon cosecha, uva y volumen en el nombre (ej.: Malbec Reserva 2021 750ml) — es por el nombre que el asistente encuentra el vino.",
+  },
   "Produto cadastrado": { es: "Producto cargado" },
   "Produto desativado": { es: "Producto desactivado" },
   "Produto reativado": { es: "Producto reactivado" },

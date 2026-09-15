@@ -72,7 +72,7 @@ export function WelcomeForm({ defaultOrgName }: { defaultOrgName: string }) {
           required
         />
         <p className="text-xs text-muted-foreground">
-          {t("É o nome que aparece para o seu time e nos relatórios. Pode ser clínica, loja, escritório — o que for seu.")}
+          {t("É o nome que aparece para o seu time e nos relatórios. Pode ser o nome da vinícola, da adega ou da loja.")}
         </p>
       </div>
 
@@ -91,7 +91,7 @@ export function WelcomeForm({ defaultOrgName }: { defaultOrgName: string }) {
           value={oQueFaz}
           onChange={(e) => setOQueFaz(e.target.value)}
           maxLength={280}
-          placeholder={t("Ex.: clínica odontológica, ou venda de roupa fitness pelo WhatsApp")}
+          placeholder={t("Ex.: vinícola com loja própria, venda para restaurantes e visitas com degustação")}
         />
         <p className="text-xs text-muted-foreground">
           {t(

@@ -197,17 +197,23 @@ export function ProdutosClient({
       </div>
 
       {podeEditar ? (
-        // Rota de API que devolve o arquivo com `content-disposition:
-        // attachment` — é download, não navegação de página, e `<Link>` do Next
-        // faria navegação de cliente para algo que não é tela.
-        <a
-          href="/api/v1/products/import"
-          download="modelo-catalogo.csv"
-          className="mb-4 inline-block text-xs text-muted-foreground underline"
-          data-testid="modelo-planilha"
-        >
-          {t("Baixar planilha modelo")}
-        </a>
+        <>
+          {/* Rota de API que devolve o arquivo com `content-disposition:
+              attachment` — é download, não navegação de página, e `<Link>` do Next
+              faria navegação de cliente para algo que não é tela. */}
+          <a
+            href="/api/v1/products/import"
+            download="modelo-catalogo.csv"
+            className="mb-4 inline-block text-xs text-muted-foreground underline"
+            data-testid="modelo-planilha"
+          >
+            {t("Baixar planilha modelo")}
+          </a>
+          {/* A busca do agente é por trigrama no NOME (spec §5.3): atributo fora do nome não é achado. */}
+          <p className="mb-4 text-xs text-muted-foreground">
+            {t("Coloque safra, uva e volume no nome (ex.: Malbec Reserva 2021 750ml) — é pelo nome que o atendente encontra o vinho.")}
+          </p>
+        </>
       ) : null}
 
       {resumo ? (

@@ -37,13 +37,24 @@ function ondeTrabalha(negocio: string, oQueFaz: string | undefined): string {
   return oQueFaz ? `${negocio}, que é: ${oQueFaz}` : negocio;
 }
 
+/**
+ * A regra de adega vale para os três tons: o atendente de uma vinícola não pode
+ * inventar rótulo nem prometer vaga de visita — reserva não é feita no CRM
+ * (spec §2, §5.4). As chaves `ecommerce_*` são o id técnico de `PromptTemplate`
+ * gravado em versão de agente; renomeá-las exigiria migration e não muda o que
+ * o usuário lê.
+ */
+const REGRA_DA_ADEGA =
+  " Indique só vinhos que existem no catálogo — nunca invente rótulo, safra, preço ou estoque." +
+  " Para visitas e degustações, anote o interesse e diga que a equipe confirma data e vaga.";
+
 const PROMPT_BODIES: Record<PromptTemplate, (onde: string) => string> = {
   ecommerce_friendly: (n) =>
-    `Você atende os clientes de ${n}. Fale de forma calorosa e próxima, como alguém que gosta de ajudar. Cumprimente, entenda o que a pessoa precisa e ofereça opções claras. Confirme os detalhes antes de agir.`,
+    `Você atende os clientes de ${n}. Fale de forma calorosa e próxima, como alguém que gosta de ajudar. Cumprimente, entenda o que a pessoa precisa e ofereça opções claras. Confirme os detalhes antes de agir.${REGRA_DA_ADEGA}`,
   ecommerce_professional: (n) =>
-    `Você atende os clientes de ${n}. Fale de forma objetiva, cordial e profissional. Vá direto ao ponto, sem parecer frio, e sempre termine indicando o próximo passo.`,
+    `Você atende os clientes de ${n}. Fale de forma objetiva, cordial e profissional. Vá direto ao ponto, sem parecer frio, e sempre termine indicando o próximo passo.${REGRA_DA_ADEGA}`,
   support_minimal: (n) =>
-    `Você atende os clientes de ${n}. Responda em frases curtas, peça apenas o que for necessário e chame uma pessoa do time assim que a dúvida sair do seu alcance.`,
+    `Você atende os clientes de ${n}. Responda em frases curtas, peça apenas o que for necessário e chame uma pessoa do time assim que a dúvida sair do seu alcance.${REGRA_DA_ADEGA}`,
 };
 
 /** O agente padrão desta organização, do jeito que este passo precisa vê-lo. */

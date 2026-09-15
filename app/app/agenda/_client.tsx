@@ -816,7 +816,7 @@ export function AgendaClient({
               onChange={(e) => setMotivo(e.target.value)}
               rows={3}
               className="w-full rounded-md border border-border bg-surface p-2 text-sm outline-hidden focus:border-border-strong"
-              placeholder={t("O paciente pediu para remarcar por telefone")}
+              placeholder={t("O cliente pediu para remarcar por telefone")}
             />
             <div className="flex justify-end gap-2">
               <Button variant="ghost" size="sm" onClick={() => setCancelandoId(null)}>
