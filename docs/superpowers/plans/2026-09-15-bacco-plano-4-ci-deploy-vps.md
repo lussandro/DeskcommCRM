@@ -165,6 +165,8 @@ ip -4 addr show docker0 | grep inet'
 ```
 Expected: Docker e Compose v2; `docker0` `inet 172.17.0.1/16` (medido pelo refutador: `dnf 4.20.0`, `dnf-plugins-core 4.7.0`, repo Docker CentOS 10 200). **Se `docker0` tiver outro endereço, usá-lo no lugar de `172.17.0.1` em todas as tarefas.**
 
+⚠️ **Medido na execução (2026-09-15):** o `systemctl enable --now docker` falha no kernel que estava rodando (`6.12.0-264`) com `iptables … -m addrtype … Extension addrtype revision 0 not supported, missing kernel module?`. Esse kernel não tem `xt_addrtype`, `nft_compat`, `br_netfilter`, `xt_MASQUERADE`, `xt_conntrack` nem `iptable_nat` em `/lib/modules`; a instalação do `docker-ce` puxa o kernel `6.12.0-267` (com `kernel-modules-extra`), que tem todos e vira o padrão de boot. **Correção: reiniciar** (`systemctl reboot`), conferir `uname -r` = `6.12.0-267.el10.x86_64`, `modprobe xt_addrtype nft_compat br_netfilter`, `systemctl restart docker` e `docker run --rm hello-world`.
+
 - [ ] **Step 2: Swap 4 GB**
 
 ```bash
@@ -488,8 +490,9 @@ Co-Authored-By: Claude Opus 5 (1M context) <noreply@anthropic.com>"
 ```bash
 P=/tmp/claude-1000/-home-lussandro-Bacco-Crm/a6337255-8451-4cc2-b075-9903d245160c/scratchpad/bacco_deploy.pub
 ssh root@2.25.222.110 'test -f /root/.ssh/bacco_deploy || ssh-keygen -t ed25519 -N "" -C "vps-bacco-adega-deploy" -f /root/.ssh/bacco_deploy >/dev/null; cat /root/.ssh/bacco_deploy.pub' > "$P"
-gh repo deploy-key add "$P" -R lussandro/bacco-adega-crm --title "vps-2.25.222.110 (read-only)"
-gh repo deploy-key list -R lussandro/bacco-adega-crm
+# este gh não tem `repo deploy-key`: API REST direto
+gh api -X POST repos/lussandro/bacco-adega-crm/keys -f title="vps-2.25.222.110 (read-only)" -f key="$(cat "$P")" -F read_only=true --jq '"id=\(.id) read_only=\(.read_only)"'
+gh api repos/lussandro/bacco-adega-crm/keys --jq '.[] | "\(.id) \(.title) read_only=\(.read_only)"'
 ```
 Expected: chave listada `read-only`.
 
