@@ -133,9 +133,9 @@ export function TimelineView({ contactId, types }: Props) {
                         OwnerBadge no card — forma, nunca cor. */}
                     <div
                       className={cn(
-                        "mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center text-accent",
+                        "mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center text-accent-text",
                         forma === "filled" && "rounded-full bg-accent-soft",
-                        forma === "ring" && "rounded-full border border-accent bg-surface ring-1 ring-inset ring-accent/40",
+                        forma === "ring" && "rounded-full border border-accent-text bg-surface ring-1 ring-inset ring-accent-text/40",
                         // Sistema, automação ou autor não registrado: o mesmo
                         // tracejado do "Sem responsável" no card. Três formas nas
                         // duas telas — quem distingue "automação" de "não sei

@@ -45,7 +45,7 @@ export function SourcesTab() {
       <div className="flex justify-center pt-10">
         <Card className="max-w-md">
           <CardHeader className="items-center text-center">
-            <PlugsConnected className="mb-2 h-10 w-10 text-accent" />
+            <PlugsConnected className="mb-2 h-10 w-10 text-accent-text" />
             <CardTitle>{t("Conecte sua landing page em 2 minutos")}</CardTitle>
           </CardHeader>
           <CardContent className="space-y-4 text-center">
@@ -82,7 +82,7 @@ export function SourcesTab() {
         {sources.map((s) => (
           <Card
             key={s.id}
-            className="cursor-pointer transition-colors hover:border-accent"
+            className="cursor-pointer transition-colors hover:border-accent-text"
             onClick={() => setSelected(s)}
           >
             <CardHeader className="space-y-2">

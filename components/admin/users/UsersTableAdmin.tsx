@@ -179,7 +179,7 @@ export function UsersTableAdmin({
                 <TableCell>
                   <Link
                     href={`/admin/users/${row.user_id}`}
-                    className="text-xs font-medium text-accent hover:underline"
+                    className="text-xs font-medium text-accent-text hover:underline"
                   >
                     {t("Ver")}
                   </Link>

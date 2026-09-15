@@ -358,7 +358,7 @@ export function PainelDeMarcacao({
             onClick={() => setEncaixeAberto(true)}
             className={cn(
               "h-11 w-full rounded-sm border border-dashed border-border text-sm text-text-muted transition-colors duration-fast ease-out lg:h-9",
-              "hover:border-accent hover:text-text",
+              "hover:border-accent-text hover:text-text",
               "focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent-500",
             )}
           >
@@ -624,7 +624,7 @@ export function PainelDeMarcacao({
             <Link
               href="/app/team?aba=atendimento"
               data-testid="ir-configurar-horarios"
-              className="mt-2 inline-block text-xs font-medium text-accent underline underline-offset-2 hover:text-accent-strong"
+              className="mt-2 inline-block text-xs font-medium text-accent-text underline underline-offset-2 hover:text-accent-strong"
             >
               {t("Configurar meus horários de atendimento")}
             </Link>
@@ -651,7 +651,7 @@ export function PainelDeMarcacao({
             <Link
               href="/app/team?aba=atendimento"
               data-testid="ir-configurar-horarios"
-              className="mt-2 inline-block text-xs font-medium text-accent underline underline-offset-2 hover:text-accent-strong"
+              className="mt-2 inline-block text-xs font-medium text-accent-text underline underline-offset-2 hover:text-accent-strong"
             >
               {t("Configurar meus horários de atendimento")}
             </Link>
@@ -920,7 +920,7 @@ export function PainelDeMarcacao({
                   "focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent-500",
                   horario?.instante === h.instante
                     ? "border-accent bg-accent font-semibold text-accent-foreground"
-                    : "border-border bg-surface text-text hover:border-accent hover:bg-accent-soft",
+                    : "border-border bg-surface text-text hover:border-accent-text hover:bg-accent-soft",
                 )}
               >
                 {h.rotulo}

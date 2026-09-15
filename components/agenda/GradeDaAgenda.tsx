@@ -501,7 +501,7 @@ function FantasmaDoArraste({
       aria-hidden
       className={cn(
         "pointer-events-none absolute inset-x-0.5 z-20 rounded-sm border-2 border-dashed px-1.5 py-0.5",
-        valido ? "border-accent bg-accent-soft" : "border-error bg-error-bg",
+        valido ? "border-accent-text bg-accent-soft" : "border-error bg-error-bg",
       )}
       style={{
         top: pixelsDe(proposta.minuto - PRIMEIRA_HORA * 60),

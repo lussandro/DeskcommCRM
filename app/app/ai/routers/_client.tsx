@@ -83,7 +83,7 @@ export function RoutersClient({ initialState, channelSessions }: Props) {
           {routers.map((r) => (
             <li key={r.id}>
               <Link href={`/app/ai/routers/${r.id}`}>
-                <Card className="flex h-full flex-col gap-2 p-4 transition-colors hover:border-accent">
+                <Card className="flex h-full flex-col gap-2 p-4 transition-colors hover:border-accent-text">
                   <div className="flex items-start justify-between gap-2">
                     <h3 className="truncate font-medium" title={r.name}>
                       {r.name}

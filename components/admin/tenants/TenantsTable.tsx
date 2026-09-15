@@ -187,7 +187,7 @@ export function TenantsTable({
                 <TableCell>
                   <Link
                     href={`/admin/tenants/${row.id}`}
-                    className="text-xs font-medium text-accent hover:underline"
+                    className="text-xs font-medium text-accent-text hover:underline"
                   >
                     {t("Ver")}
                   </Link>

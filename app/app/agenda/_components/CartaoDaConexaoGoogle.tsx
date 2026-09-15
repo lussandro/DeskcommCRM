@@ -88,7 +88,7 @@ export function CartaoDaConexaoGoogle({
           <a
             href={linkDeConfiguracao}
             data-testid="ir-configurar-google"
-            className="mt-2 inline-block text-xs font-medium text-accent underline underline-offset-2 hover:text-accent-strong"
+            className="mt-2 inline-block text-xs font-medium text-accent-text underline underline-offset-2 hover:text-accent-strong"
           >
             {t("Cadastrar as credenciais do Google")}
           </a>

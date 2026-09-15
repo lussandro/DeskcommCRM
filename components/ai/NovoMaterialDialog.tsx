@@ -172,7 +172,7 @@ export function NovoMaterialDialog({ aberto, onFechar, onCriado, podeIndexar }: 
                     data-testid={`material-tipo-${tf.id}`}
                     className={[
                       "rounded-lg border p-3 text-left text-sm transition",
-                      marcado ? "border-accent bg-accent/10" : "border-border hover:bg-surface",
+                      marcado ? "border-accent-text bg-accent/10" : "border-border hover:bg-surface",
                       rotina ? "cursor-not-allowed opacity-50" : "",
                     ].join(" ")}
                   >

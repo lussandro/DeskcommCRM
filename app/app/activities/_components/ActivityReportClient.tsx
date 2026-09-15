@@ -37,7 +37,7 @@ function MarcadorDeAtor({ forma }: { forma: LinhaDeAtor["forma"] }) {
       className={cn(
         "h-2 w-2 shrink-0",
         forma === "filled" && "rounded-full bg-accent",
-        forma === "ring" && "rounded-full border border-accent bg-surface",
+        forma === "ring" && "rounded-full border border-accent-text bg-surface",
         forma === "dashed" && "rounded-full border border-dashed border-border-strong",
       )}
     />
@@ -237,7 +237,7 @@ export function ActivityReportClient() {
                     {i.negocioId && (
                       <Link
                         href={`/app/leads/${i.negocioId}`}
-                        className="text-xs text-accent underline underline-offset-2"
+                        className="text-xs text-accent-text underline underline-offset-2"
                       >
                         {i.negocioTitulo ?? `${vocabulario.deal} ${i.negocioId.slice(0, 8)}`}
                       </Link>

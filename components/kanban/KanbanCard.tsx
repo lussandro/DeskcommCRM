@@ -144,8 +144,8 @@ export function KanbanCard({
             "group relative overflow-hidden rounded-md border border-border bg-surface",
             "py-2.5 pl-3 pr-3 shadow-xs transition-colors",
             "hover:border-border-strong",
-            snapshot.isDragging && "rotate-1 shadow-md ring-1 ring-accent/40",
-            isSelected && "ring-2 ring-accent",
+            snapshot.isDragging && "rotate-1 shadow-md ring-1 ring-accent-text/40",
+            isSelected && "ring-2 ring-accent-text",
           )}
         >
           {/* key = contador: cada evento remoto monta um overlay NOVO, e é isso
@@ -198,7 +198,7 @@ export function KanbanCard({
                 }}
                 className={cn(
                   "mt-1 h-4 w-4 shrink-0 cursor-pointer accent-accent transition-opacity",
-                  "focus:opacity-100 focus-visible:outline-2 focus-visible:outline-accent",
+                  "focus:opacity-100 focus-visible:outline-2 focus-visible:outline-accent-text",
                   isSelected || isSelecting
                     ? "opacity-100"
                     : "opacity-0 group-hover:opacity-100",

@@ -60,7 +60,7 @@ export function CaseReplyPanel({ caseId, status }: { caseId: string; status: Cas
             onClick={() => setAction(opt.action)}
             className={cn(
               "rounded-sm border p-3 text-left transition-colors",
-              action === opt.action ? "border-accent bg-accent-soft" : "border-border hover:border-border-strong",
+              action === opt.action ? "border-accent-text bg-accent-soft" : "border-border hover:border-border-strong",
               disabled && "cursor-not-allowed opacity-55",
             )}
           >

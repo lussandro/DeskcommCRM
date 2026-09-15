@@ -80,7 +80,7 @@ async function avaliarSuperficie(
     // Ator: o BRIEFING §5 e o OwnerBadge são explícitos — humano é disco
     // PREENCHIDO, agente é círculo VAZADO COM ANEL. A distinção é geométrica.
     const preenchidos = raiz.querySelectorAll("[class*='bg-accent-soft']").length;
-    const comAnel = raiz.querySelectorAll("[class*='ring-'][class*='border-accent']").length;
+    const comAnel = raiz.querySelectorAll("[class*='ring-'][class*='border-accent-text']").length;
     return { texto, preenchidos, comAnel };
   }, seletor);
 

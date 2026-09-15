@@ -276,7 +276,7 @@ export function AgendaInterativa({
         <div
           data-testid="confirmar-remarcacao"
           role="status"
-          className="flex flex-wrap items-center justify-between gap-2 rounded-sm border border-accent/50 bg-accent-soft px-3 py-2"
+          className="flex flex-wrap items-center justify-between gap-2 rounded-sm border border-accent-text/50 bg-accent-soft px-3 py-2"
         >
           <p className="text-xs leading-4 text-text">
             {t("Remarcar")} <span className="font-semibold">{nomeDoPendente}</span> {t("para")}{" "}

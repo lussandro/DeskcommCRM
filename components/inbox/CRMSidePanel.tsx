@@ -319,7 +319,7 @@ function InboxLeadEditor({
                   onClick={() => onSelecionar(l.id)}
                   className={cn(
                     "w-full rounded-md border p-2 text-left text-xs",
-                    marcado ? "border-accent bg-accent/10" : "border-border",
+                    marcado ? "border-accent-text bg-accent/10" : "border-border",
                   )}
                 >
                   <div className="truncate font-medium">{l.title}</div>
@@ -768,7 +768,7 @@ export function CRMSidePanel({ conversation }: Props) {
                       "h-2 w-2 shrink-0",
                       actorShape(a.actor_kind) === "filled" && "rounded-full bg-accent",
                       actorShape(a.actor_kind) === "ring" &&
-                        "rounded-full border border-accent bg-surface",
+                        "rounded-full border border-accent-text bg-surface",
                       actorShape(a.actor_kind) === "dashed" &&
                         "rounded-full border border-dashed border-border-strong",
                     )}

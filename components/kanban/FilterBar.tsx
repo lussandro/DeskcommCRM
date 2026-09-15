@@ -208,7 +208,7 @@ export function FilterBar({ filters, onChange, leads }: FilterBarProps) {
       <label
         className={cn(
           "flex cursor-pointer select-none items-center gap-2 rounded-md border border-border px-3 py-1.5 text-sm",
-          filters.overdueOnly && "border-accent bg-accent/10",
+          filters.overdueOnly && "border-accent-text bg-accent/10",
         )}
       >
         <input
