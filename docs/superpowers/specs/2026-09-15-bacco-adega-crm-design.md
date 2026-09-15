@@ -347,6 +347,13 @@ guardrail disso (busca por idade/álcool em `lib` e `app`: zero).
 - **Domínio da API do Supabase próprio:** `api-adega.baccosistemas.com.br` (dono, 2026-09-15).
   O instalador exige URL `https` que responda em `/auth/v1/health` (`install.sh:228-245`): o Kong
   do Supabase é publicado nesse domínio pelo mesmo proxy que serve o app.
+- **E-mail transacional:** conta Resend já usada pela Bacco (chave em
+  `~/bacco-controle/apps/api/.env`, `RESEND_API_KEY`; domínio `baccosistemas.com.br` **verified**
+  em sa-east-1, medido pela API em 2026-09-15). Remetente **`nao-responda@baccosistemas.com.br`**,
+  nome exibido **Bacco Adega CRM** (decisão do dono). Usado por dois caminhos: SMTP do GoTrue
+  (`smtp.resend.com`, porta 465, usuário `resend`, senha = API key — portas de saída liberadas na
+  VPS, medido) e `RESEND_API_KEY`/`RESEND_FROM_EMAIL` do app (convites). A chave vai para a VPS por
+  pipe no SSH, nunca exibida. Referência: vault `projetos/_shared/emails-transacionais-resend.md`.
 - **Supabase próprio (self-hosted)** — decisão do dono em 2026-09-15.
   - O kit do upstream **aceita** Supabase próprio mas **não o instala**
     (`.env.hostgator.example:119-127`): subir a stack Supabase oficial em Docker antes, e
