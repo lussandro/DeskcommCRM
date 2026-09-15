@@ -1,6 +1,22 @@
 # Marca
 
-## Símbolo e logotipo
+## Marca do produto: Bacco Adega CRM
+
+Fonte: `docs/brand/bacco/` — arte oficial (`docs/brand/bacco/bacco-adega-crm-simbolo.svg`,
+`docs/brand/bacco/bacco-adega-crm-logo-principal.svg`, `docs/brand/bacco/bacco-adega-crm-logo-bordo.svg`),
+`docs/brand/bacco/preview.png` e o board `docs/brand/bacco/referencia-board-2026-09-15.png`. O app NÃO lê esses arquivos: a geometria vive em
+`lib/branding/desenho.ts`, **gerado** por `docs/brand/bacco/texto-para-path.py` (instruções no
+cabeçalho do script). Ao revisar a arte, troque os SVGs e rode o script de novo. O logotipo da barra
+omite de propósito a linha separadora, a tagline e a folha (ver o cabeçalho gerado).
+
+Cores: borgonha `#4a0e1f`, creme `#f5f0e6`, ouro `#c49a4a`, grafite `#2e2e2e`.
+Fontes: Inter (interface), Playfair Display 600 (títulos das telas públicas), IBM Plex Mono (código).
+Render de conferência: `evidence/bacco-rebrand/03-revisao.md`.
+
+## Histórico do upstream: símbolo e logotipo DeskcommCRM
+
+Os SVGs abaixo ficam no repositório porque `README.es.md` e `docs/brand/og-card.html` ainda os
+referenciam; não são mais a marca do produto.
 
 | Arquivo | O que é |
 |---|---|

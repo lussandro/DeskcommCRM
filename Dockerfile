@@ -1,6 +1,6 @@
 # syntax=docker/dockerfile:1
-# DeskcommCRM — imagem de produção self-host (Next.js standalone).
-# Build: docker build --build-arg NEXT_PUBLIC_SUPABASE_URL=... -t deskcomm-app .
+# Bacco Adega CRM — imagem de produção (Next.js standalone).
+# Build: docker build --build-arg NEXT_PUBLIC_SUPABASE_URL=... -t bacco-adega-crm .
 
 # ---- deps: instala dependências (layer cacheável) ----
 FROM node:22-alpine AS deps
@@ -55,7 +55,7 @@ WORKDIR /app
 # passa pelo metadata-action e sem isto sairia sem origem nenhuma.
 LABEL org.opencontainers.image.source="https://github.com/lussandro/bacco-adega-crm" \
       org.opencontainers.image.licenses="MIT" \
-      org.opencontainers.image.title="DeskcommCRM"
+      org.opencontainers.image.title="Bacco Adega CRM"
 
 # A versão que /api/v1/health reporta (invariante 7). Precisa vir por ARG: a
 # alternativa anterior era `process.env.npm_package_version`, que é `undefined`

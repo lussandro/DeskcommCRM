@@ -310,7 +310,7 @@ O conteúdo dos Steps 1–5 é o da v1 (script `texto-para-path.py`, contrato `S
 `CORES_DA_MARCA` com papéis `corpo`/`uvas`/`nome`/`sufixo`, `Partes`, favicon), já **medido** pelo
 refutador: roda, gera 16 KB, typecheck verde, render conferido. Mudanças em relação à v1:
 
-- **Omissão declarada:** o logotipo da barra usa `bacco-adega-crm-logo-bordo.svg` **sem** a linha
+- **Omissão declarada:** o logotipo da barra usa `docs/brand/bacco/bacco-adega-crm-logo-bordo.svg` **sem** a linha
   separadora e **sem** a tagline (ilegíveis na altura da barra) e sem a folha (o SVG horizontal não
   a tem). Escrever isso no cabeçalho gerado pelo script e na spec §4.1.
 - `MarcaDoProduto.tsx:9-10`: comentário "as cores seguem o TEMA: borgonha e ouro no claro, creme e ouro no escuro".
