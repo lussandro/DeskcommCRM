@@ -10,8 +10,8 @@
  * pré-buildada e cada dependência nova é superfície de advisory num produto que o
  * cliente hospeda. As conversões (sRGB ↔ OKLab, de Björn Ottosson) cabem em 60 linhas.
  *
- * A régua é `app/globals.css`. No fork Bacco a rampa do produto é `rampaDeSemente('#4a0e1f')`
- * (borgonha). A calibração abaixo (`ESCADA_L`, `CURVA_C`) foi medida na Sage do upstream e
+ * A régua é `app/globals.css`. No fork Bacco a rampa do produto é `rampaDeSemente('#6a1730')`
+ * (vinho do kit). A calibração abaixo (`ESCADA_L`, `CURVA_C`) foi medida na Sage do upstream e
  * continua valendo: `rampaDeSemente('#506d48')` reproduz os 11 stops Sage com Δ ≤ 2/255 por
  * canal — vigiado por `tests/unit/branding-rampa.test.ts` contra a régua Sage congelada
  * (`tests/fixtures/branding/regua-sage.ts`), e o produto contra o próprio CSS.

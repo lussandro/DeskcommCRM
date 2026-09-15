@@ -153,7 +153,7 @@ describe("extrairRegua — os pares saem do globals.css, nunca de lista à mão"
     for (const tema of [REGUA.claro, REGUA.escuro]) {
       const reprovas = medirPares(tema, REGUA.rampaDoProduto, 0)
         .filter((p) => !p.passa)
-        .filter((p) => !(PAPEIS_DE_FILL_NO_ESCURO as readonly string[]).includes(p.papel));
+        .filter((p) => tema.nome !== "escuro" || !(PAPEIS_DE_FILL_NO_ESCURO as readonly string[]).includes(p.papel));
       expect(reprovas, `${tema.nome}: ${JSON.stringify(reprovas)}`).toEqual([]);
     }
   });

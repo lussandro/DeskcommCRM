@@ -387,10 +387,10 @@
   --color-accent-800: #4a1b26;
   --color-accent-900: #401b23;
   --color-accent-950: #2c1419;
-  --color-accent: var(--color-accent-600);
-  --color-accent-fg: #ffffff;
   /* Fill vinho profundo (grau 600) abaixo de 3:1 contra as superfícies — exceção do PRODUTO
      (PAPEIS_DE_FILL_NO_ESCURO, spec §5.3); texto e borda da ação usam --color-accent-text (grau 300). */
+  --color-accent: var(--color-accent-600);
+  --color-accent-fg: #ffffff;
   --color-accent-soft: var(--color-accent-900);
   --color-accent-hover: var(--color-accent-500);
   --color-accent-text: var(--color-accent-300);

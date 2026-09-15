@@ -77,7 +77,7 @@ export type MarcaDeSaida = {
  * O accent do tema CLARO do produto — LIDO da régua, nunca redigitado.
  *
  * `REGUA_DO_PRODUTO.claro.indices.accent` é 6 e o grau 600 da rampa do produto é
- * `#4a0e1f` (borgonha Bacco). Escrever `"#4a0e1f"` aqui
+ * `#6a1730` (vinho do kit Bacco). Escrever `"#6a1730"` aqui
  * criaria a QUARTA cópia do mesmo hex no repositório (as outras vivem em
  * `regua-do-produto.ts`, `app/globals.css` e na rampa derivada), e nada as
  * manteria em sincronia — o dia em que o produto mudar de cor, o botão dos
