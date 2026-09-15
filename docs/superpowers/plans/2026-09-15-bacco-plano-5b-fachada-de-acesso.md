@@ -17,7 +17,7 @@
 
 ## Global Constraints
 
-- Branch `bacco`; push `git push --no-tags origin bacco:main`; sem tag (release `v26.9.2` no fim do 5C).
+- Branch `bacco`; sem push neste plano (o primeiro push, `git push --no-tags origin bacco:main`, é o do Plano 5C Task 6); sem tag (release `v26.9.2` no fim do 5C).
 - Local só comando puro (`source ~/.nvm/nvm.sh && nvm use 22`): vitest por arquivo, typecheck com `NODE_OPTIONS=--max-old-space-size=6144`, lint, `python3`. Suíte inteira e build no CI. Tela na VPS (5C).
 - Sem "Lembrar de mim" (spec §2: não há mecanismo; caixa sem efeito é enganosa).
 - `id`, `name`, `autoComplete`, `aria-invalid`, `register(...)` e mensagens de erro dos campos **não mudam** — `tests/e2e/marca-logo.spec.ts` usa `#email`, `#password` e o botão `/entrar/i`.
@@ -32,8 +32,11 @@
 
 Este plano não prova a tela. A prova (Playwright na VPS, dois temas, 1366 px e 400 px, `getComputedStyle`)
 é a Task final do Plano 5C, depois do deploy da `v26.9.2`. Até lá o status visual da fachada é
-**não validado**, mesmo com CI verde. O push para a `main` vem antes da prova porque a prova roda na imagem
-publicada pelo CI — publicar não é declarar pronto.
+**não validado**, mesmo com CI verde. Este plano não faz push: o primeiro push de 5A+5B+5C é o do Plano 5C,
+Task 6 Step 3, depois do commit que cria `evidence/bacco-rebrand/5c-ilustracoes.png` (o
+`tests/unit/evidencia-citada.test.ts` reprova documento versionado que cita PNG ainda inexistente, e o plano
+5C cita esse). O push para a `main` vem antes da prova porque a prova roda na imagem publicada pelo CI —
+publicar não é declarar pronto.
 
 ---
 
@@ -459,7 +462,7 @@ telas seguem o tema claro ou escuro escolhido. Nada muda no login em si.
 ```
 
 - [ ] **Step 2:** `pnpm exec vitest run tests/unit/fragmentos-de-release.test.ts tests/unit/evidencia-citada.test.ts` → exit 0. Commit `chore(bacco): fragmento de release da fachada` + trailer.
-- [ ] **Step 3:** `git push --no-tags origin bacco:main`; acompanhar `ci`/`perf`/`publish-image` do SHA; ler `Test Files`/`Tests`/`Errors` do `verify`. Vermelho = causa raiz, commit próprio.
+- [ ] **Step 3: Sem push aqui** — o primeiro push é o do Plano 5C, Task 6 Step 3. Motivo: `tests/unit/evidencia-citada.test.ts` varre todo `*.md` versionado e reprova documento que cita PNG não versionado; o plano 5C cita `evidence/bacco-rebrand/5c-ilustracoes.png`, que só nasce na Task 1 do 5C. Um push agora deixaria o `verify` vermelho por arquivo que ainda não tinha como existir. A prova local deste plano é a do Step 2 e das Tasks anteriores.
 
 ## Fora deste plano
 

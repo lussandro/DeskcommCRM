@@ -17,7 +17,7 @@
 
 ## Global Constraints
 
-- Branch `bacco`; push sempre `git push --no-tags origin bacco:main`. Nada de tag neste plano.
+- Branch `bacco`; sem push neste plano (o primeiro push, `git push --no-tags origin bacco:main`, é o do Plano 5C Task 6). Nada de tag neste plano.
 - Todo comando roda na raiz do checkout onde o plano está sendo executado (nunca `cd` para outro caminho).
 - Local só comando puro com `source ~/.nvm/nvm.sh && nvm use 22`: `pnpm exec vitest run <arquivos>`, `NODE_OPTIONS=--max-old-space-size=6144 pnpm typecheck`, `pnpm lint` (0 erros; avisos pré-existentes não contam), `pnpm exec tsx`, `pnpm test:shell`. Suíte inteira, `test:db`, build: CI.
 - Resultado de teste: exit code; depois rodapé `Test Files`/`Tests`/`Errors`.
@@ -646,7 +646,7 @@ configurada em Configurações › Marca continua valendo, com o contraste de se
 
 - [ ] **Step 4:** `pnpm exec vitest run tests/unit/fragmentos-de-release.test.ts` → exit 0.
 - [ ] **Step 5: Commit** — `chore(bacco): saídas de e-mail e kit no vinho do kit, e fragmento de release` + trailer.
-- [ ] **Step 6: CI** — `git push --no-tags origin bacco:main`; acompanhar `ci`, `perf`, `publish-image` do SHA (`gh api "repos/lussandro/bacco-adega-crm/actions/runs?head_sha=<sha>"`); no `verify`, ler `Test Files`/`Tests`/`Errors`. Vermelho = causa raiz, commit próprio, novo push. Sem tag: a release é no fim do 5C.
+- [ ] **Step 6: Sem push aqui** — o primeiro push destes commits é o do Plano 5C, Task 6 Step 3. Motivo: `tests/unit/evidencia-citada.test.ts` varre todo `*.md` versionado e reprova documento que cita PNG não versionado; os planos 5B e 5C, já na árvore, citam `evidence/bacco-rebrand/5b-lateral-esquerda.png`, `evidence/bacco-rebrand/5b-lateral-direita.png` e `evidence/bacco-rebrand/5c-ilustracoes.png`, que só passam a existir nas Tasks 1 do 5B e do 5C. Um push agora deixaria o `verify` vermelho por arquivo que ainda não tinha como existir. Local, a prova deste plano é a dos Steps 2 e 4 e das Tasks anteriores; o CI inteiro roda uma vez só, no push do 5C. Sem tag: a release é no fim do 5C.
 
 ---
 

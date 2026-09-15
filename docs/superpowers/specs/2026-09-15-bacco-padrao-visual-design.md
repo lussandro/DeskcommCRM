@@ -127,6 +127,10 @@ Playfair Display em títulos editoriais, Inter no resto. Seleção: claro com o 
 (item ativo ~`#F3DCDD`, card selecionado ~`#F9EEEE`); escuro com vinho profundo (item ativo ~`#4C1D29`,
 card selecionado ~`#33151B` com borda ~`#521324`). Badges de contagem em rosé nos dois temas. Os
 valores com "~" saem da amostragem das capturas e são fixados no plano por medição de contraste.
+A borda do card selecionado no escuro é o grau 800 da rampa (`#4A1B26`, `dark:border-accent-800`): entre os
+graus existentes é o mais próximo da amostra ~`#521324` (ΔE OKLab 0,0214; grau 700 `#581A2A` 0,0220; grau 600
+`#6A1730` 0,0588), medido em Python em 2026-09-15. É decorativa (1,05:1 contra o fundo selecionado, grau 900),
+e no claro a borda existe com cor transparente, para a seleção não mudar o layout (Plano 5C, Task 3).
 
 ### 5.2 Rampa e marca por instalação
 
@@ -155,8 +159,9 @@ as superfícies, e os usos de texto/borda migram para ele por codemod com lista 
 
 ### 5.4 Componentes-padrão
 
-- **Estado vazio editorial** (`components/ui/EstadoVazio.tsx`): título Playfair, subtítulo, ilustração
-  opcional (decorativa: `alt=""`, `aria-hidden`), citação opcional em ouro. Usado onde há "nada selecionado"
+- **Estado vazio editorial** (`components/empty/EmptyState.tsx`, o componente que já existe, ganhando o modo
+  `editorial`; não nasce componente novo): título Playfair, subtítulo, ilustração opcional (decorativa, em
+  `background-image` num `div aria-hidden`, nunca `<img>`), citação opcional em ouro. Usado onde há "nada selecionado"
   ou "nada ainda"; a inbox é a primeira.
 - **Tag colorida** (`components/ui/Etiqueta.tsx` + `lib/etiquetas/cor.ts`): cor CALCULADA do nome
   normalizado (hash estável → paleta pastel de 6 tons por tema, cada tom medido ≥ 4,5:1 texto × fundo).
@@ -188,7 +193,7 @@ Cada arquivo tratado é renderizado e aprovado pelo dono em `evidence/` antes do
 
 **Unidade (CI `verify`):** régua de contraste dos tokens novos nos dois temas; teste explícito da exceção
 §5.3 (texto 4,5 e anel 3); os cinco tons ajustados amarrados ao papel com o piso; cor de etiqueta
-(determinística, 6 tons passam nos dois temas, nome vazio não quebra); `EstadoVazio` (título, citação,
+(determinística, 6 tons passam nos dois temas, nome vazio não quebra); `EmptyState` editorial (título, citação,
 ilustração decorativa); `CampoDeAcesso` (olho alterna `type`, rótulo acessível, `es`); testes de fachada
 atuais (logo do revendedor, chip no escuro, título da aba) ajustados só onde a casca muda, com razão
 escrita; `i18n-espanhol-cobre-a-tela`.
@@ -198,6 +203,14 @@ catálogo e uma de configuração, nos dois temas, em 1366 px e 400 px. Medido p
 fundo, superfície e barra lateral = tokens; ação principal = kit; título editorial em Playfair; contraste
 do texto secundário ≥ 4,5 medido na tela; em 400 px as laterais do login ausentes. Capturas citadas em
 `evidence/`, aprovação do dono.
+
+**Exceção na prova em tela: Verificação em duas etapas (`/login/mfa`) — pendente de ciência do dono.** Das seis
+telas de acesso, cinco são provadas em tela; `/login/mfa` fica fora. Para capturá-la seria preciso ativar um
+fator TOTP na conta QA de produção, uma ação sensível de segurança que muda como essa conta entra e deixa um
+segredo de segundo fator para guardar. O que cobre a tela: ela usa a mesma casca `app/(public)/layout.tsx`
+das outras cinco, medida nos dois temas e nas duas larguras, e o teste unitário da fachada do Plano 5B cobre a
+casca e o `MfaForm`. A exceção é declarada na revisão da prova (`evidence/bacco-rebrand/5c-revisao.md`) e só
+vale depois de o dono tomar ciência.
 
 **Entrega:** plano → refutador + Codex → CI verde → tag anotada `v26.9.2` → `update.sh` → prova na VPS;
 fragmento `.changes/` `capacidade_nova`.
