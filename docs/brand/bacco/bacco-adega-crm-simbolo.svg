@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-labelledby="title">
+  <title id="title">Símbolo Bacco Adega CRM</title>
+  <defs><style>.serif{font-family:'Playfair Display','Cormorant Garamond',Georgia,'Times New Roman',serif}</style></defs>
+  <path d="M90 150 C70 90 119 52 181 57 C226 60 258 81 287 113 C263 132 234 123 211 103 C189 84 161 82 137 92 C111 103 96 121 90 150Z" fill="#4A0E1F"/>
+  <text x="130" y="380" class="serif" font-size="355" font-weight="600" fill="#4A0E1F">B</text>
+  <circle cx="112" cy="224" r="23" fill="#C49A4A"/><circle cx="160" cy="224" r="23" fill="#C49A4A"/>
+  <circle cx="136" cy="270" r="23" fill="#C49A4A"/><circle cx="184" cy="270" r="23" fill="#C49A4A"/>
+  <circle cx="160" cy="316" r="23" fill="#C49A4A"/><circle cx="160" cy="360" r="20" fill="#C49A4A"/>
+</svg>

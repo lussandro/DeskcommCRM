@@ -1,0 +1,29 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 620" role="img" aria-labelledby="title desc">
+  <title id="title">Bacco Adega CRM — logo principal</title>
+  <desc id="desc">Logotipo bordô e dourado com B estilizado, cacho de uvas e assinatura Adega CRM.</desc>
+  <defs>
+    <style>
+      .serif{font-family:'Playfair Display','Cormorant Garamond',Georgia,'Times New Roman',serif}
+      .sans{font-family:Inter,Arial,sans-serif}
+    </style>
+  </defs>
+  <g transform="translate(72 65)">
+    <!-- símbolo B + videira -->
+    <path d="M72 120 C60 72 91 34 141 37 C173 39 198 53 215 76 C229 94 240 104 261 106 C231 118 216 115 199 101 C183 88 168 77 145 75 C113 72 90 89 80 119 Z" fill="#4A0E1F"/>
+    <text x="112" y="220" class="serif" font-size="220" font-weight="600" fill="#4A0E1F">B</text>
+    <path d="M113 111 C96 124 84 140 79 160" fill="none" stroke="#4A0E1F" stroke-width="7" stroke-linecap="round"/>
+    <circle cx="78" cy="168" r="15" fill="#C49A4A"/>
+    <circle cx="112" cy="167" r="15" fill="#C49A4A"/>
+    <circle cx="95" cy="198" r="15" fill="#C49A4A"/>
+    <circle cx="128" cy="198" r="15" fill="#C49A4A"/>
+    <circle cx="111" cy="229" r="15" fill="#C49A4A"/>
+    <circle cx="111" cy="260" r="13" fill="#C49A4A"/>
+
+    <!-- wordmark -->
+    <text x="255" y="230" class="serif" font-size="190" font-weight="600" letter-spacing="-7" fill="#4A0E1F">acco</text>
+    <text x="118" y="360" class="serif" font-size="72" letter-spacing="18" fill="#4A0E1F">ADEGA</text>
+    <text x="510" y="360" class="serif" font-size="72" letter-spacing="12" fill="#C49A4A">CRM</text>
+    <line x1="115" y1="395" x2="865" y2="395" stroke="#C49A4A" stroke-width="3"/>
+    <text x="117" y="455" class="sans" font-size="30" font-weight="400" letter-spacing="2" fill="#2E2E2E">Relacionamento e atendimento inteligente</text>
+  </g>
+</svg>
