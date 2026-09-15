@@ -1,0 +1,8 @@
+{
+  "brand": {"name":"Bacco Adega CRM","colors":{"burgundy":"#4A0E1F","gold":"#C49A4A","cream":"#F5F0E6","graphite":"#2E2E2E"}},
+  "light": {"background":"#FBF8F2","surface":"#FFFDF8","surfaceMuted":"#F5F0E6","text":"#2E2A27","textMuted":"#776F68","border":"#E8DED1","primary":"#6A1730","primaryHover":"#541025","accent":"#C49A4A","success":"#5A8A63","danger":"#A94452"},
+  "dark": {"background":"#13110F","surface":"#1A1715","surfaceMuted":"#211D1A","text":"#F5F0E6","textMuted":"#A69C92","border":"#332C27","primary":"#7C1D3A","primaryHover":"#962749","accent":"#C49A4A","success":"#719E76","danger":"#C35A65"},
+  "typography":{"display":"Playfair Display, Georgia, serif","ui":"Inter, system-ui, sans-serif"},
+  "radius":{"sm":"6px","md":"10px","lg":"16px","xl":"22px"},
+  "spacing":{"xs":"4px","sm":"8px","md":"12px","lg":"16px","xl":"24px","2xl":"32px"}
+}

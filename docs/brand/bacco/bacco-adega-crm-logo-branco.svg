@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1600 420" role="img" aria-labelledby="title">
+  <title id="title">Bacco Adega CRM — logo branco</title>
+  <defs><style>.serif{font-family:'Playfair Display','Cormorant Garamond',Georgia,'Times New Roman',serif}.sans{font-family:Inter,Arial,sans-serif}</style></defs>
+  <g transform="translate(55 34)" fill="#F5F0E6">
+    <text x="75" y="255" class="serif" font-size="235" font-weight="600">B</text>
+    <circle cx="63" cy="167" r="13"/><circle cx="91" cy="167" r="13"/><circle cx="77" cy="194" r="13"/><circle cx="105" cy="194" r="13"/><circle cx="91" cy="221" r="13"/><circle cx="91" cy="248" r="11"/>
+    <text x="255" y="234" class="serif" font-size="170" font-weight="600" letter-spacing="-5">Bacco</text>
+    <line x1="810" y1="77" x2="810" y2="290" stroke="#F5F0E6" stroke-width="3"/>
+    <text x="855" y="210" class="serif" font-size="82" letter-spacing="10">ADEGA</text>
+    <text x="1205" y="210" class="serif" font-size="82" letter-spacing="6">CRM</text>
+    <text x="858" y="270" class="sans" font-size="27" letter-spacing="2">Relacionamento e atendimento inteligente</text>
+  </g>
+</svg>
