@@ -1,29 +1,43 @@
-# Bacco Adega CRM — Plano 5A: tokens do kit nos dois temas, régua e etiquetas
+# Bacco Adega CRM — Plano 5A: tokens do kit nos dois temas, régua e etiquetas (v2)
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Trocar a paleta de TODO o sistema pelos tokens do kit Bacco (claro e escuro), com a exceção de contraste do fill no escuro, o token `--color-accent-text` para texto/borda e etiquetas com cor calculada.
+> **v2 (2026-09-15):** revisado por refutador (Tasks 0–5 executadas em worktree) e `codex exec`. Correções: a
+> exceção do fill no escuro vale **só para a paleta do produto** (decisão do dono — marca própria segue com o piso
+> atual), uma declaração CSS por linha, ouro-texto claro `#855f00`, `branding-regua-do-produto.test.ts` na lista,
+> bloco `[data-theme="light"]` sem rampa, codemod sem `cd`, raios do kit, `pnpm test:shell` e não-prova declarada.
 
-**Architecture:** Tokens globais em `app/globals.css` (fonte única; o Tailwind 4 lê pela ponte `@theme inline`). A régua (`lib/branding/contraste.ts`) ganha duas regras: token `-text` é papel de TEXTO; no escuro o fill do accent (`--color-accent`, `--color-accent-hover`) sai da conta de componente. Os usos de texto/borda migram para `accent-text` por codemod. Etiqueta = `Badge` + cor por hash do nome em 6 trilhas de token.
+**Goal:** Trocar a paleta de TODO o sistema pelos tokens do kit Bacco (claro e escuro), com o token `--color-accent-text` para texto/borda da ação, a exceção de contraste do fill escuro declarada só para o produto, e etiquetas com cor calculada.
+
+**Architecture:** Tokens globais em `app/globals.css` (fonte única; o Tailwind 4 lê pela ponte `@theme inline`). A régua (`lib/branding/contraste.ts`) ganha UMA regra de extração: token `-text` é papel de TEXTO. A exceção do fill escuro NÃO entra na extração (senão toda marca própria perderia o piso): ela é uma política do produto (`PAPEIS_DE_FILL_NO_ESCURO`) aplicada no teste que mede a paleta do `globals.css`. Os usos de texto/borda migram para `accent-text` por codemod. Etiqueta = `Badge` + cor por hash do nome em 6 trilhas de token.
 
 **Tech Stack:** Next.js 16, React 19, Tailwind 4 (CSS-first), Vitest 4, TypeScript estrito, Node 22.
 
-**Spec:** `docs/superpowers/specs/2026-09-15-bacco-padrao-visual-design.md` (§5, §7). Plano irmão: 5B (fachada de acesso), 5C (barra lateral, inbox, estado vazio). Release única `v26.9.2` depois do 5C.
+**Spec:** `docs/superpowers/specs/2026-09-15-bacco-padrao-visual-design.md` (§5, §7). Planos irmãos: 5B (fachada de acesso), 5C (barra lateral, inbox, release e prova). Release única `v26.9.2` no fim do 5C.
 
 ## Global Constraints
 
 - Branch `bacco`; push sempre `git push --no-tags origin bacco:main`. Nada de tag neste plano.
-- Local só comando puro com `source ~/.nvm/nvm.sh && nvm use 22`: `pnpm exec vitest run <arquivos>`, `NODE_OPTIONS=--max-old-space-size=6144 pnpm typecheck`, `pnpm lint`, `pnpm exec tsx`. Suíte inteira, `test:db`, `test:shell`, build: CI.
+- Todo comando roda na raiz do checkout onde o plano está sendo executado (nunca `cd` para outro caminho).
+- Local só comando puro com `source ~/.nvm/nvm.sh && nvm use 22`: `pnpm exec vitest run <arquivos>`, `NODE_OPTIONS=--max-old-space-size=6144 pnpm typecheck`, `pnpm lint` (0 erros; avisos pré-existentes não contam), `pnpm exec tsx`, `pnpm test:shell`. Suíte inteira, `test:db`, build: CI.
 - Resultado de teste: exit code; depois rodapé `Test Files`/`Tests`/`Errors`.
-- Nenhum hex de token entra sem constar da tabela abaixo (medida por `docs/superpowers/plans/anexos/medir-tokens-kit.ts`). Texto ≥ 4,5:1; componente ≥ 3:1; a única exceção é §5.3 da spec.
+- Nenhum hex de token entra sem constar da tabela abaixo (medida por `docs/superpowers/plans/anexos/medir-tokens-kit.ts`). Texto ≥ 4,5:1; componente ≥ 3:1. A única exceção: fill da ação no escuro, **só na paleta do produto** (spec §5.3).
+- CSS: **uma declaração por linha** (os leitores de `tailwind-tokens.test.ts` e `tokens-do-kit-bacco.test.ts` leem uma por linha).
 - Régua Sage congelada (`tests/fixtures/branding/regua-sage.ts`) NÃO é regenerada; testes de algoritmo continuam nela.
-- A marca (logotipo, favicon, `lib/branding/desenho.ts`) continua `#4a0e1f`/`#c49a4a`/`#f5f0e6`. Só a AÇÃO muda para o vinho do kit.
+- A marca (logotipo, favicon, `lib/branding/desenho.ts`, `components/branding/MarcaDoProduto.tsx`) continua `#4a0e1f`/`#c49a4a`/`#f5f0e6`. Só a AÇÃO muda para o vinho do kit.
 - Texto novo em `t(...)` ganha `es` em `lib/i18n/dicionario.ts`.
 - Commit termina com `Co-Authored-By: Claude Opus 5 (1M context) <noreply@anthropic.com>`.
 
+## Não-prova declarada
+
+Este plano muda tokens visíveis em TODO o produto e não prova a tela. A prova (Playwright na VPS, dois temas,
+1366 px e 400 px, `getComputedStyle` de fundo, barra, ação e fontes) é a Task 7 do Plano 5C, depois da `v26.9.2`.
+Até lá o status visual é **não validado**, mesmo com CI verde.
+
 ## Tabela de tokens (medida em 2026-09-15)
 
-Rampa `rampaDeSemente("#6a1730")`, igual nos três blocos:
+Rampa `rampaDeSemente("#6a1730")` — escrita em `:root` e em `[data-theme="dark"]` (o bloco `[data-theme="light"]`
+**não** declara rampa, de propósito: `tests/unit/branding-tema-claro-escopavel.test.ts`):
 `50 #fdf2f3 · 100 #f7dde1 · 200 #e7b7bf · 300 #ce8693 · 400 #b3596c · 500 #94344d · 600 #6a1730 · 700 #581a2a · 800 #4a1b26 · 900 #401b23 · 950 #2c1419`
 
 | Token | `:root` e `[data-theme="light"]` | `[data-theme="dark"]` |
@@ -38,7 +52,7 @@ Rampa `rampaDeSemente("#6a1730")`, igual nos três blocos:
 | `--color-border-strong` | `#c9c5c0` (neutro 200) | `#3d3a37` (neutro 700) |
 | `--color-accent` | `var(--color-accent-600)` | `var(--color-accent-600)` |
 | `--color-accent-fg` | `#ffffff` | `#ffffff` |
-| `--color-accent-hover` | `var(--color-accent-700)` | `var(--color-accent-500)` |
+| `--color-accent-hover` | `var(--color-accent-700)` (kit `#541025`; grau 700 a ΔE 0,022) | `var(--color-accent-500)` |
 | `--color-accent-soft` | `var(--color-accent-100)` | `var(--color-accent-900)` |
 | `--color-accent-text` (novo) | `var(--color-accent-600)` | `var(--color-accent-300)` |
 | `--ring` | `var(--color-accent-500)` (sem mudança) | `var(--color-accent-400)` |
@@ -48,10 +62,11 @@ Rampa `rampaDeSemente("#6a1730")`, igual nos três blocos:
 | `--color-error` / `-bg` / `-fg` | `#a94452` / `rgba(169, 68, 82, 0.12)` / `#a5404f` | `#be5561` / `rgba(190, 85, 97, 0.18)` / `#de737c` |
 | `--color-info` / `-bg` / `-fg` | sem mudança | sem mudança |
 | `--color-gold` (novo) | `#c49a4a` | `#c49a4a` |
-| `--color-gold-text` (novo) | `#8e6603` | `#c49a4a` |
+| `--color-gold-text` (novo) | `#855f00` (4,51 sobre a seleção) | `#c49a4a` |
 | `--color-sidebar` (novo) | `#faf6f0` | `#1d0f12` |
+| `--radius-sm` / `-md` / `-lg` / `-xl` (só `:root`) | `6px` / `10px` / `16px` / `22px` | — |
 
-Neutros claro (`--color-neutral-*`): `50 #fbf8f2 · 100 #e2ded9 · 200 #c9c5c0 · 300 #b1ada8 · 400 #999590 · 500 #827e7a · 600 #6c6864 · 700 #56524e · 800 #423e3a · 900 #2e2a27 · 950 #1c1815`
+Neutros claro (`--color-neutral-*`, em `:root` e `[data-theme="light"]`): `50 #fbf8f2 · 100 #e2ded9 · 200 #c9c5c0 · 300 #b1ada8 · 400 #999590 · 500 #827e7a · 600 #6c6864 · 700 #56524e · 800 #423e3a · 900 #2e2a27 · 950 #1c1815`
 Neutros escuro: `50 #f5f0e6 · 100 #d8d4cb · 200 #bdb8b0 · 300 #a19d96 · 400 #87837d · 500 #6d6a64 · 600 #55514d · 700 #3d3a37 · 800 #272522 · 900 #13110f · 950 #030302`
 
 Etiquetas (`--color-etiqueta-N-bg` / `--color-etiqueta-N-fg`, todas ≥ 4,5:1 medidas):
@@ -65,29 +80,28 @@ Etiquetas (`--color-etiqueta-N-bg` / `--color-etiqueta-N-fg`, todas ≥ 4,5:1 me
 | 5 | rosa | `#fedfe5` / `#8d5965` | `#462930` / `#bc8c96` |
 | 6 | ouro | `#f1e7ce` / `#776636` | `#3c3216` / `#aa9a71` |
 
-Contagens esperadas da régua do produto (medidas): claro 7 papéis, 4 superfícies, 22 pares, 0 reprovas;
-escuro 5 papéis, 4 superfícies, 14 pares, 0 reprovas; índices escuro `{accent: 6, hover: 5, soft: 9}`,
-`alfaDoSoft` 1; `neutros[9]` claro `#2e2a27`, escuro `#13110f`; anel de foco escuro índice 4.
+Régua do produto esperada (medida): **claro** 7 papéis, 4 superfícies, 22 pares, 0 reprovas; **escuro** 7 papéis,
+4 superfícies, 22 pares, **8 reprovas — todas de `--color-accent`/`--color-accent-hover` contra as 4 superfícies**
+(a exceção do produto); índices escuro `{accent: 6, hover: 5, soft: 9}`, `alfaDoSoft` 1; `neutros[9]` claro
+`#2e2a27`, escuro `#13110f`; anel de foco escuro índice 4.
 
 ---
 
 ### Task 0: Conferir a base
 
-- [ ] **Step 1:** `cd /home/lussandro/Bacco-Crm && git status -sb && git log --oneline -1`
-  Expected: árvore limpa (fora `docs/superpowers/plans/`); HEAD contém `e3c227cf` (spec).
-- [ ] **Step 2:** `pnpm exec tsx docs/superpowers/plans/anexos/medir-tokens-kit.ts`
-  Expected: as linhas de rampa, neutros e régua batem com a tabela deste plano. Divergência = parar.
+- [ ] **Step 1:** `git status -sb && git log --oneline -1` — árvore limpa; a spec `docs/superpowers/specs/2026-09-15-bacco-padrao-visual-design.md` existe.
+- [ ] **Step 2:** `pnpm exec tsx docs/superpowers/plans/anexos/medir-tokens-kit.ts` — rampa e neutros batem com a tabela. (O anexo simula também a remoção do fill no escuro; os números de régua deste plano v2 são os "antes da exceção" + papel `-text`: escuro 22 pares, 8 reprovas.)
 
 ---
 
-### Task 1: Régua — papel `-text` e exceção do fill no escuro
+### Task 1: Régua — papel `-text` e política do fill escuro do produto
 
 **Files:**
-- Modify: `lib/branding/contraste.ts` (função `montarTema`, laço `for (const d of decls)`)
+- Modify: `lib/branding/contraste.ts` (função `montarTema`; constante nova acima dela)
 - Test: `tests/unit/branding-regua-papeis-do-kit.test.ts` (novo)
 
 **Interfaces:**
-- Produces: `export const PAPEIS_DE_FILL_NO_ESCURO = ["--color-accent", "--color-accent-hover"] as const;` em `lib/branding/contraste.ts`. `extrairRegua` passa a devolver papel `tipo: "texto"` para qualquer token terminado em `-text` com fonte `grau`, e omite de `escuro.papeis` os tokens de `PAPEIS_DE_FILL_NO_ESCURO`.
+- Produces: `export const PAPEIS_DE_FILL_NO_ESCURO = ["--color-accent", "--color-accent-hover"] as const;` (política do produto, **não usada pela extração**). `extrairRegua` devolve papel `tipo: "texto"`, `contra: null` para token terminado em `-text` com fonte `grau`.
 
 - [ ] **Step 1: Teste que falha** — `tests/unit/branding-regua-papeis-do-kit.test.ts`:
 
@@ -99,16 +113,16 @@ import { describe, expect, it } from "vitest";
 import { PAPEIS_DE_FILL_NO_ESCURO, extrairRegua } from "@/lib/branding/contraste";
 
 /**
- * Spec 2026-09-15-bacco-padrao-visual-design §5.3. Duas regras novas da régua:
- *  1. token `-text` que aponta para a rampa é TEXTO (piso 4,5) contra todas as superfícies;
- *  2. no ESCURO o fill da ação principal não é medido contra as superfícies — o botão se
- *     identifica pelo texto (`--color-accent-fg`, ainda medido) e o teclado pelo anel.
- * O CSS aqui é mínimo e sintético: a pergunta é sobre a extração, não sobre a paleta.
+ * Spec 2026-09-15-bacco-padrao-visual-design §5.3, lido do `app/globals.css` real.
+ *  - token `-text` que aponta para a rampa é papel de TEXTO (piso 4,5) contra todas as superfícies;
+ *  - a exceção do fill escuro é POLÍTICA DO PRODUTO: a extração continua medindo o fill como
+ *    componente nos dois temas, para que marca própria (que usa esta mesma régua na derivação)
+ *    mantenha o piso. Decisão do dono, 2026-09-15.
  */
 const CSS = fs.readFileSync(path.join(process.cwd(), "app/globals.css"), "utf8");
 
 describe("régua — papéis do kit Bacco", () => {
-  it("declara quais tokens são fill no escuro", () => {
+  it("declara quais tokens são fill no escuro (política do produto)", () => {
     expect([...PAPEIS_DE_FILL_NO_ESCURO]).toEqual(["--color-accent", "--color-accent-hover"]);
   });
 
@@ -122,16 +136,13 @@ describe("régua — papéis do kit Bacco", () => {
     }
   });
 
-  it("no escuro o fill sai da conta; o texto do fill e o anel ficam", () => {
+  it("a extração NÃO remove o fill: marca própria continua com o piso de componente", () => {
     const r = extrairRegua(CSS);
-    const escuro = r.escuro.papeis.map((p) => p.token);
-    for (const t of PAPEIS_DE_FILL_NO_ESCURO) expect(escuro).not.toContain(t);
-    expect(escuro).toContain("--color-accent-fg");
-    expect(escuro).toContain("--ring");
-    expect(escuro.some((t) => t.includes(":focus-visible"))).toBe(true);
-    // No claro nada muda: o fill continua componente contra as superfícies.
-    const claro = r.claro.papeis.map((p) => p.token);
-    for (const t of PAPEIS_DE_FILL_NO_ESCURO) expect(claro).toContain(t);
+    for (const tema of [r.claro, r.escuro]) {
+      for (const t of PAPEIS_DE_FILL_NO_ESCURO) {
+        expect(tema.papeis.find((p) => p.token === t)?.tipo, `${tema.nome}/${t}`).toBe("componente");
+      }
+    }
   });
 });
 ```
@@ -142,16 +153,17 @@ describe("régua — papéis do kit Bacco", () => {
 
 ```ts
 /**
- * Spec Bacco §5.3: no tema ESCURO a ação principal é um vinho profundo que mede ~1,6:1
- * contra as superfícies — de propósito (decisão do dono, 2026-09-15). O botão é
- * identificado pelo texto (`--color-accent-fg`, que continua medido a 4,5) e o foco pelo
- * anel (`--ring`/`:focus-visible`, que continuam a 3,0). Só estes dois tokens saem da conta;
- * qualquer outro papel segue no piso.
+ * Spec Bacco §5.3 — POLÍTICA DO PRODUTO, não regra de extração. No tema ESCURO a ação principal
+ * do kit é um vinho profundo que mede ~1,6:1 contra as superfícies, de propósito (decisão do dono,
+ * 2026-09-15). O botão é identificado pelo texto (`--color-accent-fg`, medido a 4,5) e o foco pelo
+ * anel (medido a 3,0). A extração continua medindo estes tokens como componente: a mesma régua
+ * deriva a marca própria das organizações, e ela NÃO herda a exceção. Quem aplica a exceção é o
+ * teste que mede a paleta do `globals.css` (`tests/unit/tokens-do-kit-bacco.test.ts`).
  */
 export const PAPEIS_DE_FILL_NO_ESCURO = ["--color-accent", "--color-accent-hover"] as const;
 ```
 
-  e, dentro do laço `for (const d of decls)`, substituir o bloco final
+  e, dentro do laço `for (const d of decls)` de `montarTema`, substituir
 
 ```ts
     if (fonte.tipo === "grau") {
@@ -164,31 +176,26 @@ export const PAPEIS_DE_FILL_NO_ESCURO = ["--color-accent", "--color-accent-hover
 ```ts
     if (fonte.tipo === "grau") {
       // `-text` é a ação usada como TEXTO/borda (`text-accent-text`): mede como texto.
-      if (d.prop.endsWith("-text")) {
-        papeis.push({ token: d.prop, tipo: "texto", fonte, contra: null });
-        continue;
-      }
-      if (ehEscuro && (PAPEIS_DE_FILL_NO_ESCURO as readonly string[]).includes(d.prop)) continue;
-      papeis.push({ token: d.prop, tipo: "componente", fonte, contra: null });
+      const tipo = d.prop.endsWith("-text") ? "texto" : "componente";
+      papeis.push({ token: d.prop, tipo, fonte, contra: null });
     }
 ```
 
-- [ ] **Step 4:** `pnpm exec vitest run tests/unit/branding-regua-papeis-do-kit.test.ts` → ainda FAIL no segundo `it` (o `globals.css` não tem `--color-accent-text`). Os outros dois passam. Isso é esperado: a Task 2 fecha.
-- [ ] **Step 5:** sem commit (Task 2 fecha junto, porque a régua do produto só fica coerente com o CSS novo).
+- [ ] **Step 4:** `pnpm exec vitest run tests/unit/branding-regua-papeis-do-kit.test.ts` → "1 failed | 2 passed" (o `it` do `-text` só fecha com o CSS da Task 2). Sem commit: a Task 2 fecha junto.
 
 ---
 
-### Task 2: Tokens do kit no `globals.css` e régua do produto
+### Task 2: Tokens do kit no `globals.css` e testes de produto
 
 **Files:**
-- Modify: `app/globals.css` — blocos `:root` (linha ~34), `[data-theme="light"]` (~254), `[data-theme="dark"]` (~331), `@theme inline` (~459), regra `[data-theme="dark"] :focus-visible` (~737), cabeçalho (~28)
+- Modify: `app/globals.css` — `:root` (~34), `[data-theme="light"]` (~254), `[data-theme="dark"]` (~331), `@theme inline` (~459), regra `[data-theme="dark"] :focus-visible` (~737), cabeçalho (~28), comentário do hover claro (~65)
 - Modify (gerado): `lib/branding/regua-do-produto.ts`
-- Modify: `tests/unit/branding-contraste.test.ts`, `tests/unit/branding-rampa.test.ts`, `tests/unit/branding-pares-pintados.test.ts`
+- Modify: `tests/unit/branding-contraste.test.ts`, `tests/unit/branding-rampa.test.ts`, `tests/unit/branding-pares-pintados.test.ts`, `tests/unit/branding-regua-do-produto.test.ts`
 - Test: `tests/unit/tokens-do-kit-bacco.test.ts` (novo)
 
 **Interfaces:**
-- Consumes: Task 1 (`PAPEIS_DE_FILL_NO_ESCURO`, papel `-text`).
-- Produces: utilitários Tailwind `text-accent-text`, `border-accent-text`, `ring-accent-text`, `outline-accent-text`, `bg-sidebar`, `text-gold`, `text-gold-text`, `bg-etiqueta-N-bg`, `text-etiqueta-N-fg` (N = 1..6).
+- Consumes: Task 1.
+- Produces: utilitários `text-accent-text`, `border-accent-text`, `ring-accent-text`, `outline-accent-text`, `bg-sidebar`, `bg-gold`, `border-gold`, `text-gold-text`, `bg-etiqueta-N-bg`, `text-etiqueta-N-fg` (N = 1..6); raios do kit em `rounded-sm/md/lg/xl`.
 
 - [ ] **Step 1: Teste que falha** — `tests/unit/tokens-do-kit-bacco.test.ts`:
 
@@ -197,13 +204,12 @@ import fs from "node:fs";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 
-import { razaoDeContraste } from "@/lib/branding/contraste";
+import { PAPEIS_DE_FILL_NO_ESCURO, extrairRegua, medirPares, razaoDeContraste } from "@/lib/branding/contraste";
 import { compor } from "@/lib/branding/rampa";
 
 /**
- * Os tokens do kit Bacco, medidos no próprio globals.css (spec 2026-09-15 §5.1). Os tons
- * de texto foram ajustados para passar 4,5:1 inclusive sobre a seleção e o fundo
- * translúcido das badges — é isso que estes casos guardam.
+ * Os tokens do kit Bacco, medidos no próprio globals.css (spec 2026-09-15 §5.1). Os tons de texto
+ * foram ajustados para passar 4,5:1 inclusive sobre a seleção e o fundo translúcido das badges.
  */
 const CSS = fs.readFileSync(path.join(process.cwd(), "app/globals.css"), "utf8");
 
@@ -249,11 +255,12 @@ const fundos = (b: Record<string, string>) =>
   ["--color-bg", "--color-surface", "--color-surface-elevated", "--color-sidebar", "--color-accent-soft"].map((k) => tok(b, k));
 
 describe("tokens do kit Bacco", () => {
-  it("fundos, texto e ação são os do kit", () => {
+  it("fundos, ação e raios são os do kit", () => {
     expect([tok(RAIZ, "--color-bg"), tok(RAIZ, "--color-surface"), tok(RAIZ, "--color-surface-elevated")]).toEqual(["#fbf8f2", "#fffdf8", "#f5f0e6"]);
     expect([tok(ESCURO, "--color-bg"), tok(ESCURO, "--color-surface"), tok(ESCURO, "--color-surface-elevated")]).toEqual(["#13110f", "#1a1715", "#211d1a"]);
     expect(tok(RAIZ, "--color-accent")).toBe("#6a1730");
     expect(tok(ESCURO, "--color-accent")).toBe("#6a1730");
+    expect(["--radius-sm", "--radius-md", "--radius-lg", "--radius-xl"].map((k) => RAIZ[k])).toEqual(["6px", "10px", "16px", "22px"]);
   });
 
   for (const { nome, b } of TEMAS) {
@@ -287,91 +294,137 @@ describe("tokens do kit Bacco", () => {
       }
     });
   }
+
+  it("exceção do produto: no escuro só o fill da ação reprova, e texto do fill e anel passam", () => {
+    const r = extrairRegua(CSS);
+    expect(medirPares(r.claro, r.rampaDoProduto, 0).filter((p) => !p.passa)).toEqual([]);
+    const reprovasEscuro = medirPares(r.escuro, r.rampaDoProduto, 0).filter((p) => !p.passa);
+    expect(reprovasEscuro.length, "o fill contra as 4 superfícies").toBe(8);
+    for (const p of reprovasEscuro) {
+      expect(PAPEIS_DE_FILL_NO_ESCURO as readonly string[], `${p.papel}×${p.superficie}`).toContain(p.papel);
+    }
+  });
 });
 ```
 
 - [ ] **Step 2:** `pnpm exec vitest run tests/unit/tokens-do-kit-bacco.test.ts` → FAIL (valores atuais).
 
-- [ ] **Step 3: `app/globals.css`** — aplicar a **Tabela de tokens** deste plano:
-  - Nos blocos `:root` e `[data-theme="light"]`: rampa inteira (11 linhas `--color-accent-NNN`), neutros claro (11 linhas), `--color-bg`, `--color-surface`, `--color-surface-elevated`, `--color-text`, `--color-text-muted`, `--color-text-subtle`, `--color-border`, `--color-border-strong`, `--color-accent-hover`, success e error (`-bg`, `-fg`), e as linhas novas, logo depois de `--color-accent-hover`:
+- [ ] **Step 3: `app/globals.css`** — aplicar a **Tabela de tokens** (uma declaração por linha em todo lugar):
+  - `:root`: rampa (11 linhas `--color-accent-NNN`), neutros claro (11), `--color-bg`, `--color-surface`, `--color-surface-elevated`, `--color-text`, `--color-text-muted`, `--color-text-subtle`, `--color-border`, `--color-border-strong`, `--color-accent-hover: var(--color-accent-700);` (e trocar o comentário logo acima — "Hover CLAREIA…" — por `/* Hover escurece um grau (700): o kit dá #541025, a 0,022 de ΔE do grau 700. */`), success e error (`-bg`, `-fg`), `--radius-sm: 6px;`, `--radius-md: 10px;`, `--radius-lg: 16px;`, `--radius-xl: 22px;`, e, logo depois de `--color-accent-hover`, estas linhas:
 
 ```css
   --color-accent-text: var(--color-accent-600);
   --color-gold: #c49a4a;
-  --color-gold-text: #8e6603;
+  --color-gold-text: #855f00;
   --color-sidebar: #faf6f0;
-  --color-etiqueta-1-bg: #f1e1f8; --color-etiqueta-1-fg: #785d85;
-  --color-etiqueta-2-bg: #daefda; --color-etiqueta-2-fg: #4d724e;
-  --color-etiqueta-3-bg: #d7eaff; --color-etiqueta-3-fg: #486b8e;
-  --color-etiqueta-4-bg: #f8e4cf; --color-etiqueta-4-fg: #83623a;
-  --color-etiqueta-5-bg: #fedfe5; --color-etiqueta-5-fg: #8d5965;
-  --color-etiqueta-6-bg: #f1e7ce; --color-etiqueta-6-fg: #776636;
+  --color-etiqueta-1-bg: #f1e1f8;
+  --color-etiqueta-1-fg: #785d85;
+  --color-etiqueta-2-bg: #daefda;
+  --color-etiqueta-2-fg: #4d724e;
+  --color-etiqueta-3-bg: #d7eaff;
+  --color-etiqueta-3-fg: #486b8e;
+  --color-etiqueta-4-bg: #f8e4cf;
+  --color-etiqueta-4-fg: #83623a;
+  --color-etiqueta-5-bg: #fedfe5;
+  --color-etiqueta-5-fg: #8d5965;
+  --color-etiqueta-6-bg: #f1e7ce;
+  --color-etiqueta-6-fg: #776636;
 ```
 
-  - No bloco `[data-theme="dark"]`: rampa inteira, neutros escuro, bases, texto, borda, `--color-accent-fg: #ffffff;`, `--color-accent-soft: var(--color-accent-900);`, `--color-accent-hover: var(--color-accent-500);`, `--color-accent: var(--color-accent-600);`, `--ring: var(--color-accent-400);`, success/error, e:
+  - `[data-theme="light"]`: os MESMOS valores do `:root` para neutros, bases, texto, borda, hover, success, error e as 16 linhas acima — **sem rampa** (o bloco não declara `--color-accent-NNN`) e sem raios.
+  - `[data-theme="dark"]`: rampa, neutros escuro, bases, texto, borda, `--color-accent: var(--color-accent-600);`, `--color-accent-fg: #ffffff;`, `--color-accent-soft: var(--color-accent-900);`, `--color-accent-hover: var(--color-accent-500);`, `--ring: var(--color-accent-400);`, success/error, e:
 
 ```css
   --color-accent-text: var(--color-accent-300);
   --color-gold: #c49a4a;
   --color-gold-text: #c49a4a;
   --color-sidebar: #1d0f12;
-  --color-etiqueta-1-bg: #3c2c43; --color-etiqueta-1-fg: #aa91b5;
-  --color-etiqueta-2-bg: #243924; --color-etiqueta-2-fg: #83a483;
-  --color-etiqueta-3-bg: #213549; --color-etiqueta-3-fg: #7f9fc0;
-  --color-etiqueta-4-bg: #422f18; --color-etiqueta-4-fg: #b49573;
-  --color-etiqueta-5-bg: #462930; --color-etiqueta-5-fg: #bc8c96;
-  --color-etiqueta-6-bg: #3c3216; --color-etiqueta-6-fg: #aa9a71;
+  --color-etiqueta-1-bg: #3c2c43;
+  --color-etiqueta-1-fg: #aa91b5;
+  --color-etiqueta-2-bg: #243924;
+  --color-etiqueta-2-fg: #83a483;
+  --color-etiqueta-3-bg: #213549;
+  --color-etiqueta-3-fg: #7f9fc0;
+  --color-etiqueta-4-bg: #422f18;
+  --color-etiqueta-4-fg: #b49573;
+  --color-etiqueta-5-bg: #462930;
+  --color-etiqueta-5-fg: #bc8c96;
+  --color-etiqueta-6-bg: #3c3216;
+  --color-etiqueta-6-fg: #aa9a71;
 ```
 
   - Regra `[data-theme="dark"] :focus-visible`: `outline-color: var(--color-accent-400);`
-  - Comentários de bloco: trocar "Borgonha Bacco (rampaDeSemente("#4a0e1f"))" por "Vinho do kit Bacco (rampaDeSemente("#6a1730"))"; no escuro, trocar o comentário do grau 300 por "Fill vinho profundo (grau 600) abaixo de 3:1 contra as superfícies — exceção declarada em `PAPEIS_DE_FILL_NO_ESCURO` (spec §5.3); texto e borda da ação usam `--color-accent-text` (grau 300)".
-  - Cabeçalho (~linha 28): `Bacco Adega CRM — Design System tokens (kit Bacco v2 · density Aerada)` e `Tokens: docs/brand/bacco/kit-v2/ui/tokens/ · medição: docs/superpowers/plans/anexos/medir-tokens-kit.ts`.
-  - `@theme inline`, logo depois de `--color-accent-hover: var(--color-accent-hover);`:
+  - Comentários: bloco de rampa → `Accent — vinho do kit Bacco (rampaDeSemente("#6a1730"), 11 stops)`; no escuro, o comentário do grau 300 → `Fill vinho profundo (grau 600) abaixo de 3:1 contra as superfícies — exceção do PRODUTO (PAPEIS_DE_FILL_NO_ESCURO, spec §5.3); texto e borda da ação usam --color-accent-text (grau 300).`
+  - Cabeçalho (~28): `Bacco Adega CRM — Design System tokens (kit Bacco v2 · density Aerada)` e `Tokens: docs/brand/bacco/kit-v2/ui/tokens/ · medição: docs/superpowers/plans/anexos/medir-tokens-kit.ts`.
+  - `@theme inline`, logo depois de `--color-accent-hover: var(--color-accent-hover);`, uma por linha:
 
 ```css
   --color-accent-text: var(--color-accent-text);
   --color-gold: var(--color-gold);
   --color-gold-text: var(--color-gold-text);
   --color-sidebar: var(--color-sidebar);
-  --color-etiqueta-1-bg: var(--color-etiqueta-1-bg); --color-etiqueta-1-fg: var(--color-etiqueta-1-fg);
-  --color-etiqueta-2-bg: var(--color-etiqueta-2-bg); --color-etiqueta-2-fg: var(--color-etiqueta-2-fg);
-  --color-etiqueta-3-bg: var(--color-etiqueta-3-bg); --color-etiqueta-3-fg: var(--color-etiqueta-3-fg);
-  --color-etiqueta-4-bg: var(--color-etiqueta-4-bg); --color-etiqueta-4-fg: var(--color-etiqueta-4-fg);
-  --color-etiqueta-5-bg: var(--color-etiqueta-5-bg); --color-etiqueta-5-fg: var(--color-etiqueta-5-fg);
-  --color-etiqueta-6-bg: var(--color-etiqueta-6-bg); --color-etiqueta-6-fg: var(--color-etiqueta-6-fg);
+  --color-etiqueta-1-bg: var(--color-etiqueta-1-bg);
+  --color-etiqueta-1-fg: var(--color-etiqueta-1-fg);
+  --color-etiqueta-2-bg: var(--color-etiqueta-2-bg);
+  --color-etiqueta-2-fg: var(--color-etiqueta-2-fg);
+  --color-etiqueta-3-bg: var(--color-etiqueta-3-bg);
+  --color-etiqueta-3-fg: var(--color-etiqueta-3-fg);
+  --color-etiqueta-4-bg: var(--color-etiqueta-4-bg);
+  --color-etiqueta-4-fg: var(--color-etiqueta-4-fg);
+  --color-etiqueta-5-bg: var(--color-etiqueta-5-bg);
+  --color-etiqueta-5-fg: var(--color-etiqueta-5-fg);
+  --color-etiqueta-6-bg: var(--color-etiqueta-6-bg);
+  --color-etiqueta-6-fg: var(--color-etiqueta-6-fg);
 ```
 
-- [ ] **Step 4: Regenerar a régua** — `pnpm exec vitest run tests/unit/branding-regua-do-produto.test.ts > /tmp/regua.log 2>&1`; colar o objeto impresso depois de `Substitua o objeto de lib/branding/regua-do-produto.ts por:` como valor de `REGUA_DO_PRODUTO`, **mantendo `} as const;`** no fim; rodar de novo → PASS.
+- [ ] **Step 4: Regenerar a régua** — `pnpm exec vitest run tests/unit/branding-regua-do-produto.test.ts > /tmp/regua.log 2>&1`; colar o objeto impresso depois de `Substitua o objeto de lib/branding/regua-do-produto.ts por:` como valor de `REGUA_DO_PRODUTO`, **mantendo `} as const;`**; rodar de novo.
 
-- [ ] **Step 5: Testes de produto que mudam de número** (valores medidos; Sage não muda):
+- [ ] **Step 5: Testes de produto que mudam de número** (Sage não muda):
+  - `tests/unit/branding-regua-do-produto.test.ts:36-37`: `claro.papeis` e `escuro.papeis` → `toHaveLength(7)` (papel `--color-accent-text`).
   - `tests/unit/branding-contraste.test.ts`, `describe("extrairRegua — …")`:
     - `it("acha os dois temas…")`: `rampaDoProduto[6]` → `"#6a1730"`; `escuro.neutros[9]` → `"#13110f"`.
-    - `it("alcança o anel de foco…")`: `focoEscuro` → `{ tipo: "grau", indice: 4 }` (comentário: "grau 400 da rampa do kit, 3,63 no pior fundo").
-    - `it("classifica -fg como texto e -soft como superfície")`: `escuro.indices.soft` → `9`; `escuro.alfaDoSoft` → `1`; comentário: "no kit o soft do escuro é o grau 900, opaco".
-    - `it("enumera o conjunto esperado de papéis e pares")`: lista do claro ganha `"--color-accent-text"` (ordem `sort()`); `escuro.papeis` → `toHaveLength(5)`; `superficiesDoTema(escuro)` → `toHaveLength(4)` (comentário: soft opaco compõe uma superfície só); `medirPares(claro)` → `22`; `medirPares(escuro)` → `14`.
+    - `it("alcança o anel de foco…")`: `focoEscuro` → `{ tipo: "grau", indice: 4 }` (comentário: grau 400 do vinho do kit, 3,63 no pior fundo).
+    - `it("classifica -fg como texto e -soft como superfície")`: `escuro.indices.soft` → `9`; `escuro.alfaDoSoft` → `1` (comentário: no kit o soft do escuro é o grau 900, opaco).
+    - `it("enumera o conjunto esperado de papéis e pares")`: lista do claro ganha `"--color-accent-text"` (ordem do `sort()`); `escuro.papeis` → `toHaveLength(7)`; `superficiesDoTema(escuro)` → `toHaveLength(4)` (soft opaco compõe uma superfície); `medirPares(claro)` → `22`; `medirPares(escuro)` → `22`.
+    - `it("a paleta do produto, como está no CSS, cabe nos pisos")`: no escuro, filtrar as reprovas cujo `papel` está em `PAPEIS_DE_FILL_NO_ESCURO` antes do `toEqual([])` (importar a constante), com o comentário "exceção do PRODUTO, spec §5.3 — a marca própria não herda".
   - `tests/unit/branding-rampa.test.ts`, `describe("rampaDeSemente — catraca…")`: `esperados[K]` → `"#6a1730"`; título `"reproduz os 11 stops do produto (vinho do kit Bacco) a partir de #6a1730 …"` e `rampaDeSemente("#6a1730")`.
-  - `tests/unit/branding-pares-pintados.test.ts`, `describe("a marca do produto, sem instalação configurada")`: semente `"#4a0e1f"` → `"#6a1730"` (as duas ocorrências); título `"o vinho do kit não desloca nem reprova par pintado, nos dois temas"`.
+  - `tests/unit/branding-pares-pintados.test.ts`, `describe("a marca do produto, sem instalação configurada")`: o `it` deixa de passar a cor pelo `resolverMarca` (isso seria tratá-la como marca própria, que NÃO herda a exceção) e passa a medir a paleta do CSS diretamente:
+
+```ts
+  it("o vinho do kit, direto do globals.css, só reprova no fill escuro (exceção do produto)", () => {
+    // Sem instalação configurada não há bloco emitido: a tela é o globals.css. Medir via
+    // resolverMarca trataria o vinho como marca própria — que mantém o piso (spec §5.3).
+    for (const nome of ["claro", "escuro"] as const) {
+      const pares = medirPares(REGUA_DO_PRODUTO[nome], REGUA_DO_PRODUTO.rampaDoProduto, 0);
+      const fora = pares.filter((p) => !p.passa && !(nome === "escuro" && (PAPEIS_DE_FILL_NO_ESCURO as readonly string[]).includes(p.papel)));
+      expect(fora, nome).toEqual([]);
+    }
+  });
+```
+
+    com `import { PAPEIS_DE_FILL_NO_ESCURO, medirPares } from "@/lib/branding/contraste";` (acrescentar ao import existente) e removendo o import de `resolverMarca`/`camadaDoAmbiente` só se deixar de ser usado no arquivo (conferir com `grep -n "resolverMarca" tests/unit/branding-pares-pintados.test.ts`).
 
 - [ ] **Step 6: Família**
 
 ```bash
-pnpm exec vitest run tests/unit/branding-*.test.ts tests/unit/tokens-do-kit-bacco.test.ts tests/unit/tailwind-tokens.test.ts tests/unit/logo-nao-some-no-tema-escuro.test.ts tests/unit/marca-do-produto.test.tsx lib/branding lib/email > /tmp/vt-5a-t2.log 2>&1; echo "exit=$?"
+pnpm exec vitest run tests/unit/branding-*.test.ts tests/unit/tokens-do-kit-bacco.test.ts tests/unit/tailwind-tokens.test.ts tests/unit/logo-nao-some-no-tema-escuro.test.ts tests/unit/marca-do-produto.test.tsx tests/unit/branding-fallback-alcancavel.test.ts lib/branding lib/email > /tmp/vt-5a-t2.log 2>&1; echo "exit=$?"
 grep -aE "^ *(Test Files|Tests|Errors) " /tmp/vt-5a-t2.log
 ```
-  Expected: exit 0, sem `Errors`. Regras: falha em `it` que lê `REGUA_SAGE` = parar (fixture vazou); falha de número de produto diferente dos da tabela = parar e rodar o anexo de medição.
+  Expected: exit 0, sem `Errors`. `branding-fallback-alcancavel.test.ts` tem de passar **sem edição** (prova de que a marca própria manteve o piso). Falha em `it` que lê `REGUA_SAGE` = parar.
 
-- [ ] **Step 7:** `NODE_OPTIONS=--max-old-space-size=6144 pnpm typecheck && pnpm lint` → exit 0 (358 avisos pré-existentes).
+- [ ] **Step 7:** `NODE_OPTIONS=--max-old-space-size=6144 pnpm typecheck && pnpm lint` → exit 0, 0 erros.
 
 - [ ] **Step 8: Commit**
 
 ```bash
-git add lib/branding/contraste.ts lib/branding/regua-do-produto.ts app/globals.css tests/unit/branding-regua-papeis-do-kit.test.ts tests/unit/tokens-do-kit-bacco.test.ts tests/unit/branding-contraste.test.ts tests/unit/branding-rampa.test.ts tests/unit/branding-pares-pintados.test.ts docs/superpowers/plans/anexos/medir-tokens-kit.ts
-git commit -m "feat(bacco): tokens do kit nos dois temas e exceção do fill no escuro
+git add lib/branding/contraste.ts lib/branding/regua-do-produto.ts app/globals.css tests/unit/branding-regua-papeis-do-kit.test.ts tests/unit/tokens-do-kit-bacco.test.ts tests/unit/branding-contraste.test.ts tests/unit/branding-rampa.test.ts tests/unit/branding-pares-pintados.test.ts tests/unit/branding-regua-do-produto.test.ts
+git commit -m "feat(bacco): tokens do kit nos dois temas e exceção do fill escuro só no produto
 
-Rampa rampaDeSemente(#6a1730), neutros quentes, texto e badges ajustados
-para 4,5:1 inclusive sobre seleção e fundo translúcido. Na régua, token
--text é papel de texto e o fill da ação sai da conta no escuro (spec §5.3).
-Tokens novos: accent-text, gold, gold-text, sidebar e 6 etiquetas.
+Rampa rampaDeSemente(#6a1730), neutros quentes, raios do kit, texto e
+badges ajustados para 4,5:1 inclusive sobre seleção e fundo translúcido.
+Na régua, token -text é papel de texto. O fill vinho do escuro abaixo de
+3:1 é exceção DO PRODUTO (PAPEIS_DE_FILL_NO_ESCURO), aplicada no teste da
+paleta; a marca própria segue com o piso (decisão do dono).
 
 Co-Authored-By: Claude Opus 5 (1M context) <noreply@anthropic.com>"
 ```
@@ -381,12 +434,9 @@ Co-Authored-By: Claude Opus 5 (1M context) <noreply@anthropic.com>"
 ### Task 3: Texto e borda da ação usam `accent-text`
 
 **Files:**
-- Modify: os arquivos que o teste-guarda do Step 1 lista (codemod; inventário de 2026-09-15: `text-accent` 36 em 28 arquivos, `border-accent` 21 em 14, `ring-accent` 4 em 3, `outline-accent` 2 em 2)
+- Modify: os arquivos que o teste-guarda do Step 1 lista (inventário de 2026-09-15: `text-accent` 36 em 28 arquivos, `border-accent` 21 em 14, `ring-accent` 4 em 3, `outline-accent` 2 em 2)
 - Modify: `tests/capture-wave-3-cenarios.ts:83`
 - Test: `tests/unit/acao-como-texto-usa-accent-text.test.ts` (novo)
-
-**Interfaces:**
-- Consumes: utilitários `text-accent-text`, `border-accent-text`, `ring-accent-text`, `outline-accent-text` (Task 2).
 
 - [ ] **Step 1: Teste-guarda que falha** — `tests/unit/acao-como-texto-usa-accent-text.test.ts`:
 
@@ -398,7 +448,7 @@ import { describe, expect, it } from "vitest";
 /**
  * Spec Bacco §5.3: no escuro `--color-accent` é FILL vinho profundo (1,6:1 como texto).
  * Texto, borda, anel e outline da ação usam `--color-accent-text`. A exceção medida é a
- * borda que acompanha um fill sólido (`border-accent` junto de `bg-accent ` na mesma lista).
+ * borda que acompanha um fill sólido (`border-accent` junto de `bg-accent ` na mesma linha).
  */
 const RAIZ = process.cwd();
 const PASTAS = ["app", "components", "hooks", "lib"];
@@ -429,12 +479,12 @@ describe("a ação como texto/borda usa accent-text", () => {
 });
 ```
 
-- [ ] **Step 2:** `pnpm exec vitest run tests/unit/acao-como-texto-usa-accent-text.test.ts` → FAIL listando as ocorrências (medido em 2026-09-15: 63 ocorrências).
+- [ ] **Step 2:** `pnpm exec vitest run tests/unit/acao-como-texto-usa-accent-text.test.ts` → FAIL (medido pelo refutador: 54 linhas, 63 ocorrências).
 
-- [ ] **Step 3: Codemod** (preserva as duas bordas de fill sólido: `components/inbox/InboxFilters.tsx` na linha com `"border-accent bg-accent text-accent-foreground"` e `components/agenda/PainelDeMarcacao.tsx` na linha com `"border-accent bg-accent font-semibold text-accent-foreground"`):
+- [ ] **Step 3: Codemod**, na raiz do checkout onde o plano roda (preserva as duas bordas de fill sólido: `components/inbox/InboxFilters.tsx` na linha `"border-accent bg-accent text-accent-foreground"` e `components/agenda/PainelDeMarcacao.tsx` na linha `"border-accent bg-accent font-semibold text-accent-foreground"`):
 
 ```bash
-cd /home/lussandro/Bacco-Crm && python3 - <<'PY'
+python3 - <<'PY'
 import re, pathlib
 PASTAS = ["app", "components", "hooks", "lib"]
 padrao = re.compile(r"(?<![\w-])((?:hover:|focus-visible:|active\]:|group-hover:)?(?:text|border|ring|outline))-accent(?![-\w])")
@@ -453,13 +503,11 @@ for pasta in PASTAS:
 print("trocas:", total)
 PY
 ```
-  Expected: `trocas: 61` (63 ocorrências medidas menos as 2 bordas de fill sólido). Número diferente = parar e listar com `git diff --stat`.
+  Expected: `trocas: 61` (medido pelo refutador). Número diferente = parar e listar com `git diff --stat`.
 
-- [ ] **Step 4:** `tests/capture-wave-3-cenarios.ts:83`: seletor `[class*='border-accent']` → `[class*='border-accent-text']`.
-
+- [ ] **Step 4:** `tests/capture-wave-3-cenarios.ts:83`: `[class*='border-accent']` → `[class*='border-accent-text']`.
 - [ ] **Step 5:** `pnpm exec vitest run tests/unit/acao-como-texto-usa-accent-text.test.ts tests/unit/tailwind-tokens.test.ts && NODE_OPTIONS=--max-old-space-size=6144 pnpm typecheck && pnpm lint` → exit 0.
-
-- [ ] **Step 6: Commit** — `git add -A app components hooks lib tests/unit/acao-como-texto-usa-accent-text.test.ts tests/capture-wave-3-cenarios.ts && git commit` com mensagem `refactor(bacco): texto e borda da ação usam accent-text` e o corpo "No escuro o fill da ação é vinho profundo; texto, borda, anel e outline passam a --color-accent-text (spec §5.3). Guarda em tests/unit/acao-como-texto-usa-accent-text.test.ts." + trailer.
+- [ ] **Step 6: Commit** — `git add -A app components hooks lib tests/unit/acao-como-texto-usa-accent-text.test.ts tests/capture-wave-3-cenarios.ts`; mensagem `refactor(bacco): texto e borda da ação usam accent-text`, corpo "No escuro o fill da ação é vinho profundo; texto, borda, anel e outline passam a --color-accent-text (spec §5.3). Guarda em tests/unit/acao-como-texto-usa-accent-text.test.ts." + trailer.
 
 ---
 
@@ -471,7 +519,7 @@ PY
 
 **Interfaces:**
 - Consumes: tokens `--color-etiqueta-N-bg/-fg` (Task 2).
-- Produces: `export type TrilhaDeEtiqueta = 1 | 2 | 3 | 4 | 5 | 6;` `export function trilhaDaEtiqueta(nome: string): TrilhaDeEtiqueta;` `export function Etiqueta(props: { nome: string; className?: string; children?: React.ReactNode }): JSX.Element`.
+- Produces: `export type TrilhaDeEtiqueta = 1 | 2 | 3 | 4 | 5 | 6;` `export function trilhaDaEtiqueta(nome: string): TrilhaDeEtiqueta;` `export function Etiqueta(props: { nome: string; className?: string; children?: React.ReactNode })`.
 
 - [ ] **Step 1: Teste que falha** — `lib/etiquetas/cor.test.ts`:
 
@@ -499,7 +547,8 @@ describe("trilhaDaEtiqueta — a mesma tag tem a mesma cor em qualquer tela", ()
     expect(trilhaDaEtiqueta("")).toBe(1);
   });
 
-  it("espalha: 11 nomes do guia do kit usam ao menos 4 trilhas", () => {
+  it("espalha: os 11 nomes do guia do kit usam ao menos 4 trilhas", () => {
+    // Medido em 2026-09-15 com FNV-1a: {1, 4, 5, 6}. Trocar a lista de nomes exige remedir.
     const guia = ["Cliente", "Lead", "Distribuidor", "Comercial", "Clube Reserva", "Enoturismo", "Pós-visita", "Tasting", "On-trade", "Sommelier", "VIP"];
     expect(new Set(guia.map(trilhaDaEtiqueta)).size).toBeGreaterThanOrEqual(4);
   });
@@ -507,7 +556,6 @@ describe("trilhaDaEtiqueta — a mesma tag tem a mesma cor em qualquer tela", ()
 ```
 
 - [ ] **Step 2:** `pnpm exec vitest run lib/etiquetas/cor.test.ts` → FAIL (módulo ausente).
-
 - [ ] **Step 3:** `lib/etiquetas/cor.ts`:
 
 ```ts
@@ -531,8 +579,7 @@ export function trilhaDaEtiqueta(nome: string): TrilhaDeEtiqueta {
 }
 ```
 
-- [ ] **Step 4:** `pnpm exec vitest run lib/etiquetas/cor.test.ts` → PASS. Se `espalha` falhar, parar e reportar a distribuição (não trocar o hash por outro até passar).
-
+- [ ] **Step 4:** `pnpm exec vitest run lib/etiquetas/cor.test.ts` → PASS (4/4, medido).
 - [ ] **Step 5:** `components/ui/etiqueta.tsx`:
 
 ```tsx
@@ -563,10 +610,10 @@ export function Etiqueta({ nome, className, children }: { nome: string; classNam
 }
 ```
 
-- [ ] **Step 6: Aplicar nos seis lugares** (troca literal; o `import { Badge }` sai só onde deixar de ser usado — conferir com `grep -n "<Badge" <arquivo>`):
-  - `components/inbox/ConversationListItem.tsx`: `<Badge key={t} variant="secondary" className="h-4 px-1.5 text-[10px]">{t}</Badge>` (dentro de `visibleTags.map`) → `<Etiqueta key={t} nome={t} className="h-4 px-1.5 text-[10px]" />`; import `import { Etiqueta } from "@/components/ui/etiqueta";`.
+- [ ] **Step 6: Aplicar nos seis lugares** (troca literal; conferir o import de `Badge` com `grep -n "<Badge" <arquivo>` — sai onde deixar de ser usado):
+  - `components/inbox/ConversationListItem.tsx` (dentro de `visibleTags.map`): `<Badge key={t} variant="secondary" className="h-4 px-1.5 text-[10px]">{t}</Badge>` → `<Etiqueta key={t} nome={t} className="h-4 px-1.5 text-[10px]" />`; import `import { Etiqueta } from "@/components/ui/etiqueta";`.
   - `components/inbox/CRMSidePanel.tsx` (`tags.map((t) => …)`): mesma troca.
-  - `components/inbox/ContactTagsEditor.tsx` e `components/inbox/ConversationTagsEditor.tsx`: `<Badge key={tag} variant="secondary" className="h-5 gap-1 px-1.5 text-[10px]">{tag}<button …/></Badge>` → `<Etiqueta key={tag} nome={tag} className="h-5 gap-1 px-1.5 text-[10px]"><button …/></Etiqueta>` (o `<button>` de remover fica igual, como filho).
+  - `components/inbox/ContactTagsEditor.tsx` e `components/inbox/ConversationTagsEditor.tsx`: `<Badge key={tag} variant="secondary" className="h-5 gap-1 px-1.5 text-[10px]">{tag}<button …/></Badge>` → `<Etiqueta key={tag} nome={tag} className="h-5 gap-1 px-1.5 text-[10px]"><button …/></Etiqueta>` (o `<button>` de remover fica igual; o import de `Badge` sai).
   - `app/app/contacts/[id]/_client.tsx` (duas vezes `contact.tags.map((t) => <Badge key={t} variant="neutral">{t}</Badge>)`) → `<Etiqueta key={t} nome={t} />`.
   - `components/contacts/ContactsTable.tsx`: `<Badge key={tag} variant="neutral">{tag}</Badge>` → `<Etiqueta key={tag} nome={tag} />`.
 - [ ] **Step 7:** `pnpm exec vitest run lib/etiquetas tests/unit/tailwind-tokens.test.ts components/inbox && NODE_OPTIONS=--max-old-space-size=6144 pnpm typecheck && pnpm lint` → exit 0.
@@ -581,7 +628,7 @@ export function Etiqueta({ nome, className, children }: { nome: string; classNam
 - Create: `.changes/bacco-padrao-visual-tokens.md`
 
 - [ ] **Step 1:** `#4a0e1f` → `#6a1730` em: `confirmation.html` e `recovery.html` (`background: #4a0e1f; background: __ACCENT__;`), `marca-emails.sh:140` (`*) ACCENT="#6a1730";;`) e comentário `:115` ("grau 600 da rampa do vinho do kit"), `test-validators.sh:1028` (`'background: #6a1730; background: #6a1730'`), comentários/exemplos de `saida.ts`, `rampa.ts:13`, `lib/env.ts:339`, `.env.example:329`. `ACCENT_DO_PRODUTO` (`saida.ts`) lê a régua e já vira `#6a1730`. `lib/branding/desenho.ts` e `components/branding/MarcaDoProduto.tsx` **não** mudam (são a marca).
-- [ ] **Step 2:** `bash -n hostgator-setup-kit/marca-emails.sh hostgator-setup-kit/test-validators.sh && pnpm exec vitest run tests/unit/branding.test.ts tests/unit/branding-saida.test.ts lib/email` → exit 0.
+- [ ] **Step 2:** `bash -n hostgator-setup-kit/marca-emails.sh hostgator-setup-kit/test-validators.sh && pnpm test:shell && pnpm exec vitest run tests/unit/branding.test.ts tests/unit/branding-saida.test.ts lib/email` → exit 0 (`test:shell` é o gate do kit, doutrina de packaging).
 - [ ] **Step 3:** `.changes/bacco-padrao-visual-tokens.md`:
 
 ```markdown
@@ -594,16 +641,16 @@ titulo: Cores do kit Bacco em todas as telas, claro e escuro
 Todas as telas passam a usar o padrão de cores do kit Bacco: fundos quentes, ação principal
 em vinho, ouro nos detalhes e etiquetas coloridas por nome. No tema escuro o botão principal é
 vinho profundo com texto claro. Instalação existente não precisa fazer nada; marca própria
-configurada em Configurações › Marca continua valendo.
+configurada em Configurações › Marca continua valendo, com o contraste de sempre.
 ```
 
 - [ ] **Step 4:** `pnpm exec vitest run tests/unit/fragmentos-de-release.test.ts` → exit 0.
 - [ ] **Step 5: Commit** — `chore(bacco): saídas de e-mail e kit no vinho do kit, e fragmento de release` + trailer.
-- [ ] **Step 6: CI** — `git push --no-tags origin bacco:main`; acompanhar `ci`, `perf`, `publish-image` do SHA (`gh api repos/lussandro/bacco-adega-crm/actions/runs?head_sha=<sha>`); no `verify`, ler `Test Files`/`Tests`/`Errors`. Vermelho = causa raiz, commit próprio, novo push. Sem tag: a release é depois do 5C.
+- [ ] **Step 6: CI** — `git push --no-tags origin bacco:main`; acompanhar `ci`, `perf`, `publish-image` do SHA (`gh api "repos/lussandro/bacco-adega-crm/actions/runs?head_sha=<sha>"`); no `verify`, ler `Test Files`/`Tests`/`Errors`. Vermelho = causa raiz, commit próprio, novo push. Sem tag: a release é no fim do 5C.
 
 ---
 
 ## Fora deste plano
 
-- Fachada das seis telas de acesso (5B); barra lateral usando `bg-sidebar`, item ativo e card selecionado da inbox, estado vazio editorial e ilustrações (5C).
-- Deploy e prova em tela na VPS: no fim do 5C, com release `v26.9.2`.
+- Fachada das seis telas de acesso (5B); barra lateral `bg-sidebar`, seleção e estado vazio editorial (5C).
+- Deploy e prova em tela na VPS: Task 7 do 5C, com a `v26.9.2`.

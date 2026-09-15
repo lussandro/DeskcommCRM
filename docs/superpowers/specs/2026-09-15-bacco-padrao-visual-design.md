@@ -28,7 +28,7 @@ Referências (versionadas):
 | Fundo do login | Abordagem A: laterais (taça/garrafa à esquerda, vinhedo à direita) + centro em gradiente CSS; laterais somem abaixo de ~1024 px. |
 | Tema da fachada | Segue o tema claro/escuro da pessoa; variante clara desenhada. |
 | Frases da fachada | Texto real (i18n `es`, leitor de tela): "Mais que vinhos, grandes histórias"; "Vinhos · Pessoas · Resultados"; "Bacco Adega CRM — Gestão que brinda ao seu crescimento". |
-| Ação principal no escuro | Vinho do kit (`#7C1D3A`) mesmo abaixo de 3:1 contra a superfície; régua muda (§5.3). |
+| Ação principal no escuro | Vinho profundo, grau 600 da rampa (`#6A1730`; kit `#7C1D3A`, uma rampa só), abaixo de 3:1 contra a superfície — exceção só da paleta do produto; marca própria mantém o piso (§5.3). |
 | Tokens | Os do kit, com cinco tons ajustados para texto (§5.1). |
 | Ilustrações | As do kit v2; as que trazem texto ou interface gravados são limpas por nós e o texto vira HTML (§6). |
 | Padrão | Vale para todas as telas: tokens globais + componentes reutilizáveis. |
@@ -59,8 +59,8 @@ de revendedor; o `<img>` do revendedor e `marcaEhADoProduto` seguem valendo dent
 
 ### 4.2 Formulários
 
-- Componente novo `components/auth/CampoDeAcesso.tsx`: ícone à esquerda (`lucide-react`, já dependência:
-  `Mail`, `Lock`) e, em campo de senha, botão de olho real (`Eye`/`EyeOff`) que alterna `type`, com
+- Componente novo `components/auth/CampoDeAcesso.tsx`: ícone à esquerda (barril `@/lib/ui/icons`, ADR-05:
+  `Envelope`, `Lock`) e, em campo de senha, botão de olho real (`Eye`/`EyeSlash`) que alterna `type`, com
   `aria-label` e `aria-pressed`, textos com `es`.
 - Aplicado em `LoginForm`, `SignupForm`, `ResetPasswordForm`, `ForgotPasswordForm`. `MfaForm` e
   `RecoveryForm` (código numérico) ganham só o estilo.
@@ -80,7 +80,7 @@ acima do botão; botão "Entrar →"; separador "ou"; "Não tem conta? Criar con
 | Fundo | laterais como vêm; centro `#13110F` → transparente | laterais sob véu creme `#F5F0E6` ~70 %; centro creme |
 | Card | `surface` escuro, borda ouro `#C49A4A` 1 px | `surface` claro, borda ouro 1 px, sombra suave |
 | Título | creme `#F5F0E6` | borgonha `#4A0E1F` |
-| Links / frases | ouro `#C49A4A` | ouro-texto `#8E6603` |
+| Links / frases | ouro `#C49A4A` | ouro-texto `#855F00` |
 | Botão | `primary` escuro | `primary` claro |
 
 ## 5. Padrão visual do sistema (seção 2b)
@@ -95,8 +95,8 @@ acima do botão; botão "Entrar →"; separador "ou"; "Não tem conta? Criar con
 | texto | `#2E2A27` | 12,52 |
 | texto secundário | `#6C645D` (kit `#776F68`, ajustado; `#746C65` reprovava 4,02 sobre a seleção `--color-accent-soft`) | 4,53 |
 | borda | `#E8DED1` | decorativa |
-| ação principal / hover | `#6A1730` / `#541025`, texto branco | 11,81 |
-| ouro (traço, ícone) / ouro-texto | `#C49A4A` / `#8E6603` (ajustado) | — / 4,56 |
+| ação principal / hover | `#6A1730` / grau 700 da rampa `#581A2A` (kit `#541025`, ΔE 0,022), texto branco | 11,81 |
+| ouro (traço, ícone) / ouro-texto | `#C49A4A` / `#855F00` (ajustado; `#8E6603` reprovava 4,04 sobre a seleção) | — / 4,51 |
 | sucesso (ícone, badge) / sucesso-texto | `#5A8A63` / `#406F4A` (ajustado; `#497852` reprovava 3,98 sobre o fundo translúcido da badge) | — / 4,54 |
 | perigo / perigo-texto | `#A94452` / `#A5404F` (ajustado; 4,30 sobre a badge) | 5,09 / 4,54 |
 | ação como texto e borda (`--color-accent-text`, novo) | grau 600 da rampa (`#6A1730`) | 9,21 |
@@ -109,7 +109,7 @@ acima do botão; botão "Entrar →"; separador "ou"; "Não tem conta? Criar con
 | fundo / superfície / superfície suave | `#13110F` / `#1A1715` / `#211D1A` | — |
 | texto / texto secundário | `#F5F0E6` / `#A69C92` | 14,73 / 6,21 |
 | borda | `#332C27` | decorativa |
-| ação principal / hover | `#7C1D3A` / `#962749`, texto branco | 10,03 |
+| hover da ação | grau 500 da rampa (`#94344D`; kit `#962749`, ΔE 0,021), texto branco | 7,35 |
 | ouro (inclusive texto) | `#C49A4A` | 6,43 |
 | sucesso / sucesso-texto | `#719E76` / `#78A57D` (ajustado; 4,16 sobre a badge) | 5,46 / 4,54 |
 | perigo-texto / botão de perigo | `#DE737C` (ajustado; `#CE646E` reprovava 3,74 sobre a badge) / `#BE5561` com texto branco | 4,51 / 4,51 |
@@ -140,8 +140,9 @@ algoritmo.
 
 ### 5.3 Mudança da régua de contraste (tema escuro)
 
-Hoje o produto exige accent × superfície ≥ 3:1. No escuro a ação principal do kit mede 1,88. Regra nova,
-só no escuro e só para o fill da ação principal: **texto sobre o fill ≥ 4,5:1** e **anel de foco ≥ 3:1
+Hoje o produto exige accent × superfície ≥ 3:1. No escuro a ação principal do kit mede ~1,6. Exceção **só da
+paleta do produto** (decisão do dono, 2026-09-15 — organização com marca própria mantém o piso, porque a mesma
+régua deriva a marca dela), só no escuro e só para o fill da ação principal: **texto sobre o fill ≥ 4,5:1** e **anel de foco ≥ 3:1
 contra as superfícies**. O botão se identifica pelo texto; quem navega por teclado vê o anel. A exceção
 fica declarada no teste com esta razão, e qualquer outro papel continua no piso atual.
 
