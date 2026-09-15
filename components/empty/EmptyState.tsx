@@ -17,6 +17,10 @@ export interface EmptyStateProps {
   subcopy?: string;
   primary?: EmptyStateAction;
   secondary?: EmptyStateAction;
+  /** Modo editorial (kit Bacco): título Playfair, gravura e citação. */
+  editorial?: boolean;
+  ilustracao?: "vinhedo";
+  citacao?: string;
 }
 
 function ActionButton({
@@ -46,6 +50,9 @@ export function EmptyState({
   subcopy,
   primary,
   secondary,
+  editorial,
+  ilustracao,
+  citacao,
 }: EmptyStateProps) {
   // A tradução mora AQUI, no ponto de render, e não em `variants.tsx`: as
   // variantes são chamadas de função com texto literal, e envolvê-las uma a uma
@@ -55,12 +62,24 @@ export function EmptyState({
   const t = useT();
   return (
     <div className="flex flex-col items-center justify-center py-16 text-center">
-      <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-muted text-muted-foreground">
-        <Icon size={24} weight="duotone" />
-      </div>
-      <h3 className="text-base font-semibold">{t(headline)}</h3>
+      {ilustracao === "vinhedo" ? (
+        <div
+          data-ilustracao="vinhedo"
+          aria-hidden="true"
+          className="mb-2 aspect-[625/305] w-full max-w-[34rem] bg-[url('/ilustracoes/vinhedo-claro.webp')] bg-contain bg-center bg-no-repeat dark:bg-[url('/ilustracoes/vinhedo-escuro.webp')]"
+        />
+      ) : (
+        <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-muted text-muted-foreground">
+          <Icon size={24} weight="duotone" />
+        </div>
+      )}
+      <h3 className={editorial ? "font-display text-2xl font-semibold text-text" : "text-base font-semibold"}>
+        {t(headline)}
+      </h3>
       {subcopy ? (
-        <p className="mt-1 max-w-sm text-sm text-muted-foreground">{t(subcopy)}</p>
+        <p className={editorial ? "mt-2 max-w-md text-sm text-text-muted" : "mt-1 max-w-sm text-sm text-muted-foreground"}>
+          {t(subcopy)}
+        </p>
       ) : null}
       {(primary || secondary) && (
         <div className="mt-4 flex gap-2">
@@ -68,6 +87,12 @@ export function EmptyState({
           {primary ? <ActionButton action={primary} variant="default" /> : null}
         </div>
       )}
+      {citacao ? (
+        <figure className="mt-8">
+          <blockquote className="font-display text-base italic text-gold-text">“{t(citacao)}”</blockquote>
+          <span aria-hidden="true" className="mx-auto mt-3 block h-px w-12 bg-gold" />
+        </figure>
+      ) : null}
     </div>
   );
 }
