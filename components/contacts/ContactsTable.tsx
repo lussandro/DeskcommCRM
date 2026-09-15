@@ -21,6 +21,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
+import { Etiqueta } from "@/components/ui/etiqueta";
 import { Button } from "@/components/ui/button";
 import {
   AlertDialog,
@@ -209,7 +210,7 @@ export function ContactsTable({ contacts, orderBy, orderDir, onSort }: Props) {
                 {c.tags.length === 0
                   ? <span className="text-muted-foreground text-xs">—</span>
                   : c.tags.map((tag) => (
-                      <Badge key={tag} variant="neutral">{tag}</Badge>
+                      <Etiqueta key={tag} nome={tag} />
                     ))}
               </div>
             </TableCell>

@@ -1,7 +1,7 @@
 "use client";
 import { useState } from "react";
 import { useT } from "@/hooks/i18n/useT";
-import { Badge } from "@/components/ui/badge";
+import { Etiqueta } from "@/components/ui/etiqueta";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { X, Plus } from "@/lib/ui/icons";
@@ -39,8 +39,7 @@ export function ContactTagsEditor({ contactId, tags }: Props) {
       <div className="flex flex-wrap gap-1">
         {tags.length > 0 ? (
           tags.map((tag) => (
-            <Badge key={tag} variant="secondary" className="h-5 gap-1 px-1.5 text-[10px]">
-              {tag}
+            <Etiqueta key={tag} nome={tag} className="h-5 gap-1 px-1.5 text-[10px]">
               <button
                 type="button"
                 onClick={() => remove(tag)}
@@ -50,7 +49,7 @@ export function ContactTagsEditor({ contactId, tags }: Props) {
               >
                 <X size={10} weight="bold" aria-hidden />
               </button>
-            </Badge>
+            </Etiqueta>
           ))
         ) : (
           <span className="text-xs text-muted-foreground">{t("Sem tags no contato.")}</span>
