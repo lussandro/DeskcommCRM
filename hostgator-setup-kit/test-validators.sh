@@ -1844,6 +1844,22 @@ echo "packaging: a tag do git não basta — as imagens têm de existir"
 # GHCR nasce privado, e repositório público não muda isso.
 TMP_PRIV="$(mktemp -d)"
 (
+  # Offline, como o teste de pinagem acima: sem REPO_URL local o install consulta
+  # o remoto padrão pela rede, e o ramo "construídas neste servidor" só existe
+  # com uma versão resolvida. Num fork privado (ou sem rede) o ls-remote volta
+  # vazio e o teste reprovava pelo motivo errado.
+  origem="$TMP_PRIV/origem.git"
+  git init --quiet --bare "$origem"
+  (
+    cd "$TMP_PRIV" || exit 1
+    git clone --quiet "$origem" w 2>/dev/null
+    cd w || exit 1
+    git config user.email t@t; git config user.name t
+    echo x > a; git add -A; git commit --quiet -m init
+    git tag v1.0.0
+    git push --quiet origin HEAD --tags 2>/dev/null
+  )
+
   montar_vps "$TMP_PRIV/vps" "crmpriv" <<'STUB'
 #!/usr/bin/env bash
 printf '%s\n' "$*" >> "$DOCKER_LOG"
@@ -1853,8 +1869,9 @@ esac
 exit 0
 STUB
   export DUBLE_GHCR=403          # pacote existe mas está PRIVADO
+  export REPO_URL="$origem"
   saida="$(rodar install.sh --yes)"
-  unset DUBLE_GHCR
+  unset DUBLE_GHCR REPO_URL
 
   if ! printf '%s' "$saida" | grep -q "construídas neste servidor"; then
     printf '  ✗ com as imagens inalcançáveis, o instalador não avisou que ia construir aqui\n'
