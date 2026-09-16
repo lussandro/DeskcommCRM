@@ -25,15 +25,20 @@ function bancoComStatus(status: string | null, forma: "objeto" | "array" = "obje
     expires_at: null,
     organizations: forma === "array" ? [{ status }] : { status },
   };
+  const colunasPedidas: string[] = [];
   const update = { eq: vi.fn(async () => ({ error: null })) };
   vi.mocked(createAdminClient).mockReturnValue({
     from: vi.fn(() => ({
-      select: vi.fn(() => ({
-        eq: vi.fn(() => ({ maybeSingle: vi.fn(async () => ({ data: linha, error: null })) })),
-      })),
+      select: vi.fn((colunas: string) => {
+        colunasPedidas.push(colunas);
+        return {
+          eq: vi.fn(() => ({ maybeSingle: vi.fn(async () => ({ data: linha, error: null })) })),
+        };
+      }),
       update: vi.fn(() => update),
     })),
   } as unknown as ReturnType<typeof createAdminClient>);
+  return { colunasPedidas };
 }
 
 beforeEach(() => vi.clearAllMocks());
@@ -59,6 +64,17 @@ describe("validateBearerToken sob organização suspensa", () => {
   // casos o ramo do array não é exercitado por ninguém: se `orgJoin[0]`
   // estivesse errado, a suíte seguiria verde e o gate nunca dispararia — que é
   // exatamente o que o comentário do código chama de falha silenciosa.
+  // O gate inteiro depende de UMA string: sem `organizations(status)` no select,
+  // o embed nunca vem, `orgStatus` é sempre null e a organização suspensa passa
+  // — com a suíte verde, porque os dublês devolvem a linha pronta e ignoram o
+  // que foi pedido. Este caso vigia a string, que é a peça que ninguém olhava.
+  it("pede o status da organização no select — sem o embed o gate fica cego", async () => {
+    const { colunasPedidas } = bancoComStatus("active");
+    await validateBearerToken(`Bearer ${TOKEN}`);
+    expect(colunasPedidas).toHaveLength(1);
+    expect(colunasPedidas[0]).toContain("organizations(status)");
+  });
+
   it("recusa também quando o embed vem como ARRAY", async () => {
     bancoComStatus("suspended", "array");
     await expect(validateBearerToken(`Bearer ${TOKEN}`)).rejects.toMatchObject({
