@@ -320,10 +320,26 @@ async function credenciaisDaLoja(
  * saber. Agora qualquer trecho não gravado derruba a indexação inteira: a
  * versão falha com o motivo e a anterior segue ativa.
  */
+/**
+ * Trechos gravados entre um batimento e outro. A ~4 trechos/s são ~25 s — bem
+ * dentro dos 10 min que o drain tolera (`PROCESSING_STALE_MS`) antes de
+ * devolver o evento à fila. Sem batimento, fonte com mais de ~2.400 trechos
+ * era reclamada no meio, outro handler abria versão nova e recomeçava do zero:
+ * medido em 2026-09-16, uma fonte de 1,6 MB gerou 7 versões parciais e 25 mil
+ * trechos órfãos com embedding pagos, e nunca ativou nenhuma.
+ */
+export const TRECHOS_POR_BATIMENTO = 100;
+/** Teto de tempo entre batimentos, para o caso de o provedor de embedding estar lento. */
+export const MS_POR_BATIMENTO = 60 * 1000;
+
 export async function indexarFonte(
   fonte: FonteRow,
   chave: ChaveDeEmbedding,
-  extra: { productId?: string },
+  extra: {
+    productId?: string;
+    /** Chamado a cada `aCadaTrechos` trechos gravados; falha dele não derruba a indexação. */
+    batimento?: { tocar: () => Promise<unknown>; aCadaTrechos?: number };
+  },
 ): Promise<Resultado> {
   const tipo = canonizarTipoDeFonte(fonte.source_type);
   if (tipo === null) {
@@ -374,6 +390,7 @@ export async function indexarFonte(
   // Trecho que não gravou NÃO pode seguir para a ativação: a versão fica
   // incompleta e a anterior — que funciona — é quem deve continuar no ar.
   const falhas: Array<{ posicao: number; mensagem: string }> = [];
+  let ultimoBatimento = Date.now();
 
   for (let i = 0; i < pedacos.length; i++) {
     const p = pedacos[i]!;
@@ -415,6 +432,16 @@ export async function indexarFonte(
       falhas.push({ posicao: i, mensagem: upErr.message });
     } else {
       gravados++;
+    }
+
+    const aCada = extra.batimento?.aCadaTrechos ?? TRECHOS_POR_BATIMENTO;
+    // Por contagem OU por tempo: um provedor lento (ou um trecho que fica
+    // esperando rate limit) não pode deixar o evento sem toque por 10 min.
+    if (extra.batimento && ((i + 1) % aCada === 0 || Date.now() - ultimoBatimento >= MS_POR_BATIMENTO)) {
+      // Best-effort: o batimento é para o drain não reclamar o evento; se ele
+      // falhar, o pior caso é o de antes desta linha existir.
+      await extra.batimento.tocar().catch(() => undefined);
+      ultimoBatimento = Date.now();
     }
   }
 
@@ -574,7 +601,19 @@ export async function processRagIndexer(row: EventRow): Promise<HandlerResult> {
 
     await marcarFonte(row.organization_id, fonte.id, { last_index_status: "indexando" });
 
-    const resultado = await indexarFonte(fonte, chave, productId ? { productId } : {});
+    const resultado = await indexarFonte(fonte, chave, {
+      ...(productId ? { productId } : {}),
+      batimento: {
+        // O trigger `trg_event_log_touch` reescreve `updated_at`; é ele que o
+        // drain lê para decidir se o evento está órfão.
+        tocar: async () => {
+          await createAdminClient()
+            .from("event_log")
+            .update({ updated_at: new Date().toISOString() })
+            .eq("id", row.id);
+        },
+      },
+    });
 
     if (resultado.tipo === "ok") {
       await marcarFonte(row.organization_id, fonte.id, {

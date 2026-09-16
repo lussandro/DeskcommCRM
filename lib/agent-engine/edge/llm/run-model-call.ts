@@ -23,8 +23,14 @@ import { z } from 'zod';
 import { scrubMessage } from '@/lib/sentry/scrub';
 
 import type { Logger } from '../../obs/logger';
-import { decidirParaOSeam } from './binding-do-ponto';
-import { resolveOrgLlmConfig, type LlmEdgeConfig, type OrcamentoDaOrg } from './credentials';
+import type { LinhaDeBinding } from '../../../ai/pontos/resolver';
+import { carregarBinding, decidirParaOSeam } from './binding-do-ponto';
+import {
+  LlmNotConfiguredError,
+  resolveOrgLlmConfig,
+  type LlmEdgeConfig,
+  type OrcamentoDaOrg,
+} from './credentials';
 import {
   AVISO_CORPO,
   AVISO_TITULO,
@@ -314,7 +320,27 @@ export async function runModelCall(db: pg.Pool, cfg: LlmEdgeConfig, input: RunMo
 
   // A config da org é lida ANTES da decisão porque o resolvedor precisa dela
   // como último degrau da precedência (o padrão, quando ninguém mais opinou).
-  const padrao = await resolveOrgLlmConfig(db, cfg, input.tenantId, input.llmOverride);
+  // `undefined` = o caminho normal (a decisão lê o binding); uma linha ou
+  // `null` = já lido aqui, e a decisão usa ESTA leitura, para nunca divergir da
+  // credencial carregada.
+  let bindingAntecipado: LinhaDeBinding | null | undefined;
+  const padrao = await resolveOrgLlmConfig(db, cfg, input.tenantId, input.llmOverride).catch(
+    async (err: unknown) => {
+      // Org sem credencial para o SEU provider, mas o painel apontou este ponto
+      // para outro: a chamada tem de sair pelo binding. Medido em produção em
+      // 2026-09-16 — org em `anthropic` sem chave, `intent_router` ligado à
+      // OpenAI no painel, e o roteador morria AQUI, antes de o binding ser lido.
+      // Só o caminho quebrado muda: com credencial, o binding é lido uma vez,
+      // logo abaixo, como sempre foi.
+      if (!(err instanceof LlmNotConfiguredError) || input.llmOverride !== undefined) throw err;
+      bindingAntecipado = await carregarBinding(db, input.tenantId, purpose).catch(() => null);
+      if (bindingAntecipado === null) throw err;
+      return resolveOrgLlmConfig(db, cfg, input.tenantId, {
+        provider: bindingAntecipado.provider,
+        credentialId: bindingAntecipado.credential_id,
+      });
+    },
+  );
 
   // O painel de provedores entra AQUI, e é o que faz `purpose` deixar de ser
   // só um rótulo de custo e virar decisão. Sem binding configurado, `decisao`
@@ -333,6 +359,7 @@ export async function runModelCall(db: pg.Pool, cfg: LlmEdgeConfig, input: RunMo
             model: input.model,
           },
     padraoDaOrganizacao: { provider: padrao.provider, defaultModel: padrao.defaultModel },
+    ...(bindingAntecipado !== undefined ? { bindingJaLido: bindingAntecipado } : {}),
   }, deps.log ? { log: deps.log } : {});
 
   // Só re-resolve a credencial quando a decisão aponta para OUTRA que não a já
@@ -346,7 +373,8 @@ export async function runModelCall(db: pg.Pool, cfg: LlmEdgeConfig, input: RunMo
   // silenciosamente, porque `factory` usa `config.provider` e não
   // `decisao.provider`. `padrao` foi resolvido com `input.llmOverride`, então
   // comparar contra ele é comparar contra o que de fato está carregado.
-  const credencialJaCarregada = input.llmOverride?.credentialId ?? null;
+  const credencialJaCarregada =
+    bindingAntecipado?.credential_id ?? input.llmOverride?.credentialId ?? null;
   const precisaOutraCredencial =
     decisao.provider !== padrao.provider ||
     (decisao.credentialId !== null && decisao.credentialId !== credencialJaCarregada);

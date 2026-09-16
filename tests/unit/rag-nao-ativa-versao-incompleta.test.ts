@@ -164,3 +164,33 @@ describe("indexarFonte — falha parcial não ativa versão", () => {
     expect(activateVersion).not.toHaveBeenCalled();
   });
 });
+
+describe("o batimento durante a indexação", () => {
+  // Medido em 2026-09-16: o drain devolve à fila todo evento `processing` cujo
+  // `updated_at` passou de 10 min, e o indexador não tocava a linha — fonte de
+  // 1,6 MB (5.759 trechos) gerou 7 versões parciais e nunca ativou nenhuma.
+  it("é chamado a cada N trechos gravados", async () => {
+    const tocar = vi.fn(async () => undefined);
+    const resultado = await indexarFonte(FONTE as never, CHAVE as never, {
+      batimento: { tocar, aCadaTrechos: 1 },
+    });
+    expect(resultado.tipo).toBe("ok");
+    expect(tocar).toHaveBeenCalledTimes(FAQ.length);
+  });
+
+  it("falha do batimento não derruba a indexação", async () => {
+    const tocar = vi.fn(async () => {
+      throw new Error("event_log fora do ar");
+    });
+    const resultado = await indexarFonte(FONTE as never, CHAVE as never, {
+      batimento: { tocar, aCadaTrechos: 1 },
+    });
+    expect(resultado.tipo).toBe("ok");
+    expect(tocar).toHaveBeenCalled();
+  });
+
+  it("sem batimento, nada é tocado — o chamador decide", async () => {
+    const resultado = await indexarFonte(FONTE as never, CHAVE as never, {});
+    expect(resultado.tipo).toBe("ok");
+  });
+});

@@ -54,6 +54,8 @@ export interface EntradaDoSeam {
   /** Preenchido apenas quando a origem é a versão publicada do agente. */
   overrideDoAgente: AgentePublicado | null;
   padraoDaOrganizacao: { provider: string; defaultModel: string | null };
+  /** Binding já lido pelo chamador; `undefined` = ler aqui. */
+  bindingJaLido?: LinhaDeBinding | null;
 }
 
 /**
@@ -66,9 +68,14 @@ export async function decidirParaOSeam(
   entrada: EntradaDoSeam,
   deps: { log?: { warn: (msg: string, meta?: Record<string, unknown>) => void } } = {},
 ): Promise<DecisaoDeBinding> {
-  let binding: LinhaDeBinding | null = null;
+  // Quem já leu o binding (o seam, quando a org não tinha credencial para o
+  // provider padrão) entrega a linha: ler de novo é a chance de a decisão
+  // divergir da credencial que já foi carregada.
+  let binding: LinhaDeBinding | null = entrada.bindingJaLido ?? null;
   try {
-    binding = await carregarBinding(db, entrada.organizationId, entrada.purpose);
+    if (entrada.bindingJaLido === undefined) {
+      binding = await carregarBinding(db, entrada.organizationId, entrada.purpose);
+    }
   } catch (err) {
     // Segue o caminho de antes desta frente — indisponibilidade da tabela não
     // pode virar cliente sem resposta.

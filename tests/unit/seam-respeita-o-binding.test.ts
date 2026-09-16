@@ -16,6 +16,13 @@ import { describe, expect, it, vi } from "vitest";
 
 import { runModelCall } from "@/lib/agent-engine/edge/llm/run-model-call";
 
+// A chave BYOK decifrada tem nome próprio, para o teste distinguir "usou a
+// credencial do painel" de "caiu na chave de plataforma" pelo que chega à fábrica.
+vi.mock("@/lib/crypto/aes_gcm", () => ({
+  decryptKey: () => "chave-byok-do-painel",
+  byteaToBuffer: (v: unknown) => Buffer.from(String(v)),
+}));
+
 const ORG = "11111111-1111-4111-8111-111111111111";
 
 interface LinhaBinding {
@@ -36,6 +43,8 @@ function poolFalso(opts: {
   binding?: LinhaBinding | null;
   llmSettings?: Record<string, unknown>;
   erroNoBinding?: boolean;
+  /** Id de credencial BYOK que existe (ativa e validada) na org fingida. */
+  credencialExistente?: string;
 }) {
   const inserts: Array<{ sql: string; params: unknown[] }> = [];
   const query = vi.fn(async (sql: string, params: unknown[] = []) => {
@@ -59,7 +68,12 @@ function poolFalso(opts: {
       return { rows: opts.binding ? [opts.binding] : [] };
     }
     if (sql.includes("from ai_provider_credentials")) {
-      return { rows: [] }; // sem BYOK → cai na chave de plataforma
+      // Só a credencial pedida PELO ID existe; busca "a mais recente do
+      // provider" volta vazia → cai na chave de plataforma.
+      if (opts.credencialExistente !== undefined && params[1] === opts.credencialExistente) {
+        return { rows: [{ api_key_encrypted: "x", api_key_iv: "y", api_key_tag: "z" }] };
+      }
+      return { rows: [] };
     }
     if (sql.includes("insert into llm_calls")) {
       inserts.push({ sql, params });
@@ -256,5 +270,62 @@ describe("o custo é atribuído ao ponto certo", () => {
     expect(params).toContain("flywheel_judge");
     expect(params).toContain("openai");
     expect(params).toContain("gpt-5-mini");
+  });
+});
+
+describe("org sem credencial para o SEU provider, mas com binding no painel", () => {
+  // Medido em produção em 2026-09-16: organização em `anthropic` sem chave,
+  // painel apontando o `intent_router` para OpenAI com credencial validada — e
+  // o roteador morria com `org sem credencial LLM utilizável` ANTES de o seam
+  // ler o binding. O painel dizia uma coisa, a chamada fazia outra: a forma
+  // exata do problema que o painel existe para resolver.
+  it("a chamada sai pelo provider do binding, não morre no padrão da org", async () => {
+    const { pool, query } = poolFalso({
+      binding: {
+        provider: "openai",
+        credential_id: "cred-openai-do-painel",
+        model_id: "gpt-5-nano",
+        base_url: null,
+        is_enabled: true,
+      },
+      credencialExistente: "cred-openai-do-painel",
+    });
+    const { registry, chamadas } = registrySpiao();
+    const semChaveAnthropic = { openaiApiKey: "chave-openai", cacheTtl: "1h" as const };
+    const r = await runModelCall(
+      pool,
+      semChaveAnthropic,
+      { tenantId: ORG, purpose: "intent_router", messages: [{ role: "user", content: "bom dia" }] },
+      { registry },
+    );
+    // A chave é a BYOK do painel (decifrada), não a de plataforma ("chave-openai").
+    expect(chamadas[0]).toMatchObject({
+      provider: "openai",
+      modelId: "gpt-5-nano",
+      apiKey: "chave-byok-do-painel",
+    });
+    expect(r.origem).toBe("binding");
+    // A credencial procurada é a DO BINDING, pelo id — não "a mais recente do
+    // provider" nem a chave de plataforma. Um conserto que ignorasse
+    // `binding.credential_id` passaria nas duas asserções acima.
+    const buscasDeCredencial = query.mock.calls
+      .filter(([sql]) => String(sql).includes("from ai_provider_credentials"))
+      .map(([, params]) => params);
+    expect(buscasDeCredencial).toContainEqual([ORG, "cred-openai-do-painel"]);
+    expect(buscasDeCredencial).not.toContainEqual([ORG, "openai"]);
+  });
+
+  it("sem binding, o erro continua o mesmo — a org precisa mesmo de credencial", async () => {
+    const { pool } = poolFalso({ binding: null });
+    const { registry } = registrySpiao();
+    const semChaveAnthropic = { openaiApiKey: "chave-openai", cacheTtl: "1h" as const };
+    await expect(
+      runModelCall(
+        pool,
+        semChaveAnthropic,
+        { tenantId: ORG, purpose: "intent_router", messages: [{ role: "user", content: "bom dia" }] },
+        { registry },
+      ),
+    ).rejects.toMatchObject({ name: "llm_not_configured" });
   });
 });
