@@ -123,7 +123,11 @@ export interface ClaimOptions {
   batchSize?: number;
 }
 
-/** Exportado só para o invariante medir o plano de execução do SQL real (Step 3-B). */
+/**
+ * Exportado só para `tests/invariants/suspensao-nao-roda-job.test.ts` medir o plano de
+ * execução do SQL REAL. Copiar este SQL para dentro de um teste é o defeito que
+ * `queue-relogio.test.ts` carrega até hoje: ele mede à mão uma consulta que já diverge desta.
+ */
 export const CLAIM_SQL = `
   with dedup as (
     -- etapa (a): no máximo 1 job por lane por lote; lane sem lead = o próprio id

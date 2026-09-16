@@ -98,9 +98,14 @@ describe("claim sob organização suspensa", () => {
     expect(falta).toBeNull();
   });
 
-  it("o CLAIM_SQL real segue sob o índice parcial, com o NOT EXISTS", async () => {
-    // 5.000 linhas mortas: sem índice, o plano vira Seq Scan e o custo migra
-    // para a CPU do banco numa tabela que nada no produto poda.
+  // ⚠️ O QUE ESTE CASO PROVA, E O QUE NÃO PROVA. Ele mede que **histórico morto
+  // não empurra o claim para varredura sequencial**: as 5.000 linhas de
+  // enchimento são `status='done'`, que o índice parcial exclui por definição.
+  // Ele NÃO prova nada sobre o `not exists` novo — fica verde com o predicado
+  // da suspensão sabotado —, e NÃO mede o teto que o plano declarava, que era
+  // backlog de dezenas de milhares de `pending`. Quem garante o comportamento
+  // do gate são os casos 1 a 3; este é medidor de custo, e só.
+  it("histórico morto não empurra o claim para varredura sequencial", async () => {
     await pool.query(
       `insert into job_queue (organization_id, contact_id, kind, payload, status, run_after)
        select $1, null, 'watchdog', '{}'::jsonb, 'done', now() from generate_series(1, 5000)`,
@@ -109,18 +114,32 @@ describe("claim sob organização suspensa", () => {
     await pool.query("analyze job_queue");
     await pool.query("analyze organizations");
 
-    // `explain (analyze)` EXECUTA — e o CLAIM_SQL é um UPDATE. Por isso vai
-    // dentro de uma transação que termina em rollback: mede o plano real sem
-    // deixar job nenhum marcado como `running`.
-    await pool.query("begin");
-    const { rows } = await pool.query<{ "QUERY PLAN": string }>(
-      `explain (analyze, buffers) ${CLAIM_SQL}`,
-      [10, "invariante-explain"],
-    );
-    await pool.query("rollback");
+    // `explain (analyze)` EXECUTA — e o CLAIM_SQL é um UPDATE. Precisa de
+    // transação com rollback; e precisa ser no MESMO cliente, senão não há
+    // transação nenhuma: `Pool.query` pega e devolve um cliente por chamada, e
+    // `begin`/`explain`/`rollback` cairiam em conexões diferentes, deixando o
+    // UPDATE em autocommit. Hoje ele casa 0 linhas, mas a garantia escrita tem
+    // de ser verdadeira, não incidental.
+    const client = await pool.connect();
+    let plano: string;
+    try {
+      await client.query("begin");
+      const { rows } = await client.query<{ "QUERY PLAN": string }>(
+        `explain (analyze, buffers) ${CLAIM_SQL}`,
+        [10, "invariante-explain"],
+      );
+      plano = rows.map((r) => r["QUERY PLAN"]).join("\n");
+    } finally {
+      await client.query("rollback");
+      client.release();
+    }
 
-    const plano = rows.map((r) => r["QUERY PLAN"]).join("\n");
     expect(plano).toContain("idx_job_queue_claim");
+    // Qualificado em `job_queue` de propósito, e o motivo é MEDIDO: o plano real
+    // traz `Seq Scan on organizations o` como lado interno de um Nested Loop
+    // Anti Join — com duas organizações, o planner escolhe isso e está certo.
+    // O brief dizia "lookup por chave primária de organizations"; não é, e o
+    // instrumento diz a verdade em vez de acomodá-la em silêncio.
     expect(plano).not.toContain("Seq Scan on job_queue");
   });
 });
