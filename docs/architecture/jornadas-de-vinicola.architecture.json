@@ -1,0 +1,288 @@
+{
+  "schema_version": 1,
+  "diagram_type": "architecture",
+  "meta": {
+    "title": "Jornadas de vinícola",
+    "subtitle": "Pacote de conteúdo por nicho — duas entradas, um aplicador, um ledger por id",
+    "output": "jornadas-de-vinicola.html",
+    "quality_profile": "standard"
+  },
+  "lanes": [
+    {
+      "id": "codigo",
+      "label": "Código"
+    },
+    {
+      "id": "app",
+      "label": "Aplicativo"
+    },
+    {
+      "id": "banco",
+      "label": "Banco"
+    }
+  ],
+  "mainPath": [
+    "definicoes",
+    "pacotes",
+    "wizard",
+    "aplicador",
+    "ledger",
+    "tela_jornadas"
+  ],
+  "nodes": [
+    {
+      "id": "definicoes",
+      "lane": "codigo",
+      "col": 0,
+      "type": "lib",
+      "label": "lib/vertical/vinicola/{canal,clube,consumidor,enoturismo}.ts: conteúdo por jornada"
+    },
+    {
+      "id": "pacotes",
+      "lane": "codigo",
+      "col": 1,
+      "type": "lib",
+      "label": "lib/vertical/vinicola/index.ts: JORNADAS + VERSAO_DO_PACOTE"
+    },
+    {
+      "id": "wizard",
+      "lane": "app",
+      "col": 2,
+      "type": "route",
+      "label": "app/actions/onboarding/montarQuadro.ts: vinícola marca no onboarding"
+    },
+    {
+      "id": "tela_jornadas",
+      "lane": "app",
+      "col": 2,
+      "type": "ui",
+      "label": "/app/settings/tenant/jornadas: aplicar depois, estado por jornada"
+    },
+    {
+      "id": "aplicador",
+      "lane": "app",
+      "col": 3,
+      "type": "service",
+      "label": "lib/vertical/vinicola/aplicar.ts: aplicarJornada() — único caminho para o banco"
+    },
+    {
+      "id": "tornar_padrao",
+      "lane": "app",
+      "col": 4,
+      "type": "service",
+      "label": "tornarPadrao(): promove o funil da 1ª jornada em duas escritas ordenadas"
+    },
+    {
+      "id": "ledger",
+      "lane": "banco",
+      "col": 4,
+      "type": "database",
+      "label": "organizations.settings.bacco_jornadas: id + chave natural, existência por id"
+    },
+    {
+      "id": "funil",
+      "lane": "banco",
+      "col": 5,
+      "type": "database",
+      "label": "crm_pipelines / crm_stages + settings.{vocabulary,fields,lost_reasons}"
+    },
+    {
+      "id": "modelos",
+      "lane": "banco",
+      "col": 5,
+      "type": "database",
+      "label": "message_templates: respostas rápidas"
+    },
+    {
+      "id": "tipos",
+      "lane": "banco",
+      "col": 5,
+      "type": "database",
+      "label": "calendar_event_types: reminder_enabled=false explícito"
+    },
+    {
+      "id": "cadencias",
+      "lane": "banco",
+      "col": 5,
+      "type": "database",
+      "label": "followup_flow_pointers: cadências em rascunho, ids reais da organização"
+    },
+    {
+      "id": "auditoria",
+      "lane": "banco",
+      "col": 4,
+      "type": "database",
+      "label": "api_audit_log: código por peça + vertical.jornada_aplicada"
+    },
+    {
+      "id": "quadro",
+      "lane": "app",
+      "col": 6,
+      "type": "ui",
+      "label": "/app/leads: o quadro que lê crm_pipelines/crm_stages"
+    },
+    {
+      "id": "composer",
+      "lane": "app",
+      "col": 6,
+      "type": "ui",
+      "label": "components/inbox/Composer.tsx: seletor de respostas rápidas"
+    },
+    {
+      "id": "agenda",
+      "lane": "app",
+      "col": 6,
+      "type": "ui",
+      "label": "Agenda: tipos de compromisso oferecidos ao marcar"
+    },
+    {
+      "id": "construtor_followup",
+      "lane": "app",
+      "col": 6,
+      "type": "ui",
+      "label": "Construtor de fluxos de follow-up"
+    },
+    {
+      "id": "painel_auditoria",
+      "lane": "app",
+      "col": 6,
+      "type": "ui",
+      "label": "Painel de auditoria: lista derivada de AUDIT_ACTIONS"
+    },
+    {
+      "id": "catalogo_nav",
+      "lane": "codigo",
+      "col": 1,
+      "type": "config",
+      "label": "lib/navigation/catalogo.ts: grupo organizacao, icon Signpost, minRole manager"
+    }
+  ],
+  "edges": [
+    {
+      "id": "definicoes-aplicador",
+      "from": "definicoes",
+      "to": "aplicador",
+      "label": "conteúdo de cada jornada, lido no momento da aplicação"
+    },
+    {
+      "id": "definicoes-pacotes",
+      "from": "definicoes",
+      "to": "pacotes",
+      "label": "agrupado em JORNADAS por chave"
+    },
+    {
+      "id": "pacotes-wizard",
+      "from": "pacotes",
+      "to": "wizard",
+      "label": "catálogo de jornadas oferecido no onboarding"
+    },
+    {
+      "id": "pacotes-tela",
+      "from": "pacotes",
+      "to": "tela_jornadas",
+      "label": "catálogo de jornadas oferecido na tela"
+    },
+    {
+      "id": "catalogo-tela",
+      "from": "catalogo_nav",
+      "to": "tela_jornadas",
+      "label": "porta: /app/settings/tenant/jornadas"
+    },
+    {
+      "id": "wizard-aplicador",
+      "from": "wizard",
+      "to": "aplicador",
+      "label": "aplicarJornada(orgId, chave, userId) — caminho B do Step 8"
+    },
+    {
+      "id": "wizard-tornar-padrao",
+      "from": "wizard",
+      "to": "tornar_padrao",
+      "label": "primeira jornada marcada vira funil padrão"
+    },
+    {
+      "id": "tela-aplicador",
+      "from": "tela_jornadas",
+      "to": "aplicador",
+      "label": "aplicarJornadaDeVinicola(formData) — a tela, depois"
+    },
+    {
+      "id": "ledger-tela",
+      "from": "ledger",
+      "to": "tela_jornadas",
+      "label": "três estados por jornada: nenhuma peça / parcial / completa"
+    },
+    {
+      "id": "aplicador-funil",
+      "from": "aplicador",
+      "to": "funil",
+      "label": "1) funil + etapas — id de etapa é alvo de gatilho e condição"
+    },
+    {
+      "id": "aplicador-modelos",
+      "from": "aplicador",
+      "to": "modelos",
+      "label": "4) respostas rápidas — antes das cadências, sem unique por shortcut"
+    },
+    {
+      "id": "aplicador-tipos",
+      "from": "aplicador",
+      "to": "tipos",
+      "label": "5) tipos de compromisso — pré-lê por nome, slug sem colisão"
+    },
+    {
+      "id": "aplicador-cadencias",
+      "from": "aplicador",
+      "to": "cadencias",
+      "label": "6) cadências — só depois dos modelos existirem"
+    },
+    {
+      "id": "aplicador-ledger",
+      "from": "aplicador",
+      "to": "ledger",
+      "label": "grava id + chave natural por peça criada"
+    },
+    {
+      "id": "aplicador-auditoria",
+      "from": "aplicador",
+      "to": "auditoria",
+      "label": "um código por peça + vertical.jornada_aplicada com relatório no metadata"
+    },
+    {
+      "id": "tornar-padrao-funil",
+      "from": "tornar_padrao",
+      "to": "funil",
+      "label": "uniq_crm_pipelines_org_default é parcial: duas escritas em ordem"
+    },
+    {
+      "id": "funil-quadro",
+      "from": "funil",
+      "to": "quadro",
+      "label": "o quadro em /app/leads lê o funil aplicado"
+    },
+    {
+      "id": "modelos-composer",
+      "from": "modelos",
+      "to": "composer",
+      "label": "resolve {{nome}} no seletor de respostas rápidas"
+    },
+    {
+      "id": "tipos-agenda",
+      "from": "tipos",
+      "to": "agenda",
+      "label": "tipo de compromisso oferecido ao marcar"
+    },
+    {
+      "id": "cadencias-construtor",
+      "from": "cadencias",
+      "to": "construtor_followup",
+      "label": "cadência em rascunho, editável no construtor"
+    },
+    {
+      "id": "auditoria-painel",
+      "from": "auditoria",
+      "to": "painel_auditoria",
+      "label": "sem código extra — a lista é derivada de AUDIT_ACTIONS"
+    }
+  ]
+}
