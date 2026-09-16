@@ -121,6 +121,18 @@ jobs:
     # runner não há nem a URL nem a conta — e apontá-las para o Supabase local mediria
     # outra instalação. Evidência e medidas: `evidence/bacco-rebrand/10-revisao.md`.
     #
+    # ═══ `bacco-jornadas`: RODA NA VPS, CONTRA A PRODUÇÃO, COM AS JORNADAS APLICADAS ═══
+    #
+    # Fork Bacco (Plano "Jornadas de vinícola", Task 6). Ela roda na VPS contra a
+    # produção, com a conta QA real e as jornadas já aplicadas; o CI não tem nem a
+    # conta nem o banco. A prova é de EFEITO, não de tela isolada: ativa as quatro
+    # jornadas pelo botão e depois vai procurar o resultado onde o usuário o veria —
+    # o funil com as colunas no quadro, a resposta rápida no composer do
+    # atendimento, o tipo de compromisso na Agenda e a cadência com selo de
+    # rascunho. Isso exige uma instalação com conversa, funis e fluxos de verdade,
+    # e credenciais que só existem em `/root/.bacco_qa`. Roda no mesmo contêiner
+    # `mcr.microsoft.com/playwright:v1.63.0-noble`, sem `playwright.config` do repo.
+    #
     # ═══ `cadastro-sem-confirmacao-de-email`: A PRECONDIÇÃO É DO PROVEDOR ═══
     #
     # Ela mede o cadastro com "Confirm email" DESLIGADO no provedor de auth — o
@@ -621,6 +633,7 @@ jobs:
         cadastro-sem-confirmacao-de-email.spec.ts
         bacco-evidencia.spec.ts
         bacco-qa-cadastro.spec.ts
+        bacco-jornadas.spec.ts
     steps:
       - uses: actions/checkout@v7
 
