@@ -123,12 +123,21 @@ export interface ClaimOptions {
   batchSize?: number;
 }
 
-const CLAIM_SQL = `
+/** Exportado só para o invariante medir o plano de execução do SQL real (Step 3-B). */
+export const CLAIM_SQL = `
   with dedup as (
     -- etapa (a): no máximo 1 job por lane por lote; lane sem lead = o próprio id
     select distinct on (coalesce(j.contact_id, j.id)) j.id
     from job_queue j
     where j.status = 'pending' and j.run_after <= now()
+      -- SUSPENSÃO: a fila tem CINCO produtores e UM consumidor. O gate mora no
+      -- consumo porque é o único ponto por onde todo job passa — tapar produtor
+      -- a produtor é como o sexto fica quebrado sem ninguém ver.
+      -- "= 'suspended'" e não "<> 'active'" de propósito: o CHECK aceita também
+      -- 'redacted' e 'archived', e desligar a fila para eles seria mudança de
+      -- comportamento que esta spec não pediu.
+      and not exists (select 1 from organizations o
+                      where o.id = j.organization_id and o.status = 'suspended')
       and (j.contact_id is null
            or not exists (select 1 from job_queue r
                           where r.contact_id = j.contact_id and r.status = 'running'))
@@ -208,7 +217,12 @@ export async function faltaParaOProximoJob(pool: Pool): Promise<number | null> {
                    )::int
             end as falta_ms
        from job_queue
-      where status = 'pending'`,
+      where status = 'pending'
+        -- O MESMO predicado do claim. Sem ele o relógio manda o worker acordar
+        -- por backlog de organização suspensa, o claim devolve zero, e o laço
+        -- volta ao ritmo curto para sempre — trabalho que nunca vai sair.
+        and not exists (select 1 from organizations o
+                        where o.id = job_queue.organization_id and o.status = 'suspended')`,
   );
   return rows[0]?.falta_ms ?? null;
 }
