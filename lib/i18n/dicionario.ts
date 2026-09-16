@@ -8677,6 +8677,48 @@ export const DICIONARIO: Traducoes = {
   "Erro ao reativar tenant": { es: "Error al reactivar el tenant" },
   "Incidente resolvido com sucesso": { es: "Incidente resuelto con éxito" },
   "Erro ao resolver incidente": { es: "Error al resolver el incidente" },
+
+  // ─── Configurações › Jornadas (app/app/settings/tenant/jornadas) ───
+  // Só a INTERFACE entra aqui. Nome do funil, frase de apresentação, nome de
+  // etapa, de resposta rápida e de cadência são CONTEÚDO do pacote — a mesma
+  // string que vira nome de coisa no banco —, saem em português e a tela os
+  // renderiza crus, sem `t()`.
+  "Jornadas": { es: "Recorridos" },
+  "Funis, mensagens e lembretes prontos para cada jeito de vender vinho.": {
+    es: "Embudos, mensajes y recordatorios listos para cada forma de vender vino.",
+  },
+  "As cadências entram como rascunho. Para elas começarem a mandar mensagem, é preciso um agente de IA publicado, com follow-up ligado, e o WhatsApp conectado.":
+    {
+      es: "Las cadencias entran como borrador. Para que empiecen a enviar mensajes, hace falta un agente de IA publicado, con seguimiento activado, y el WhatsApp conectado.",
+    },
+  // Frase inteira, e não "Ativada" seco: essa chave já existe neste arquivo,
+  // de outra tela e no feminino (`Activada`) — reusá-la duplicaria a chave e
+  // discordaria do gênero de `Recorrido`.
+  "Esta jornada não está ativada": { es: "Este recorrido no está activado" },
+  "Esta jornada está ativada": { es: "Este recorrido está activado" },
+  "Ativada, com peças removidas": { es: "Activado, con piezas eliminadas" },
+  "Ativar de novo não recria o que você apagou — só cria o que nunca existiu.": {
+    es: "Activarlo de nuevo no recrea lo que usted borró — solo crea lo que nunca existió.",
+  },
+  "colunas": { es: "columnas" },
+  "campos": { es: "campos" },
+  "respostas rápidas": { es: "respuestas rápidas" },
+  "tipos de compromisso": { es: "tipos de cita" },
+  "cadências em rascunho": { es: "cadencias en borrador" },
+  "criada agora": { es: "creada ahora" },
+  "já existia, igual à da jornada": { es: "ya existía, igual a la del recorrido" },
+  "já estava lá com esse nome — o pacote não mexeu nela": {
+    es: "ya estaba ahí con ese nombre — el paquete no la tocó",
+  },
+  "foi criada antes e depois apagada": { es: "fue creada antes y luego eliminada" },
+  "não deu para criar": { es: "no se pudo crear" },
+  "Ativando…": { es: "Activando…" },
+  "Ativar jornada": { es: "Activar recorrido" },
+  "Só quem administra a empresa pode ativar uma jornada.": {
+    es: "Solo quien administra la empresa puede activar un recorrido.",
+  },
+  "Jornada ativada": { es: "Recorrido activado" },
+  "Não consegui ativar tudo": { es: "No pude activar todo" },
 };
 
 /**

@@ -247,6 +247,31 @@ export const NAV_CATALOG = [
     // na navegação" — a porta existia, era outra.
   },
   {
+    // As jornadas de vinícola: o conteúdo que a casa usa para vender, aplicável
+    // depois do onboarding. Fica em "Sua empresa" junto de Tipos de agendamento
+    // porque é configuração do NEGÓCIO, não da conta de quem está logado.
+    //
+    // SEM `sidebar`, como as outras entradas de `organizacao`: o grupo tem hub,
+    // e se chega às telas dele por "Configurações".
+    href: "/app/settings/tenant/jornadas",
+    label: "Jornadas",
+    description: "Funis, mensagens e lembretes prontos para cada jeito de vender vinho.",
+    // ⚠️ `Signpost`, e a escolha é MEDIDA. `icon` é uma string, mas o mapa que a
+    // resolve é FECHADO: `ICONS` em `lib/navigation/registry.ts`, e
+    // `NAV_DESTINATIONS` faz `ICONS[d.icon]` sem fallback. Um nome fora do mapa
+    // vira `undefined`, o React tenta renderizar um componente que não existe e
+    // a tela QUEBRA NO BROWSER — com typecheck, lint e a suíte toda verdes,
+    // porque nada disso resolve a string.
+    //
+    // "Path" não existe: nem no mapa, nem em `lib/ui/icons.ts`. `Signpost` está
+    // nos dois, e é a placa que indica caminhos — que é o que uma jornada é.
+    icon: "Signpost",
+    group: "organizacao",
+    section: "Sua empresa",
+    // `manager` vê; o botão de ativar é só de `admin`, como em Etapas do funil.
+    minRole: "manager",
+  },
+  {
     // Estava enterrado em Configurações e ninguém sabia que existia — o achado
     // que originou esta reorganização. A URL não muda; só o lugar na navegação.
     //
