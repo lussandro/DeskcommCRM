@@ -1,0 +1,3 @@
+{"medida":"organizacao","slug":"vinicola-serra-alta-qa","id":"7326ddce-8840-4e4f-92ca-5be9a9190a95","momento":"2026-09-16T12:10:23.490Z"}
+{"linha":1,"medida":"ativa","url":"https://adega-crm.baccosistemas.com.br/app/inbox","api_contacts":200}
+{"linha":1,"medida":"controle-positivo-da-fila","status_final":"dead","nota":"watchdog não tem handler: o worker o claima e ele morre. O que importa é que SAIU de pending."}

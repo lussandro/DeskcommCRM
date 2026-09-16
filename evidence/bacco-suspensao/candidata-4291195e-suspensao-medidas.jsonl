@@ -1,0 +1,8 @@
+{"medida":"organizacao","slug":"vinicola-serra-alta-qa","id":"7326ddce-8840-4e4f-92ca-5be9a9190a95","momento":"2026-09-16T12:41:38.776Z"}
+{"linha":1,"medida":"ativa","url":"https://adega-crm.baccosistemas.com.br/app/inbox","api_contacts":200}
+{"linha":1,"medida":"controle-positivo-da-fila","status_final":"dead","nota":"watchdog não tem handler: o worker o claima e ele morre. O que importa é que SAIU de pending."}
+{"linha":2,"medida":"tela-redireciona","url":"https://adega-crm.baccosistemas.com.br/account-suspended"}
+{"linha":3,"medida":"api-da-mesma-sessao","status":403,"corpo":{"error":{"code":"tenant_suspended","message":"Conta suspensa"}}}
+{"linha":4,"medida":"fila-nao-entrega","esperou_ms":30012,"status":["pending","pending","pending"]}
+{"linha":5,"medida":"descarte-com-contagem","content_range":"0-2/3","contagem":3,"chamador":"a prova, não a rota — o aviso na Central fica fora (ver cabeçalho)"}
+{"linha":6,"medida":"reativada-sem-enxurrada","url":"https://adega-crm.baccosistemas.com.br/app/inbox","api_contacts":200}
