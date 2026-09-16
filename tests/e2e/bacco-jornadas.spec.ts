@@ -362,12 +362,40 @@ test("as quatro jornadas de vinícola, da tela ao efeito", async ({ page }) => {
     await page.getByRole("link", { name: new RegExp(`^${j.funil}`) }).first().click();
     await page.waitForURL(/\/app\/pipelines\//, { timeout: 60_000 });
     await page.waitForLoadState("networkidle");
-    // `h2` no quadro é EXCLUSIVAMENTE o título de coluna (`StageColumn.tsx:131`).
-    const colunas = await page.locator("main h2").evaluateAll((els) =>
-      els.map((el) => ({
-        nome: (el.textContent ?? "").trim(),
-        x: Math.round(el.getBoundingClientRect().left),
-      })),
+    /*
+     * ⚠️ NÃO É `main h2`, E A PRIMEIRA VERSÃO DESTA SPEC ERROU AQUI: o app NÃO
+     * TEM elemento `<main>` — nem na casca (`components/shell/`), nem no layout
+     * de `/app`. `main h2` casava ZERO e a spec media `colunas: []` nos quatro
+     * quadros, com as colunas visíveis na captura. Lista vazia comparada com a
+     * ordem esperada falha, mas falha dizendo a coisa errada: parecia funil sem
+     * etapa, e era seletor sem alvo.
+     *
+     * `h2` sozinho também não serve: o `Sidebar.tsx:230` usa `h2` nos títulos de
+     * grupo, e eles entrariam na lista antes das colunas.
+     *
+     * A âncora é ESTRUTURAL: cada coluna (`StageColumn.tsx`) é um `div` que
+     * contém o `h2` do nome dentro do cabeçalho e, ao lado, o `Droppable` do
+     * @hello-pangea/dnd — que marca o DOM com `data-rfd-droppable-id`. Então
+     * título de coluna é o `h2` cujo avô contém um droppable. Não depende de
+     * classe utilitária, que muda com o CSS.
+     *
+     * As colunas NÃO são virtualizadas (`KanbanBoard.tsx` mapeia `data.stages`
+     * inteiro dentro de um `overflow-x-auto`): todas estão no DOM mesmo fora da
+     * viewport, e a ordem do DOM é a ordem do funil. `x` vai junto para a medida
+     * registrar a ordem visual também — é o que provaria uma coluna renderizada
+     * fora de lugar.
+     */
+    const colunas = await page.evaluate(() =>
+      [...document.querySelectorAll("h2")]
+        .filter((h) =>
+          h.parentElement?.parentElement?.querySelector(
+            "[data-rfd-droppable-id], [data-rbd-droppable-id]",
+          ),
+        )
+        .map((el) => ({
+          nome: (el.textContent ?? "").trim(),
+          x: Math.round(el.getBoundingClientRect().left),
+        })),
     );
     registrar({ etapa: "quadro", funil: j.funil, url: page.url(), colunas });
     expect
@@ -381,6 +409,24 @@ test("as quatro jornadas de vinícola, da tela ao efeito", async ({ page }) => {
 
   // ── 9. A resposta rápida no atendimento ───────────────────────────────────
   await abrir(page, "/app/inbox");
+  /*
+   * ⚠️ A RECARGA NÃO É SUPERSTIÇÃO — É O CACHE DAS RESPOSTAS RÁPIDAS.
+   *
+   * `hooks/inbox/useMessageTemplates.ts` guarda a lista com
+   * `staleTime: 60_000`: dentro de um minuto, o React Query devolve o que já
+   * tem sem ir ao servidor. Esta spec ACABOU de criar as respostas rápidas
+   * clicando em "Ativar jornada", na MESMA sessão de browser — se a lista já
+   * tiver sido buscada antes disso, o menu abre com o conteúdo velho e nenhum
+   * dos atalhos novos aparece. Foi o que aconteceu na primeira rodada na VPS:
+   * `titulos: []` nos quatro atalhos, com os 67 modelos existindo no banco.
+   *
+   * O reload derruba o `QueryClient` inteiro e a busca sai de novo. É o mesmo
+   * gesto que um humano faria — e é honesto que a spec precise dele: quem
+   * ativar a jornada com a inbox aberta noutra aba também vai ter de recarregar
+   * para ver as respostas novas.
+   */
+  await page.reload();
+  await page.waitForLoadState("networkidle");
   const conversas = page.locator("button[data-conversation-id]");
   const quantasConversas = await conversas.count();
   registrar({ etapa: "inbox", conversas: quantasConversas });
