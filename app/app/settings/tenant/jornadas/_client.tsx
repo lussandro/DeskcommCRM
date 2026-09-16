@@ -153,7 +153,17 @@ export function JornadasClient({
                 {aRelatar.map((p) => (
                   <li key={`${p.tipo}:${p.chave}`}>
                     <span className="font-medium">{p.chave}</span>
-                    <span className="text-muted-foreground">
+                    {/*
+                      Só `falhou` ganha destaque. `nao_verificada` fica NEUTRA
+                      de propósito: ela não é erro — é linha que já estava lá e
+                      que o pacote não mexeu —, e pintá-la de vermelho
+                      assustaria quem não tem defeito nenhum. Sem isto os cinco
+                      desfechos eram tipograficamente idênticos, e quem batia o
+                      olho numa lista de seis peças não distinguia aviso de erro.
+                    */}
+                    <span
+                      className={p.estado === "falhou" ? "text-destructive" : "text-muted-foreground"}
+                    >
                       {" "}
                       — {t(ROTULO_DO_DESFECHO[p.estado])}
                       {p.erro ? `: ${p.erro}` : ""}
