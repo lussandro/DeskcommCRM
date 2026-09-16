@@ -13,6 +13,11 @@ import { join } from "node:path";
 
 import { describe, expect, it } from "vitest";
 
+// TETO DESTA HEURÍSTICA, declarado para ninguém confiar demais nela: o
+// congelamento procura os radicais `campaign` e `campanha`. Uma superfície
+// nascida como `broadcasts`, `disparos` ou `envio_em_massa` passa VERDE por
+// aqui. O teste avisa o caso provável, não todos — quem criar disparo em
+// massa com outro nome tem de lembrar da matriz de suspensão por conta.
 describe("superfície de campanha", () => {
   it("não existe no schema — se passar a existir, a suspensão precisa decidir sobre ela", () => {
     const baseline = readFileSync(join(process.cwd(), "supabase", "baseline.sql"), "utf8");
