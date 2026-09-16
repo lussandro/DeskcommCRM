@@ -363,41 +363,77 @@ test("as quatro jornadas de vinícola, da tela ao efeito", async ({ page }) => {
     await page.waitForURL(/\/app\/pipelines\//, { timeout: 60_000 });
     await page.waitForLoadState("networkidle");
     /*
-     * ⚠️ NÃO É `main h2`, E A PRIMEIRA VERSÃO DESTA SPEC ERROU AQUI: o app NÃO
-     * TEM elemento `<main>` — nem na casca (`components/shell/`), nem no layout
-     * de `/app`. `main h2` casava ZERO e a spec media `colunas: []` nos quatro
-     * quadros, com as colunas visíveis na captura. Lista vazia comparada com a
-     * ordem esperada falha, mas falha dizendo a coisa errada: parecia funil sem
-     * etapa, e era seletor sem alvo.
+     * ⚠️ O QUE FALTAVA ERA A ESPERA, E ELA VEM ANTES DE QUALQUER SELETOR.
      *
-     * `h2` sozinho também não serve: o `Sidebar.tsx:230` usa `h2` nos títulos de
-     * grupo, e eles entrariam na lista antes das colunas.
+     * Duas rodadas na VPS mediram `colunas: []` com as colunas VISÍVEIS na
+     * captura, e as duas causas propostas eram de seletor. A medida diz outra
+     * coisa: `waitForLoadState("networkidle")` depois de um clique é promessa
+     * vazia numa navegação de SPA — não houve carga de documento, então ele
+     * resolve na hora. O quadro, porém, é buscado no cliente: enquanto a
+     * consulta não volta, `app/app/pipelines/[id]/_client.tsx` desenha
+     * "Carregando…" e NÃO EXISTE coluna nenhuma no DOM. A captura só mostrava
+     * colunas porque era tirada depois, já com o reload da troca de tema.
      *
-     * A âncora é ESTRUTURAL: cada coluna (`StageColumn.tsx`) é um `div` que
-     * contém o `h2` do nome dentro do cabeçalho e, ao lado, o `Droppable` do
-     * @hello-pangea/dnd — que marca o DOM com `data-rfd-droppable-id`. Então
-     * título de coluna é o `h2` cujo avô contém um droppable. Não depende de
-     * classe utilitária, que muda com o CSS.
+     * Esperar o primeiro droppable é esperar o quadro pintado — é o mesmo sinal
+     * que o seletor usa, então não há como um vir sem o outro.
+     */
+    await page
+      .locator("[data-rfd-droppable-id]")
+      .first()
+      .waitFor({ state: "attached", timeout: 60_000 });
+
+    /*
+     * A âncora é ESTRUTURAL, e agora parte do droppable para fora — como o
+     * coordenador pediu, e é de fato a leitura mais direta do markup.
+     *
+     * Cada coluna (`components/kanban/StageColumn.tsx`) é um `div` que contém,
+     * nesta ordem: o `div` de cabeçalho (com o `h2` do nome), o total opcional, e
+     * o `Droppable` do @hello-pangea/dnd. Medido em `node_modules`
+     * (@hello-pangea/dnd 18.0.1), o atributo que ele escreve é
+     * `data-rfd-droppable-id`. Então: para cada droppable, sobe até o elemento
+     * de coluna e lê o `h2` que está lá dentro. `closest("div:has(> h2)")` não
+     * serve — o `h2` é neto, não filho —, por isso a subida é explícita, com
+     * teto: no máximo quatro níveis, e para no primeiro ancestral que tenha `h2`.
+     *
+     * `h2` sozinho nunca serviria: o `Sidebar.tsx:230` usa `h2` nos títulos de
+     * grupo, e eles entrariam antes das colunas. `main h2` — a primeira versão —
+     * casava ZERO porque o app não tem elemento `<main>` em lugar nenhum.
      *
      * As colunas NÃO são virtualizadas (`KanbanBoard.tsx` mapeia `data.stages`
-     * inteiro dentro de um `overflow-x-auto`): todas estão no DOM mesmo fora da
+     * inteiro dentro de um `overflow-x-auto`): todas ficam no DOM mesmo fora da
      * viewport, e a ordem do DOM é a ordem do funil. `x` vai junto para a medida
-     * registrar a ordem visual também — é o que provaria uma coluna renderizada
-     * fora de lugar.
+     * registrar a ordem visual também.
      */
-    const colunas = await page.evaluate(() =>
-      [...document.querySelectorAll("h2")]
-        .filter((h) =>
-          h.parentElement?.parentElement?.querySelector(
-            "[data-rfd-droppable-id], [data-rbd-droppable-id]",
-          ),
-        )
-        .map((el) => ({
-          nome: (el.textContent ?? "").trim(),
-          x: Math.round(el.getBoundingClientRect().left),
-        })),
-    );
-    registrar({ etapa: "quadro", funil: j.funil, url: page.url(), colunas });
+    const quadro = await page.evaluate(() => {
+      const droppables = [...document.querySelectorAll("[data-rfd-droppable-id]")];
+      const colunas = droppables.map((d) => {
+        let no: Element | null = d.parentElement;
+        for (let i = 0; i < 4 && no; i += 1) {
+          const h2 = no.querySelector("h2");
+          if (h2) {
+            return {
+              nome: (h2.textContent ?? "").trim(),
+              x: Math.round(h2.getBoundingClientRect().left),
+            };
+          }
+          no = no.parentElement;
+        }
+        return { nome: "", x: -1 };
+      });
+      return {
+        colunas,
+        // Diagnóstico: uma terceira lista vazia tem de vir com a razão junto, em
+        // vez de mandar alguém adivinhar o seletor pela terceira vez.
+        droppables: droppables.length,
+        h2NaPagina: document.querySelectorAll("h2").length,
+        carregando: document.body.textContent?.includes("Carregando…") ?? false,
+      };
+    });
+    const colunas = quadro.colunas;
+    registrar({ etapa: "quadro", funil: j.funil, url: page.url(), ...quadro });
+    expect
+      .soft(quadro.droppables, `"${j.funil}": o quadro pintou as colunas antes da medida`)
+      .toBeGreaterThan(0);
     expect
       .soft(
         colunas.map((c) => c.nome),
@@ -427,6 +463,43 @@ test("as quatro jornadas de vinícola, da tela ao efeito", async ({ page }) => {
    */
   await page.reload();
   await page.waitForLoadState("networkidle");
+
+  /*
+   * A MESMA PERGUNTA, FEITA NAS DUAS CAMADAS, NO MESMO ARQUIVO DE MEDIDAS.
+   *
+   * O menu veio vazio e o filtro está inocente: `resolveSlash` tira a barra,
+   * a busca vira `canal-ola`, o atalho gravado é `/canal-ola` e o filtro usa
+   * `includes` — casa. Então ou a lista não chega à tela, ou chega vazia. Esta
+   * chamada pergunta à API o que a tela deveria estar mostrando, de dentro da
+   * PÁGINA (com os cookies da sessão, não com um cliente novo), e registra o
+   * número ao lado do que o menu mostrar.
+   *
+   * Os dois números juntos decidem de quem é o defeito, sem mais nenhuma
+   * rodada: API com 67 e menu com 0 é defeito de tela; API com 0 é sessão ou
+   * consulta, e o servidor é que responde. O `expect.soft` do menu fica de pé —
+   * a sonda mede, não substitui a prova pela tela.
+   */
+  const sondaDaApi = await page.evaluate(async () => {
+    try {
+      const r = await fetch("/api/v1/message-templates", { credentials: "include" });
+      const corpo: unknown = await r.json();
+      const lista = (corpo as { data?: unknown[] } | null)?.data;
+      return {
+        status: r.status,
+        quantidade: Array.isArray(lista) ? lista.length : null,
+        atalhos: Array.isArray(lista)
+          ? lista
+              .map((t) => (t as { shortcut?: string | null }).shortcut)
+              .filter((s): s is string => typeof s === "string")
+              .slice(0, 10)
+          : [],
+      };
+    } catch (e) {
+      return { status: -1, quantidade: null, atalhos: [], erro: String(e) };
+    }
+  });
+  registrar({ etapa: "api_message_templates", ...sondaDaApi });
+
   const conversas = page.locator("button[data-conversation-id]");
   const quantasConversas = await conversas.count();
   registrar({ etapa: "inbox", conversas: quantasConversas });
