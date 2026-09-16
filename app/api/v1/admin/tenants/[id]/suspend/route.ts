@@ -15,6 +15,10 @@ import { requirePlatformAdmin } from "@/lib/auth/requirePlatformAdmin";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { ok, fail } from "@/lib/api/wrappers";
 import { audit } from "@/lib/audit";
+import {
+  avisarDescarteDaFila,
+  limparFilaRepresada,
+} from "@/lib/tenancy/limpar-fila-represada";
 
 const bodySchema = z.object({
   reason: z
@@ -82,6 +86,35 @@ export async function POST(
   if (updateError) {
     return fail("internal_error", "Failed to suspend tenant", 500, { requestId });
   }
+
+  // DEPOIS do update, e chamada DIRETA — não um consumidor de `tenant.suspended`.
+  //
+  // Depois porque com a organização já `suspended` o claim a ignora: nada corre
+  // com worker em voo. Direta porque o consumidor de evento nunca rodaria:
+  // `fn_event_log_e_registro` declara `tenant.suspended` como REGISTRO e o
+  // trigger `before insert` faz a linha nascer `done`, enquanto o drain só
+  // seleciona `pending`. O handler seria letra morta, verde no CI.
+  //
+  // E, mesmo se rodasse, síncrono é melhor: o erro chega a quem CLICOU, em vez
+  // de morrer num consumidor que ninguém lê. Some um caminho assíncrono inteiro.
+  // O evento abaixo continua sendo emitido — ele é histórico para quem lê o
+  // `event_log`, que é o que "registro" quer dizer.
+  let jobsDescartados = 0;
+  try {
+    ({ descartados: jobsDescartados } = await limparFilaRepresada(admin, tenantId));
+  } catch (err) {
+    // A suspensão JÁ está gravada, e o texto diz isso: mascarar em "falhou"
+    // faria o operador tentar de novo algo que já aconteceu (e levar 409).
+    return fail(
+      "internal_error",
+      `Tenant suspended, but clearing queued work failed: ` +
+        `${err instanceof Error ? err.message : String(err)}`,
+      500,
+      { requestId },
+    );
+  }
+
+  await avisarDescarteDaFila(admin, tenantId, jobsDescartados, "suspensao");
 
   // Audit (fire-and-forget)
   void audit({

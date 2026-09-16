@@ -20,7 +20,6 @@ import { mediaPersistHandler } from "@/workers/media-persist-worker.handler";
 import { mediaDeriveHandler } from "@/workers/media-derive-worker.handler";
 import { webPushInboundHandler } from "@/lib/notifications/push.handler";
 import { conversaoDeVendaHandler } from "@/lib/conversoes/envio.handler";
-import { filaDaSuspensaoHandler } from "@/lib/tenancy/fila-da-suspensao.handler";
 import { registerHandler } from "@/lib/event-log/dispatcher";
 
 let _registered = false;
@@ -43,9 +42,11 @@ export function ensureHandlersRegistered(): void {
   registerHandler(mediaPersistHandler);
   registerHandler(mediaDeriveHandler);
   registerHandler(webPushInboundHandler);
-  // Suspensão é administrativa e não depende de rede de terceiro — entra antes
-  // do consumidor mais externo, que é o de conversão.
-  registerHandler(filaDaSuspensaoHandler);
+  // NÃO registre `tenant.suspended` nem `tenant.reactivated` aqui: os dois estão
+  // em `fn_event_log_e_registro` (baseline), nascem `done` pelo trigger
+  // `before insert`, e o drain só seleciona `pending` — o handler seria letra
+  // morta. A limpeza da fila represada é chamada DIRETO pelas rotas de
+  // suspend/reactivate. Vigiado em lib/tenancy/rotas-da-suspensao.test.ts.
   // Por último: reportar a venda ao anúncio é o consumidor mais externo do
   // fechamento — depende de rede de terceiro e não pode atrasar quem escreve
   // no banco. Falha dele nunca segura os handlers acima.

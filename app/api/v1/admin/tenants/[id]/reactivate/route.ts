@@ -16,7 +16,10 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { ok, fail } from "@/lib/api/wrappers";
 import { audit } from "@/lib/audit";
 import { logger } from "@/lib/logger";
-import { limparFilaRepresada } from "@/lib/tenancy/limpar-fila-represada";
+import {
+  avisarDescarteDaFila,
+  limparFilaRepresada,
+} from "@/lib/tenancy/limpar-fila-represada";
 
 const bodySchema = z.object({
   reason: z
@@ -89,6 +92,14 @@ export async function POST(
       { requestId },
     );
   }
+
+  // O aviso sai DAQUI, e não de um consumidor de `tenant.reactivated`: esse
+  // evento está em `fn_event_log_e_registro`, nasce `done` pelo trigger, e o
+  // drain só vê `pending` — o handler nunca rodaria. Aqui é `await`, não
+  // `void`: quem clicou tem de saber que N jobs morreram antes de a tela dizer
+  // "ativo". Falha do aviso não derruba a reativação (os jobs já morreram); ela
+  // vai para o log dentro do helper.
+  await avisarDescarteDaFila(admin, tenantId, jobsDescartados, "reativacao");
 
   // Perform the UPDATE — clear all suspension fields
   const now = new Date().toISOString();
