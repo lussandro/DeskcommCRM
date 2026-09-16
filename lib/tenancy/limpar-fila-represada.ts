@@ -55,10 +55,17 @@ export async function limparFilaRepresada(
 /**
  * O aviso do descarte, na Central.
  *
- * NUNCA lança: quando ele roda, os jobs JÁ estão mortos. Derrubar a rota aqui
- * transformaria "avisei mal" em "a operação falhou", e o operador tentaria de
- * novo uma coisa que já aconteceu. A falha vai para o log com o texto real do
- * banco, que é o que permite descobrir por que o aviso não apareceu.
+ * NUNCA lança: quando ele roda, os jobs JÁ estão mortos — e, na suspensão, o
+ * status JÁ está gravado. Derrubar a rota aqui transformaria "avisei mal" em "a
+ * operação falhou", e o operador tentaria de novo uma coisa que já aconteceu (e
+ * levaria 409). A falha vai para o log com o texto real, que é o que permite
+ * descobrir por que o aviso não apareceu.
+ *
+ * O `try/catch` não é decorativo: `{ error }` cobre a recusa do PostgREST, e o
+ * `catch` cobre o que o supabase-js LANÇA (queda de rede, DNS, fetch abortado) —
+ * o caminho que faria a promessa acima ser só prosa. Medido por
+ * `limpar-fila-represada.test.ts` nos dois sentidos, e pela rota em
+ * `rotas-da-suspensao.test.ts`.
  *
  * `kind: 'job_dead'` porque o vocabulário de `agent_inbox_items` é CHECK fechado
  * e não tem valor de suspensão — e é o rótulo honesto: os jobs morreram mesmo.
@@ -77,27 +84,33 @@ export async function avisarDescarteDaFila(
 
   // UM aviso com a contagem, não um por job: 300 alertas idênticos é o mesmo
   // que nenhum — foi o que a VPS já pagou com o `job_dead` do reaper.
-  const { error } = await admin.from("agent_inbox_items").insert({
-    organization_id: organizationId,
-    kind: "job_dead",
-    severity: "warn",
-    title: naReativacao
-      ? "Trabalho acumulado descartado antes de reativar"
-      : "Trabalho pendente descartado pela suspensão",
-    body: naReativacao
-      ? `${descartados} job(s) que se acumularam enquanto a organização estava ` +
-        `suspensa foram descartados agora, para que a reativação não dispare ` +
-        `tudo de uma vez. Os dados não foram tocados; o atendimento recomeça do ` +
-        `que chegar a partir de agora.`
-      : `${descartados} job(s) pendentes foram descartados quando a organização ` +
-        `foi suspensa. Os dados não foram tocados. Na reativação, nada será ` +
-        `reenviado em massa — o atendimento recomeça do que chegar depois.`,
-  });
+  let falha: string | null = null;
+  try {
+    const { error } = await admin.from("agent_inbox_items").insert({
+      organization_id: organizationId,
+      kind: "job_dead",
+      severity: "warn",
+      title: naReativacao
+        ? "Trabalho acumulado descartado antes de reativar"
+        : "Trabalho pendente descartado pela suspensão",
+      body: naReativacao
+        ? `${descartados} job(s) que se acumularam enquanto a organização estava ` +
+          `suspensa foram descartados agora, para que a reativação não dispare ` +
+          `tudo de uma vez. Os dados não foram tocados; o atendimento recomeça do ` +
+          `que chegar a partir de agora.`
+        : `${descartados} job(s) pendentes foram descartados quando a organização ` +
+          `foi suspensa. Os dados não foram tocados. Na reativação, nada será ` +
+          `reenviado em massa — o atendimento recomeça do que chegar depois.`,
+    });
+    if (error) falha = error.message;
+  } catch (err) {
+    falha = err instanceof Error ? err.message : String(err);
+  }
 
-  if (error) {
+  if (falha) {
     logger.error(
       "aviso de descarte da fila não registrado — o operador não saberá quantos jobs morreram",
-      { organization_id: organizationId, descartados, momento, error: error.message },
+      { organization_id: organizationId, descartados, momento, error: falha },
     );
   }
 }

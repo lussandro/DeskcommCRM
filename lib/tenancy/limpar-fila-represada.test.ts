@@ -8,7 +8,12 @@
  */
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import { limparFilaRepresada } from "@/lib/tenancy/limpar-fila-represada";
+import { logger } from "@/lib/logger";
+import { avisarDescarteDaFila, limparFilaRepresada } from "@/lib/tenancy/limpar-fila-represada";
+
+vi.mock("@/lib/logger", () => ({
+  logger: { error: vi.fn(), warn: vi.fn(), info: vi.fn(), debug: vi.fn() },
+}));
 
 const ORG = "22222222-2222-4222-8222-222222222222";
 
@@ -100,5 +105,53 @@ describe("limparFilaRepresada", () => {
     const { admin } = clienteQueRegistra({ count: null, error: { message: "deadlock detected" } });
 
     await expect(limparFilaRepresada(admin as never, ORG)).rejects.toThrow(/deadlock detected/);
+  });
+});
+
+/**
+ * O contrário do caso acima, e de propósito: a LIMPEZA lança, o AVISO nunca.
+ *
+ * Quando o aviso roda, os jobs já morreram e — na suspensão — o status já está
+ * gravado. Um throw aqui transformaria "avisei mal" em "a operação falhou", e o
+ * operador repetiria algo que já aconteceu, levando 409. A promessa estava só no
+ * comentário: o revisor trocou o `logger.error` por `throw` e a suíte seguiu
+ * verde. Estes dois casos são a medida dela, nas duas formas de falha do
+ * supabase-js — a recusa que volta em `{ error }` e a queda de rede que LANÇA.
+ */
+describe("avisarDescarteDaFila nunca lança", () => {
+  function clienteDeAviso(modo: "erro" | "lanca") {
+    return {
+      from: () => ({
+        insert: async () => {
+          if (modo === "lanca") throw new Error("fetch failed");
+          return { error: { message: "violates check constraint" } };
+        },
+      }),
+    };
+  }
+
+  it.each([
+    ["recusa do PostgREST", "erro", "violates check constraint"],
+    ["queda de rede", "lanca", "fetch failed"],
+  ] as const)("%s: resolve e vai para o log com o texto real", async (_nome, modo, texto) => {
+    await expect(
+      avisarDescarteDaFila(clienteDeAviso(modo) as never, ORG, 3, "suspensao"),
+    ).resolves.toBeUndefined();
+
+    expect(vi.mocked(logger.error)).toHaveBeenCalledWith(
+      expect.stringContaining("aviso de descarte"),
+      expect.objectContaining({ organization_id: ORG, descartados: 3, error: texto }),
+    );
+  });
+
+  it("fila vazia nem chega a tocar o banco", async () => {
+    const admin = {
+      from: () => {
+        throw new Error("não devia ter sido chamado");
+      },
+    };
+
+    await expect(avisarDescarteDaFila(admin as never, ORG, 0, "reativacao")).resolves.toBeUndefined();
+    expect(vi.mocked(logger.error)).not.toHaveBeenCalled();
   });
 });

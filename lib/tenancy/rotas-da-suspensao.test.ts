@@ -57,6 +57,8 @@ type Opcoes = {
   erroDaLimpeza?: string;
   /** Segura o insert do aviso até o teste liberar — é assim que se prova `await`. */
   travarAviso?: Promise<void>;
+  /** Quebra o insert do aviso: recusa do PostgREST (`erro`) ou queda de rede (`lanca`). */
+  avisoQuebra?: "erro" | "lanca";
 };
 
 /**
@@ -83,6 +85,10 @@ function banco(opcoes: Opcoes = {}) {
       ops.push(`insert:${tabela}`);
       if (tabela === "agent_inbox_items") {
         if (opcoes.travarAviso) await opcoes.travarAviso;
+        if (opcoes.avisoQuebra === "lanca") throw new Error("fetch failed");
+        if (opcoes.avisoQuebra === "erro") {
+          return { error: { message: "violates check constraint agent_inbox_items_kind_check" } };
+        }
         avisos.push(linha);
       }
       if (tabela === "event_log") eventos.push(linha);
@@ -153,13 +159,37 @@ describe("POST /admin/tenants/:id/suspend — limpa a fila e avisa", () => {
     expect(String(avisos[0]!.body)).toContain("2 job(s)");
   });
 
-  it("continua emitindo tenant.suspended — o evento é histórico, não trabalho", async () => {
+  it("continua emitindo tenant.suspended, com a contagem no payload", async () => {
     const { eventos } = banco({ status: "active", descartados: 1 });
 
     await chamar("suspend");
 
-    expect(eventos.map((e) => e.event_type)).toContain("tenant.suspended");
+    const evento = eventos.find((e) => e.event_type === "tenant.suspended");
+    expect(evento, "o evento é histórico, não trabalho — mas continua sendo emitido").toBeDefined();
+    // Desde que a suspensão também descarta, o número existe dos dois lados;
+    // omiti-lo aqui faria o histórico saber de metade do descarte.
+    expect(evento?.payload).toMatchObject({ jobs_descartados: 1 });
   });
+
+  // A promessa "NUNCA lança" do helper do aviso não era medida por ninguém: o
+  // revisor trocou o `logger.error` por `throw` e a suíte ficou 14/14 verde.
+  // É o pior lugar possível para um throw — a suspensão JÁ está gravada, então a
+  // rota devolveria 500 numa operação que aconteceu, o operador repetiria, e
+  // levaria 409 com o aviso perdido.
+  it.each(["erro", "lanca"] as const)(
+    "aviso que falha (%s) não derruba a suspensão já gravada",
+    async (avisoQuebra) => {
+      const { ops } = banco({ status: "active", descartados: 2, avisoQuebra });
+
+      const res = await chamar("suspend");
+
+      expect(res.status).toBe(200);
+      expect(await res.json()).toMatchObject({ data: { status: "suspended" } });
+      // E a suspensão de fato aconteceu: não é um 200 de caminho curto.
+      expect(ops).toContain("update:organizations");
+      expect(ops).toContain("update:job_queue");
+    },
+  );
 
   it("fila vazia é silêncio, não um aviso de zero", async () => {
     const { avisos, ops } = banco({ status: "active", descartados: 0 });

@@ -138,10 +138,15 @@ export async function POST(
 
   // Domain event
   //
-  // Continua fire-and-forget — a reativação não deve falhar por causa do aviso
-  // —, mas a falha para de ser SILENCIOSA: é deste evento que pende o único
-  // aviso ao operador de que N jobs foram descartados. Sem o log, eles morriam
-  // e ninguém ficava sabendo.
+  // O evento é HISTÓRICO, não o aviso: desde que a limpeza virou chamada direta,
+  // quem avisa o operador é `avisarDescarteDaFila` acima, na Central. Este
+  // registro segue sendo emitido porque é dele que sai a resposta a "quando esta
+  // organização foi reativada, por quem, com que motivo e quantos jobs morreram
+  // no caminho" — a Central é aviso, e aviso se lê, se resolve e some.
+  //
+  // Fire-and-forget porque a reativação não deve falhar por causa do histórico;
+  // com `.then`, porém, a falha não é SILENCIOSA: sem o log, o registro sumiria
+  // e a linha de tempo mentiria por omissão, sem ninguém notar.
   void admin
     .from("event_log")
     .insert({

@@ -18,7 +18,7 @@
     { "id": "rota_suspender", "lane": "admin", "col": 0, "type": "route", "label": "POST /api/v1/admin/tenants/:id/suspend: grava o status e emite o evento" },
     { "id": "rota_reativar", "lane": "admin", "col": 0, "type": "route", "label": "POST /api/v1/admin/tenants/:id/reactivate: status volta a 'active'" },
     { "id": "status", "lane": "banco", "col": 1, "type": "table", "label": "organizations.status: 'active' | 'suspended' | 'redacted' | 'archived'" },
-    { "id": "evento", "lane": "banco", "col": 1, "type": "table", "label": "event_log 'tenant.suspended': registro (nasce 'done'), histórico e não trabalho" },
+    { "id": "evento", "lane": "banco", "col": 1, "type": "table", "label": "event_log 'tenant.suspended': registro (nasce 'done'), com jobs_descartados no payload" },
     { "id": "evento_reativar", "lane": "banco", "col": 1, "type": "table", "label": "event_log 'tenant.reactivated': registro (nasce 'done'), com jobs_descartados no payload" },
     { "id": "require_role", "lane": "codigo", "col": 2, "type": "lib", "label": "lib/auth/require-role.ts: 403 tenant_suspended antes da RPC de papel" },
     { "id": "bearer", "lane": "codigo", "col": 2, "type": "lib", "label": "lib/mcp/auth.ts: validateBearerToken recusa com -32002/403" },

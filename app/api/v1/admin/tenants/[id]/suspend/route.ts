@@ -15,6 +15,7 @@ import { requirePlatformAdmin } from "@/lib/auth/requirePlatformAdmin";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { ok, fail } from "@/lib/api/wrappers";
 import { audit } from "@/lib/audit";
+import { logger } from "@/lib/logger";
 import {
   avisarDescarteDaFila,
   limparFilaRepresada,
@@ -134,18 +135,32 @@ export async function POST(
     },
   });
 
-  // Domain event for downstream consumers
-  void admin.from("event_log").insert({
-    organization_id: tenantId,
-    entity_kind: "organization",
-    entity_id: tenantId,
-    event_type: "tenant.suspended",
-    payload: {
-      tenant_id: tenantId,
-      suspended_by: adminCtx.user.id,
-      reason: body.reason,
-    },
-  });
+  // Domain event — histórico, do mesmo jeito que na reativação: fire-and-forget,
+  // mas a falha vai para o log em vez de sumir. E leva `jobs_descartados`: desde
+  // que a suspensão também descarta, o número existe dos dois lados, e omiti-lo
+  // aqui faria a linha de tempo do `event_log` só saber da metade do descarte.
+  void admin
+    .from("event_log")
+    .insert({
+      organization_id: tenantId,
+      entity_kind: "organization",
+      entity_id: tenantId,
+      event_type: "tenant.suspended",
+      payload: {
+        tenant_id: tenantId,
+        suspended_by: adminCtx.user.id,
+        reason: body.reason,
+        jobs_descartados: jobsDescartados,
+      },
+    })
+    .then(({ error }) => {
+      if (error) {
+        logger.error(
+          "admin-suspend: evento tenant.suspended não registrado — o histórico do descarte se perde",
+          { tenant_id: tenantId, jobs_descartados: jobsDescartados, error: error.message },
+        );
+      }
+    });
 
   return ok({ id: tenantId, status: "suspended", suspended_at: now }, { requestId });
 }
