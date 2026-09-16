@@ -547,6 +547,15 @@ export const AUDIT_ACTIONS = [
   // porque toda leitura de `admin/` é auditada neste repo — e porque aqui o
   // operador enxerga o agente publicado na organização de outra pessoa.
   "platform_admin.tenant_agents_viewed",
+  // A primeira ação com prefixo `vertical.` — o pacote de conteúdo do fork.
+  //
+  // As ações por peça (`pipeline.created`, `followup_flow.created`, …) já
+  // registram cada linha criada, e nenhuma delas responde QUEM ativou
+  // *Enoturismo*, quando, em que versão do pacote e se o resultado saiu
+  // completo. Sem esta linha a auditoria mostra dez criações avulsas — que é o
+  // modo de falha que o cabeçalho deste arquivo descreve: a ausência lê-se como
+  // "isso não acontece".
+  "vertical.jornada_aplicada",
 ] as const;
 
 /** Um código de auditoria. Derivado de `AUDIT_ACTIONS` — não redigite a lista. */
