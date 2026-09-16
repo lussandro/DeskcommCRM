@@ -27,15 +27,40 @@ const ORG = "22222222-2222-4222-8222-222222222222";
 
 vi.mock("@/lib/tenancy/limpar-fila-represada", () => ({ limparFilaRepresada: vi.fn() }));
 
-function banco() {
+/**
+ * @param status  o que `organizations.status` devolve na RELEITURA do handler.
+ *                `null` = organização sumiu. O default é `suspended` porque é o
+ *                caminho normal — os casos antigos não precisaram mudar.
+ * @param erroStatus  faz a releitura falhar, para provar que ninguém limpa no escuro.
+ */
+function banco(
+  status: string | null = "suspended",
+  erroStatus: { message: string } | null = null,
+) {
   const inseridos: Record<string, unknown>[] = [];
   vi.mocked(createAdminClient).mockReturnValue({
-    from: vi.fn(() => ({
-      insert: vi.fn(async (linha: Record<string, unknown>) => {
-        inseridos.push(linha);
-        return { error: null };
-      }),
-    })),
+    from: vi.fn((tabela: string) => {
+      if (tabela === "organizations") {
+        const cadeia = {
+          select() {
+            return cadeia;
+          },
+          eq() {
+            return cadeia;
+          },
+          async maybeSingle() {
+            return { data: status === null ? null : { status }, error: erroStatus };
+          },
+        };
+        return cadeia;
+      }
+      return {
+        insert: vi.fn(async (linha: Record<string, unknown>) => {
+          inseridos.push(linha);
+          return { error: null };
+        }),
+      };
+    }),
   } as unknown as ReturnType<typeof createAdminClient>);
   return inseridos;
 }
@@ -86,6 +111,34 @@ describe("consumidor da fila represada por suspensão", () => {
     expect(r.status).toBe("ok");
     expect(r.detail).toContain("descartados=3");
     expect(inseridos[0]).toMatchObject({ kind: "job_dead" });
+  });
+
+  it("evento antigo de organização que JÁ VOLTOU a ficar ativa não limpa nada", async () => {
+    // O caminho real: `tenant.suspended` ficou `pending` desde antes de existir
+    // handler (o drain filtra por tipo registrado e não tem janela de
+    // recência), e é drenado no primeiro tick depois do deploy. Sem a
+    // releitura, ele mataria o `pending` VIVO de uma organização ativa — o
+    // dano desta task ao contrário. Mesmo caminho de suspender e reativar
+    // dentro do mesmo minuto, onde o evento chega depois da reativação.
+    const inseridos = banco("active");
+
+    const r = await filaDaSuspensaoHandler.handle(evento("tenant.suspended"));
+
+    expect(limparFilaRepresada).not.toHaveBeenCalled();
+    expect(r.status).toBe("skipped");
+    expect(r.detail).toContain("active");
+    expect(inseridos).toHaveLength(0);
+  });
+
+  it("status ilegível devolve error com o texto real — nunca limpa no escuro", async () => {
+    const inseridos = banco("suspended", { message: "deadlock detected" });
+
+    const r = await filaDaSuspensaoHandler.handle(evento("tenant.suspended"));
+
+    expect(limparFilaRepresada).not.toHaveBeenCalled();
+    expect(r.status).toBe("error");
+    expect(r.detail).toContain("deadlock detected");
+    expect(inseridos).toHaveLength(0);
   });
 
   it("sem fila represada, não abre aviso nenhum", async () => {

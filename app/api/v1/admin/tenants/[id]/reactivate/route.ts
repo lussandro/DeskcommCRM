@@ -15,6 +15,7 @@ import { requirePlatformAdmin } from "@/lib/auth/requirePlatformAdmin";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { ok, fail } from "@/lib/api/wrappers";
 import { audit } from "@/lib/audit";
+import { logger } from "@/lib/logger";
 import { limparFilaRepresada } from "@/lib/tenancy/limpar-fila-represada";
 
 const bodySchema = z.object({
@@ -125,18 +126,33 @@ export async function POST(
   });
 
   // Domain event
-  void admin.from("event_log").insert({
-    organization_id: tenantId,
-    entity_kind: "organization",
-    entity_id: tenantId,
-    event_type: "tenant.reactivated",
-    payload: {
-      tenant_id: tenantId,
-      reactivated_by: adminCtx.user.id,
-      reason: body.reason,
-      jobs_descartados: jobsDescartados,
-    },
-  });
+  //
+  // Continua fire-and-forget — a reativação não deve falhar por causa do aviso
+  // —, mas a falha para de ser SILENCIOSA: é deste evento que pende o único
+  // aviso ao operador de que N jobs foram descartados. Sem o log, eles morriam
+  // e ninguém ficava sabendo.
+  void admin
+    .from("event_log")
+    .insert({
+      organization_id: tenantId,
+      entity_kind: "organization",
+      entity_id: tenantId,
+      event_type: "tenant.reactivated",
+      payload: {
+        tenant_id: tenantId,
+        reactivated_by: adminCtx.user.id,
+        reason: body.reason,
+        jobs_descartados: jobsDescartados,
+      },
+    })
+    .then(({ error }) => {
+      if (error) {
+        logger.error(
+          "admin-reactivate: evento tenant.reactivated não registrado — o operador não será avisado do descarte",
+          { tenant_id: tenantId, jobs_descartados: jobsDescartados, error: error.message },
+        );
+      }
+    });
 
   return ok({ id: tenantId, status: "active" }, { requestId });
 }

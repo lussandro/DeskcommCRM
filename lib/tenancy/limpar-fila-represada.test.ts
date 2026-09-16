@@ -14,18 +14,29 @@ const ORG = "22222222-2222-4222-8222-222222222222";
 
 /** Dublê que REGISTRA o que foi filtrado — é o filtro que está sob teste. */
 function clienteQueRegistra(resultado: {
-  data: { id: string }[] | null;
+  count: number | null;
   error: { message: string } | null;
 }) {
   const chamadas = {
     tabela: "",
     patch: {} as Record<string, unknown>,
+    opcoes: {} as Record<string, unknown>,
     filtros: [] as [string, string, unknown][],
   };
   const cadeia = {
-    update(patch: Record<string, unknown>) {
+    update(patch: Record<string, unknown>, opcoes: Record<string, unknown> = {}) {
       chamadas.patch = patch;
+      chamadas.opcoes = opcoes;
       return cadeia;
+    },
+    // A cadeia SEM `.select()` é ela própria o thenable — é assim que o
+    // postgrest-js devolve `count` sem trazer linha nenhuma.
+    then(
+      resolva: (r: { data: null; count: number | null; error: { message: string } | null }) => unknown,
+    ) {
+      return Promise.resolve({ data: null, count: resultado.count, error: resultado.error }).then(
+        resolva,
+      );
     },
     eq(coluna: string, valor: unknown) {
       chamadas.filtros.push(["eq", coluna, valor]);
@@ -35,7 +46,6 @@ function clienteQueRegistra(resultado: {
       chamadas.filtros.push(["lt", coluna, valor]);
       return cadeia;
     },
-    select: vi.fn(async () => resultado),
   };
   const admin = {
     from(tabela: string) {
@@ -50,14 +60,15 @@ beforeEach(() => vi.clearAllMocks());
 
 describe("limparFilaRepresada", () => {
   it("descarta só o pendente da organização certa, e devolve a contagem", async () => {
-    const { admin, chamadas } = clienteQueRegistra({
-      data: [{ id: "j1" }, { id: "j2" }],
-      error: null,
-    });
+    const { admin, chamadas } = clienteQueRegistra({ count: 2, error: null });
 
     const r = await limparFilaRepresada(admin as never, ORG);
 
     expect(r.descartados).toBe(2);
+    // A contagem vem do `count` do próprio UPDATE; pedi-la é o que faz o
+    // PostgREST mandar o `Content-Range`. Sem esta opção, `count` é `null` e o
+    // descarte passaria a relatar 0 — aviso nenhum na Central.
+    expect(chamadas.opcoes).toMatchObject({ count: "exact" });
     expect(chamadas.tabela).toBe("job_queue");
     expect(chamadas.filtros).toContainEqual(["eq", "organization_id", ORG]);
     // É ESTE expect que a sabotagem nº 1 do Step 5 derruba.
@@ -65,7 +76,7 @@ describe("limparFilaRepresada", () => {
   });
 
   it("deixa o hold do watchdog em paz", async () => {
-    const { admin, chamadas } = clienteQueRegistra({ data: [], error: null });
+    const { admin, chamadas } = clienteQueRegistra({ count: 0, error: null });
 
     await limparFilaRepresada(admin as never, ORG);
 
@@ -75,7 +86,7 @@ describe("limparFilaRepresada", () => {
   });
 
   it("marca dead com o motivo, para a Central não mentir sobre a causa", async () => {
-    const { admin, chamadas } = clienteQueRegistra({ data: [{ id: "j1" }], error: null });
+    const { admin, chamadas } = clienteQueRegistra({ count: 1, error: null });
 
     await limparFilaRepresada(admin as never, ORG);
 
@@ -86,7 +97,7 @@ describe("limparFilaRepresada", () => {
   });
 
   it("erro do banco sobe com o texto real, nunca engolido", async () => {
-    const { admin } = clienteQueRegistra({ data: null, error: { message: "deadlock detected" } });
+    const { admin } = clienteQueRegistra({ count: null, error: { message: "deadlock detected" } });
 
     await expect(limparFilaRepresada(admin as never, ORG)).rejects.toThrow(/deadlock detected/);
   });

@@ -26,14 +26,18 @@ export async function limparFilaRepresada(
   admin: SupabaseClient,
   organizationId: string,
 ): Promise<{ descartados: number }> {
-  const { data, error } = await admin
+  // `count` no próprio UPDATE, e NÃO `.select("id")`: o número chega pelo
+  // header `Content-Range` e nenhuma linha viaja — trazer todos os ids só para
+  // medir `.length` é payload puro. A opção mora no `update()` porque o
+  // `select()` de pós-escrita do postgrest-js não aceita opções (só colunas);
+  // `.select("id", { count: "exact", head: true })` ali seria ignorado.
+  const { count, error } = await admin
     .from("job_queue")
-    .update({ status: "dead", last_error: "organização suspensa" })
+    .update({ status: "dead", last_error: "organização suspensa" }, { count: "exact" })
     .eq("organization_id", organizationId)
     .eq("status", "pending")
-    .lt("run_after", LIMITE_FINITO)
-    .select("id");
+    .lt("run_after", LIMITE_FINITO);
 
   if (error) throw new Error(`limparFilaRepresada: ${error.message}`);
-  return { descartados: data?.length ?? 0 };
+  return { descartados: count ?? 0 };
 }

@@ -38,6 +38,57 @@ export const filaDaSuspensaoHandler: EventHandler = {
       const orgId = row.organization_id;
       const naReativacao = row.event_type === "tenant.reactivated";
 
+      if (!naReativacao) {
+        // RELEITURA DO STATUS — a guarda que impede esta task de causar, ao
+        // contrário, o dano que ela existe para evitar.
+        //
+        // O drain NÃO tem janela de recência (`lib/event-log/drain.ts`): tipo
+        // sem handler registrado fica `pending` para sempre, e TODO
+        // `tenant.suspended` já emitido está parado lá desde antes deste
+        // arquivo existir. No primeiro tick depois do deploy eles saem em
+        // ordem de `created_at` e, sem esta leitura, matariam o `pending` VIVO
+        // de organizações hoje ATIVAS: o `inbound_turn` do cliente que está
+        // esperando resposta, o `followup_turn` já agendado. Suspender e
+        // reativar dentro do mesmo minuto cai no mesmo buraco — o evento chega
+        // depois da reativação.
+        //
+        // Por que a releitura BASTA, e NÃO há teto de idade no estilo do
+        // `IDADE_MAXIMA_MS` de `lib/followup/gatilho-caso.ts`: lá o efeito é
+        // DATADO — enrollar um caso de três dias atrás está errado mesmo que o
+        // caso ainda exista, porque o contato já seguiu a vida. Aqui o efeito é
+        // função do ESTADO ATUAL: descartar a fila de quem está suspenso AGORA
+        // é exatamente o certo, tenha o evento um minuto ou um mês. Um teto só
+        // acrescentaria um segundo jeito de a limpeza não acontecer quando é
+        // devida, e o único caso que ele pegaria a mais — suspensa, reativada e
+        // suspensa de novo, com o evento antigo chegando atrasado — descreve
+        // uma organização SUSPENSA, cuja fila deve mesmo ser descartada.
+        const { data: org, error: erroStatus } = await admin
+          .from("organizations")
+          .select("status")
+          .eq("id", orgId)
+          .maybeSingle();
+
+        // Sem saber o status, o descarte PODE ser o dano: não se limpa no
+        // escuro. O texto real do banco sobe para quem for ler o event_log.
+        if (erroStatus) {
+          return {
+            consumer_key: FILA_DA_SUSPENSAO_HANDLER_KEY,
+            status: "error",
+            detail: `status da organização ilegível, nada foi descartado: ${erroStatus.message}`,
+          };
+        }
+
+        if (org?.status !== "suspended") {
+          return {
+            consumer_key: FILA_DA_SUSPENSAO_HANDLER_KEY,
+            status: "skipped",
+            detail:
+              `organização não está mais suspensa (status=${org?.status ?? "inexistente"}) — ` +
+              `fila preservada`,
+          };
+        }
+      }
+
       const quantos = naReativacao
         ? Number((row.payload as { jobs_descartados?: number } | null)?.jobs_descartados ?? 0)
         : (await limparFilaRepresada(admin, orgId)).descartados;
