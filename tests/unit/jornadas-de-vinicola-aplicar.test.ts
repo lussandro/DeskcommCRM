@@ -18,11 +18,17 @@ vi.mock("@/lib/audit", () => ({ audit: vi.fn(async () => undefined) }));
 import { audit } from "@/lib/audit";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { slugDeNome } from "@/lib/leads/stage-editing";
-import { JORNADAS, VERSAO_DO_PACOTE, type ChaveDeJornada } from "@/lib/vertical/vinicola";
+import {
+  JORNADAS,
+  VERSAO_DO_PACOTE,
+  type ChaveDeJornada,
+  type TipoDeCompromissoDaJornada,
+} from "@/lib/vertical/vinicola";
 import {
   aplicarJornada,
   estadoDaJornada,
   lerLedger,
+  linhaDoTipoDeCompromisso,
   tornarPadrao,
   type PecaDoLedger,
 } from "@/lib/vertical/vinicola/aplicar";
@@ -340,7 +346,9 @@ describe("as peças nascem como o produto espera", () => {
     await aplicarJornada(ORG, "consumidor", ATOR);
     for (const l of banco.tabelas.followup_flow_pointers!) {
       expect(l.status).toBe("draft");
-      expect(l.active_version_id ?? null).toBeNull();
+      // Sem o `?? null`: a coluna é escrita explícita, e a asserção tem de
+      // reprovar se ela deixar de ser — senão mede o vazio.
+      expect(l.active_version_id).toBeNull();
     }
   });
 
@@ -381,6 +389,177 @@ describe("as peças nascem como o produto espera", () => {
       .canonical_conversation_tags as string[];
     expect(tags).toContain("ja-existia");
     for (const t of JORNADAS.canal.tags) expect(tags).toContain(t);
+  });
+});
+
+describe("a chave natural, sem ledger nenhum", () => {
+  /** Tudo o que a jornada criaria, já no banco — e um `settings` SEM ledger. */
+  function semearJornadaInteira(chave: ChaveDeJornada) {
+    const j = JORNADAS[chave];
+    const pipelineId = crypto.randomUUID();
+    return bancoFalso({
+      // Sem `bacco_jornadas`: é o ponto do caso. As tags já estão lá, senão a
+      // peça `tag` seria a única com escrita a fazer.
+      organizations: [{ id: ORG, settings: { canonical_conversation_tags: [...j.tags] } }],
+      crm_pipelines: [
+        {
+          id: pipelineId,
+          organization_id: ORG,
+          name: j.nomeDoFunil,
+          slug: slugDeNome(j.nomeDoFunil, [], "funil"),
+          vocabulary: { ...j.vocabulario },
+          settings: { fields: j.campos, lost_reasons: j.motivosDePerda },
+        },
+      ],
+      crm_stages: j.etapas.map((e) => ({
+        id: crypto.randomUUID(),
+        organization_id: ORG,
+        pipeline_id: pipelineId,
+        name: e.nome,
+      })),
+      message_templates: j.respostasRapidas.map((r) => ({
+        id: crypto.randomUUID(),
+        organization_id: ORG,
+        shortcut: r.atalho,
+      })),
+      calendar_event_types: j.tiposDeCompromisso.map((t) => ({
+        id: crypto.randomUUID(),
+        organization_id: ORG,
+        name: t.nome,
+        slug: slugDeNome(t.nome, [], "tipo"),
+      })),
+      followup_flow_pointers: j.cadencias.map((c) => ({
+        id: crypto.randomUUID(),
+        organization_id: ORG,
+        name: c.nome,
+      })),
+    });
+  }
+
+  it("adota tudo o que já está lá e NÃO insere nada", async () => {
+    // É o desfecho que separa o ledger da pré-leitura: aqui o ledger está
+    // vazio, e quem reconhece o que já entrou é a chave natural — atalho, nome
+    // de etapa, nome de funil, nome de cadência. Sem isto, a aplicação que
+    // morreu antes de gravar o ledger duplicaria o pacote inteiro na tentativa
+    // seguinte.
+    const banco = semearJornadaInteira("consumidor");
+
+    const r = await aplicarJornada(ORG, "consumidor", ATOR);
+
+    expect(
+      banco.ordem.filter((o) => o.startsWith("insert:")),
+      "alguma peça foi recriada apesar de já estar no banco",
+    ).toEqual([]);
+    expect(
+      r.pecas.filter((p) => p.estado !== "ja_existia"),
+      "toda peça devia ter sido adotada pela chave natural",
+    ).toEqual([]);
+    expect(r.completa).toBe(true);
+    expect(await estadoDaJornada(ORG, "consumidor")).toBe("aplicada");
+  });
+
+  it("nem por isso audita criação nenhuma — não houve efeito", async () => {
+    semearJornadaInteira("consumidor");
+    await aplicarJornada(ORG, "consumidor", ATOR);
+    const acoes = vi.mocked(audit).mock.calls.map((c) => c[0].action);
+    expect(acoes).not.toContain("pipeline.created");
+    expect(acoes).not.toContain("template.created");
+  });
+});
+
+describe("o funil que a vinícola já tinha criado à mão", () => {
+  /** Mesmo nome, configuração de e-commerce — o que o gatilho de seed deixa. */
+  function comFunilDeECommerce(chave: ChaveDeJornada) {
+    const j = JORNADAS[chave];
+    return bancoFalso({
+      crm_pipelines: [
+        {
+          id: crypto.randomUUID(),
+          organization_id: ORG,
+          name: j.nomeDoFunil,
+          slug: "funil",
+          vocabulary: { lead: "Cliente", deal: "Pedido", won: "Pago", lost: "Cancelado" },
+          settings: { fields: [], lost_reasons: [] },
+        },
+      ],
+    });
+  }
+
+  it("a configuração NÃO é afirmada: a peça sai como nao_verificada", async () => {
+    // Adotar o funil pelo nome não prova nada sobre o vocabulário, os campos e
+    // os motivos dele — e a regra 9 proíbe sobrescrever linha existente. Dizer
+    // "já existia" aqui afirmaria uma configuração que continua a de loja
+    // online, e a tela repetiria a afirmação.
+    comFunilDeECommerce("clube");
+
+    const r = await aplicarJornada(ORG, "clube", ATOR);
+
+    const config = r.pecas.find((p) => p.tipo === "config")!;
+    expect(config.estado).toBe("nao_verificada");
+    expect(config.erro).toContain(JORNADAS.clube.nomeDoFunil);
+    expect(r.completa, "peça não aplicada não pode contar como pacote completo").toBe(false);
+  });
+
+  it("e a peça fica FORA do ledger, senão a afirmação viraria verdade na volta", async () => {
+    comFunilDeECommerce("clube");
+    await aplicarJornada(ORG, "clube", ATOR);
+
+    const ledger = (await lerLedger(ORG)).clube!;
+    expect(ledger.pecas.some((p) => p.chave.startsWith("config:"))).toBe(false);
+    expect(await estadoDaJornada(ORG, "clube")).toBe("parcial");
+
+    // E na segunda aplicação continua sendo medida, não lembrada.
+    const r = await aplicarJornada(ORG, "clube", ATOR);
+    expect(r.pecas.find((p) => p.tipo === "config")!.estado).toBe("nao_verificada");
+  });
+
+  it("quando o que está lá BATE com a jornada, aí sim é ja_existia", async () => {
+    const j = JORNADAS.clube;
+    bancoFalso({
+      crm_pipelines: [
+        {
+          id: crypto.randomUUID(),
+          organization_id: ORG,
+          name: j.nomeDoFunil,
+          slug: "funil",
+          vocabulary: { ...j.vocabulario },
+          settings: { fields: j.campos, lost_reasons: j.motivosDePerda },
+        },
+      ],
+    });
+
+    const r = await aplicarJornada(ORG, "clube", ATOR);
+
+    expect(r.pecas.find((p) => p.tipo === "config")!.estado).toBe("ja_existia");
+  });
+});
+
+describe("o lembrete do tipo de compromisso", () => {
+  const base: TipoDeCompromissoDaJornada = {
+    nome: "Visita guiada",
+    categoria: "visita",
+    duracaoMinutos: 60,
+    local: "in_person",
+  };
+
+  it.each([14, 0, 10_081])("recusa %i minutos — fora da faixa que a rota aceita", (minutos) => {
+    // Recusar, nunca aproximar: "quase certo" aqui é mensagem no telefone do
+    // cliente na hora errada, e isso não se desfaz.
+    expect(() =>
+      linhaDoTipoDeCompromisso(ORG, { ...base, lembreteMinutosAntes: minutos }, "visita_guiada"),
+    ).toThrow(/fora da faixa/);
+  });
+
+  it.each([15, 1440, 10_080])("aceita %i minutos, com o lembrete desligado", (minutos) => {
+    expect(
+      linhaDoTipoDeCompromisso(ORG, { ...base, lembreteMinutosAntes: minutos }, "visita_guiada"),
+    ).toMatchObject({ reminder_enabled: false, reminder_minutes_before: minutos });
+  });
+
+  it("sem lembrete declarado, não escreve a coluna", () => {
+    expect(linhaDoTipoDeCompromisso(ORG, base, "visita_guiada")).not.toHaveProperty(
+      "reminder_minutes_before",
+    );
   });
 });
 
@@ -528,6 +707,39 @@ describe("quando algo falha no meio", () => {
     expect(r.pecas.find((p) => p.estado === "falhou")!.erro).toContain("falha proposital");
   });
 
+  it("a jornada aplicada pela METADE não lê como aplicada", async () => {
+    // Peça que falhou não entra no ledger. Se o estado conferisse só as peças
+    // registradas, a tela da Task 4 afirmaria completude logo depois de um
+    // relatório `completa: false` — a régua tem de ser a JORNADA, não o que
+    // sobrou dela.
+    const banco = bancoFalso();
+    banco.quebradas.add("calendar_event_types");
+
+    const r = await aplicarJornada(ORG, "consumidor", ATOR);
+
+    expect(r.completa).toBe(false);
+    expect(await estadoDaJornada(ORG, "consumidor")).toBe("parcial");
+  });
+
+  it("ledger que não grava FALHA alto — é a promessa inteira que se perderia", async () => {
+    // A idempotência toda mora nessa gravação: sem ela, as linhas ficam no
+    // banco e a jornada lê como nunca aplicada. O desfecho certo não é seguir
+    // em silêncio, é dizer que falhou — a aplicação seguinte reencontra as
+    // peças pela chave natural, que é o caminho provado acima.
+    const banco = bancoFalso();
+    banco.quebradas.add("organizations");
+
+    const r = await aplicarJornada(ORG, "canal", ATOR);
+
+    expect(r.completa).toBe(false);
+    const doLedger = r.pecas.find((p) => p.chave.includes("bacco_jornadas"))!;
+    expect(doLedger.estado).toBe("falhou");
+    expect(doLedger.erro).toContain("falha proposital");
+    // As linhas entraram, e o estado NÃO mente dizendo que a jornada está lá.
+    expect(banco.tabelas.crm_pipelines).toHaveLength(1);
+    expect(await estadoDaJornada(ORG, "canal")).toBe("nao_aplicada");
+  });
+
   it("funil que não entra encerra a aplicação — não há onde pendurar o resto", async () => {
     const banco = bancoFalso();
     banco.quebradas.add("crm_pipelines");
@@ -568,6 +780,16 @@ describe("auditoria", () => {
     expect(acoes).not.toContain("pipeline.created");
     // A aplicação em si continua auditada: alguém clicou o botão de novo.
     expect(acoes).toContain("vertical.jornada_aplicada");
+  });
+
+  it("a configuração NÃO vira linha própria — ela entrou no mesmo insert do funil", async () => {
+    // `pipeline.config_updated` ao lado de `pipeline.created`, pelo mesmo
+    // INSERT, nomearia um UPDATE que nunca aconteceu.
+    bancoFalso();
+    await aplicarJornada(ORG, "canal", ATOR);
+    const acoes = vi.mocked(audit).mock.calls.map((c) => c[0].action);
+    expect(acoes).toContain("pipeline.created");
+    expect(acoes).not.toContain("pipeline.config_updated");
   });
 });
 

@@ -47,9 +47,28 @@ import { etapasParaGravar } from "@/lib/onboarding/proposta-de-funil";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 import { JORNADAS, VERSAO_DO_PACOTE, ehChaveDeJornada, type ChaveDeJornada } from "./index";
-import type { CadenciaDaJornada, GatilhoDaCadencia } from "./tipos";
+import type {
+  CadenciaDaJornada,
+  GatilhoDaCadencia,
+  JornadaDeVinicola,
+  TipoDeCompromissoDaJornada,
+} from "./tipos";
 
-export type EstadoDaPeca = "criada" | "ja_existia" | "no_ledger_e_apagada" | "falhou";
+/**
+ * O desfecho de uma peça.
+ *
+ * ⚠️ `nao_verificada` é a diferença entre ADOTAR uma linha e AFIRMAR que ela
+ * tem o que teríamos escrito. Achar pelo nome um funil que a vinícola criou à
+ * mão não prova nada sobre o vocabulário, os campos e os motivos de perda dele
+ * — e a regra 9 proíbe sobrescrever linha existente. Então o desfecho honesto
+ * não é "já existia", é "está lá, e o pacote não o configurou".
+ */
+export type EstadoDaPeca =
+  | "criada"
+  | "ja_existia"
+  | "nao_verificada"
+  | "no_ledger_e_apagada"
+  | "falhou";
 
 export type TipoDaPeca =
   | "funil"
@@ -123,10 +142,43 @@ const TABELA_DA_PECA: Record<TipoDaPeca, string> = {
   cadencia: "followup_flow_pointers",
 };
 
-/** A ação de auditoria de cada peça criada. `tag` reescreve o `settings` da org. */
-const ACAO_DA_PECA: Record<TipoDaPeca, AuditAction> = {
+/** O rótulo de uma peça no relatório e no ledger. Uma conta só, usada nos dois. */
+function chaveDaPeca(tipo: TipoDaPeca, rotulo: string): string {
+  return `${tipo}:${rotulo}`;
+}
+
+/**
+ * As peças que a jornada TEM — a régua contra a qual o ledger é medido.
+ *
+ * Existe porque peça que falhou não entra no ledger: conferir só o que está
+ * registrado faria uma aplicação encerrada com `completa: false` ler como
+ * "aplicada", e a tela afirmaria completude sobre um pacote incompleto.
+ */
+export function pecasEsperadas(chave: ChaveDeJornada): string[] {
+  const j = JORNADAS[chave];
+  return [
+    chaveDaPeca("funil", j.nomeDoFunil),
+    chaveDaPeca("config", j.nomeDoFunil),
+    // O mesmo `nome` que `etapasParaGravar` repassa — ele não o normaliza.
+    ...j.etapas.map((e) => chaveDaPeca("etapa", e.nome)),
+    chaveDaPeca("tag", "conversa"),
+    ...j.respostasRapidas.map((r) => chaveDaPeca("resposta_rapida", r.atalho)),
+    ...j.tiposDeCompromisso.map((t) => chaveDaPeca("tipo_de_compromisso", t.nome)),
+    ...j.cadencias.map((c) => chaveDaPeca("cadencia", c.nome)),
+  ];
+}
+
+/**
+ * A ação de auditoria de cada peça criada. `tag` reescreve o `settings` da org.
+ *
+ * ⚠️ `config` é `null` DE PROPÓSITO. Vocabulário, campos e motivos vão no MESMO
+ * `insert` do funil, que `pipeline.created` já registra: uma segunda linha
+ * dizendo `pipeline.config_updated` nomearia um UPDATE que nunca aconteceu, e
+ * uma trilha de auditoria que inventa operação é pior que uma trilha curta.
+ */
+const ACAO_DA_PECA: Record<TipoDaPeca, AuditAction | null> = {
   funil: "pipeline.created",
-  config: "pipeline.config_updated",
+  config: null,
   etapa: "pipeline.stage_created",
   tag: "org.updated",
   resposta_rapida: "template.created",
@@ -422,6 +474,14 @@ export async function estadoDaJornada(
 ): Promise<"nao_aplicada" | "aplicada" | "parcial"> {
   const entrada = (await lerLedger(organizationId))[chave];
   if (!entrada || entrada.pecas.length === 0) return "nao_aplicada";
+
+  // ⚠️ AS PEÇAS DO LEDGER NÃO BASTAM COMO RÉGUA. Peça que falhou — ou que foi
+  // adotada sem verificação — não entra no ledger, então conferir só o que está
+  // registrado devolveria "aplicada" logo depois de um relatório
+  // `completa: false`. A régua é o que a JORNADA tem, não o que sobrou dela.
+  const registradas = new Set(entrada.pecas.map((p) => p.chave));
+  if (pecasEsperadas(chave).some((k) => !registradas.has(k))) return "parcial";
+
   const vivos = await idsQueAindaExistem(createAdminClient(), organizationId, entrada.pecas);
   return entrada.pecas.every((p) => vivos.has(p.id)) ? "aplicada" : "parcial";
 }
@@ -459,6 +519,90 @@ async function lerTabela(
 }
 
 const texto = (v: unknown): string => (typeof v === "string" ? v : "");
+const objeto = (v: unknown): Record<string, unknown> =>
+  typeof v === "object" && v !== null ? (v as Record<string, unknown>) : {};
+
+/**
+ * O que falta no funil ADOTADO para ele estar configurado como a jornada manda
+ * — `null` quando não falta nada.
+ *
+ * Um funil encontrado pelo nome pode ser o que a vinícola criou à mão, com o
+ * vocabulário de e-commerce que o gatilho de seed deixou. Marcar a peça `config`
+ * como "já existia" só porque o FUNIL existe seria afirmar vocabulário, campos e
+ * motivos que continuam os de loja online — e a tela repetiria a afirmação.
+ */
+function divergenciaDaConfiguracao(
+  funil: Record<string, unknown>,
+  j: JornadaDeVinicola,
+): string | null {
+  const vocab = objeto(funil.vocabulary);
+  const settings = objeto(funil.settings);
+
+  const vocabulario = (["lead", "deal", "won", "lost"] as const).filter(
+    (k) => vocab[k] !== j.vocabulario[k],
+  );
+
+  const campos = Array.isArray(settings.fields) ? settings.fields : [];
+  const presentes = new Set(campos.map((c) => texto(objeto(c).key)));
+  const faltamCampos = j.campos.filter((c) => !presentes.has(c.key)).map((c) => c.key);
+
+  const motivos = Array.isArray(settings.lost_reasons) ? settings.lost_reasons.map(texto) : [];
+  const faltamMotivos = j.motivosDePerda.filter((m) => !motivos.includes(m));
+
+  if (vocabulario.length === 0 && faltamCampos.length === 0 && faltamMotivos.length === 0) {
+    return null;
+  }
+
+  const partes = [
+    vocabulario.length > 0 ? `vocabulário (${vocabulario.join(", ")})` : "",
+    faltamCampos.length > 0 ? `campos ausentes (${faltamCampos.join(", ")})` : "",
+    faltamMotivos.length > 0 ? `${faltamMotivos.length} motivo(s) de perda ausente(s)` : "",
+  ].filter(Boolean);
+
+  return (
+    `o funil «${j.nomeDoFunil}» já existia e NÃO foi reconfigurado — o pacote não sobrescreve ` +
+    `linha que já estava lá. Diverge em: ${partes.join("; ")}.`
+  );
+}
+
+/**
+ * A linha de um tipo de compromisso — e a única RECUSA do pacote.
+ *
+ * Exportada porque a recusa mora aqui e os três valores do conteúdo hoje são
+ * 1440: sem uma porta de entrada própria, a recusa seria linha que nenhum teste
+ * alcança, ou seja, recusa não provada. Ela só dispara quando alguém editar o
+ * conteúdo da jornada — que é exatamente quando ela precisa funcionar.
+ */
+export function linhaDoTipoDeCompromisso(
+  organizationId: string,
+  t: TipoDeCompromissoDaJornada,
+  slug: string,
+): Record<string, unknown> {
+  const lembrete = t.lembreteMinutosAntes;
+  if (lembrete !== undefined && (lembrete < LEMBRETE_MINIMO || lembrete > LEMBRETE_MAXIMO)) {
+    // Recusar, nunca aproximar: um lembrete fora da faixa é erro de cadastro do
+    // pacote, e "quase certo" aqui vira mensagem no telefone do cliente na hora
+    // errada — efeito irreversível.
+    throw new Error(
+      `o tipo «${t.nome}» pede lembrete de ${lembrete} min, fora da faixa de ` +
+        `${LEMBRETE_MINIMO} a ${LEMBRETE_MAXIMO} minutos`,
+    );
+  }
+  return {
+    organization_id: organizationId,
+    name: t.nome,
+    slug,
+    category: t.categoria,
+    duration_minutes: t.duracaoMinutos,
+    location_kind: t.local,
+    ...(t.detalhesDoLocal ? { location_details: t.detalhesDoLocal } : {}),
+    // ⚠️ EXPLÍCITO. O DDL base nasceu com default TRUE e só o apêndice o virou
+    // false: herdar o default mandaria mensagem ao cliente num clone que ainda
+    // não aplicou a 0194. Ligar o lembrete é da vinícola.
+    reminder_enabled: false,
+    ...(lembrete !== undefined ? { reminder_minutes_before: lembrete } : {}),
+  };
+}
 
 /**
  * Aplica uma jornada nesta organização, sem lançar.
@@ -516,8 +660,14 @@ export async function aplicarJornada(
     rotulo: string,
     idNatural: string | null,
     criar: () => Promise<string>,
+    /**
+     * Roda só quando a peça é ADOTADA pela chave natural, e devolve o motivo
+     * pelo qual a adoção não prova nada — ou `null` quando prova. É o que
+     * separa "está lá e confere" de "está lá, e não sei o que tem dentro".
+     */
+    conferirAdocao?: () => string | null,
   ): Promise<string | null> {
-    const k = `${tipo}:${rotulo}`;
+    const k = chaveDaPeca(tipo, rotulo);
 
     const registrada = registradas.get(k);
     if (registrada) {
@@ -534,6 +684,13 @@ export async function aplicarJornada(
     }
 
     if (idNatural) {
+      const divergencia = conferirAdocao?.() ?? null;
+      if (divergencia) {
+        // Fica FORA do ledger: registrar aqui faria a aplicação seguinte ler a
+        // peça como "já existia" e a afirmação não-verificada viraria verdade.
+        pecas.push({ tipo, chave: k, estado: "nao_verificada", erro: divergencia });
+        return idNatural;
+      }
       pecas.push({ tipo, chave: k, estado: "ja_existia" });
       doLedger.push({ id: idNatural, chave: k });
       return idNatural;
@@ -543,14 +700,17 @@ export async function aplicarJornada(
       const id = await criar();
       pecas.push({ tipo, chave: k, estado: "criada" });
       doLedger.push({ id, chave: k });
-      await audit({
-        action: ACAO_DA_PECA[tipo],
-        organizationId,
-        actorUserId: atorUserId,
-        resourceType: TABELA_DA_PECA[tipo],
-        resourceId: id,
-        metadata: { jornada: chave, versao: VERSAO_DO_PACOTE, peca: k },
-      });
+      const acao = ACAO_DA_PECA[tipo];
+      if (acao) {
+        await audit({
+          action: acao,
+          organizationId,
+          actorUserId: atorUserId,
+          resourceType: TABELA_DA_PECA[tipo],
+          resourceId: id,
+          metadata: { jornada: chave, versao: VERSAO_DO_PACOTE, peca: k },
+        });
+      }
       return id;
     } catch (err) {
       pecas.push({
@@ -564,7 +724,9 @@ export async function aplicarJornada(
   }
 
   // ── 1. o funil ────────────────────────────────────────────────────────────
-  const funis = await lerTabela(admin, "crm_pipelines", "id, name, slug", {
+  // `vocabulary` e `settings` vêm junto porque é com eles que a peça `config`
+  // decide se pode afirmar alguma coisa sobre um funil que já estava lá.
+  const funis = await lerTabela(admin, "crm_pipelines", "id, name, slug, vocabulary, settings", {
     organization_id: organizationId,
   });
   const funilExistente = funis.find((p) => texto(p.name) === j.nomeDoFunil);
@@ -605,8 +767,15 @@ export async function aplicarJornada(
   // Vocabulário, campos, motivos e tags canônicas foram no MESMO insert acima —
   // um funil que nasce sem eles fica meio configurado se o segundo write falha.
   // A peça existe no relatório e no ledger porque é ela que a tela lista.
-  await aplicarPeca("config", j.nomeDoFunil, funilExistente ? pipelineId : null, async () =>
-    pipelineId,
+  //
+  // Quando o funil foi ADOTADO pelo nome, nada disso foi escrito: aí a peça só
+  // pode ser afirmada se o que está lá bater — senão é `nao_verificada`.
+  await aplicarPeca(
+    "config",
+    j.nomeDoFunil,
+    funilExistente ? pipelineId : null,
+    async () => pipelineId,
+    () => (funilExistente ? divergenciaDaConfiguracao(funilExistente, j) : null),
   );
 
   // ── 3. as etapas ──────────────────────────────────────────────────────────
@@ -639,7 +808,17 @@ export async function aplicarJornada(
   // ── 4. as tags da conversa ────────────────────────────────────────────────
   // União com o que já está lá: a organização pode ter marcadores próprios, e
   // substituir a lista os apagaria.
-  await aplicarPeca("tag", "conversa", null, async () => {
+  //
+  // A chave natural aqui é a própria lista: com todas as tags da jornada já
+  // presentes não há o que escrever, e escrever assim mesmo seria uma gravação
+  // que não muda nada — barulho no `settings` e no relatório.
+  const settingsDaOrg = await lerSettings(admin, organizationId);
+  const tagsAtuais = Array.isArray(settingsDaOrg.canonical_conversation_tags)
+    ? settingsDaOrg.canonical_conversation_tags.filter((t): t is string => typeof t === "string")
+    : [];
+  const tagsJaPresentes = j.tags.every((t) => tagsAtuais.includes(t));
+
+  await aplicarPeca("tag", "conversa", tagsJaPresentes ? organizationId : null, async () => {
     const settings = await lerSettings(admin, organizationId);
     const atuais = Array.isArray(settings.canonical_conversation_tags)
       ? settings.canonical_conversation_tags.filter((t): t is string => typeof t === "string")
@@ -688,32 +867,9 @@ export async function aplicarJornada(
     const existente = tiposNoBanco.find((x) => texto(x.name) === t.nome);
     const slug = slugDeNome(t.nome, slugsDeTipo, "tipo");
     if (!existente) slugsDeTipo.push(slug);
-    await aplicarPeca("tipo_de_compromisso", t.nome, existente ? texto(existente.id) : null, () => {
-      const lembrete = t.lembreteMinutosAntes;
-      if (lembrete !== undefined && (lembrete < LEMBRETE_MINIMO || lembrete > LEMBRETE_MAXIMO)) {
-        // Recusar, nunca aproximar: um lembrete fora da faixa é erro de
-        // cadastro do pacote, e "quase certo" aqui vira mensagem no telefone
-        // do cliente na hora errada — efeito irreversível.
-        throw new Error(
-          `o tipo «${t.nome}» pede lembrete de ${lembrete} min, fora da faixa de ` +
-            `${LEMBRETE_MINIMO} a ${LEMBRETE_MAXIMO} minutos`,
-        );
-      }
-      return inserir(admin, "calendar_event_types", {
-        organization_id: organizationId,
-        name: t.nome,
-        slug,
-        category: t.categoria,
-        duration_minutes: t.duracaoMinutos,
-        location_kind: t.local,
-        ...(t.detalhesDoLocal ? { location_details: t.detalhesDoLocal } : {}),
-        // ⚠️ EXPLÍCITO. O DDL base nasceu com default TRUE e só o apêndice o
-        // virou false: herdar o default mandaria mensagem ao cliente num clone
-        // que ainda não aplicou a 0194. Ligar o lembrete é da vinícola.
-        reminder_enabled: false,
-        ...(lembrete !== undefined ? { reminder_minutes_before: lembrete } : {}),
-      });
-    });
+    await aplicarPeca("tipo_de_compromisso", t.nome, existente ? texto(existente.id) : null, () =>
+      inserir(admin, "calendar_event_types", linhaDoTipoDeCompromisso(organizationId, t, slug)),
+    );
   }
 
   // ── 7. as cadências ───────────────────────────────────────────────────────
@@ -740,6 +896,9 @@ export async function aplicarJornada(
         // Explícito pela mesma razão do lembrete: o default é do banco, e um
         // clone atrasado não é auditado por nós. Publicar é da vinícola.
         status: "draft",
+        // Idem — e é o que permite ao teste medir "nunca publicada" em vez de
+        // medir uma coluna que ninguém escreveu.
+        active_version_id: null,
         trigger_config: gatilhoParaGravar(cad.gatilho, idDaEtapa),
         draft_graph: grafoDaCadencia(cad, idDaEtapa, idDoModelo),
       }),
@@ -747,7 +906,10 @@ export async function aplicarJornada(
   }
 
   // ── 8. o ledger, por merge ────────────────────────────────────────────────
-  const completa = pecas.every((p) => p.estado !== "falhou");
+  // `nao_verificada` conta como incompleta: a peça não foi aplicada, só
+  // encontrada. Chamar isso de completo seria a afirmação que este arquivo
+  // acabou de recusar.
+  const completa = pecas.every((p) => p.estado !== "falhou" && p.estado !== "nao_verificada");
   try {
     const settings = await lerSettings(admin, organizationId);
     const ledger =
