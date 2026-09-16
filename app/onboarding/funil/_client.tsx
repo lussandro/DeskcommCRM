@@ -150,24 +150,48 @@ export function QuadroClient({
         de que ela não está funcionando — descoberta que, calada, só chegaria com
         o primeiro cliente real.
       */}
-      {jornadas.length > 0 ? null : sugestao.origem === "ia" ? (
-        <p className="rounded-md border border-emerald-500/30 bg-emerald-500/5 p-3 text-sm">
-          {t(
-            "Seu funcionário montou este quadro olhando o que você me contou sobre o negócio. Ajuste o que quiser.",
-          )}
-        </p>
+      {sugestao.origem === "ia" ? (
+        // Com jornada marcada este quadro não vai para lugar nenhum, e a frase
+        // "ajuste o que quiser" apontaria para um editor que saiu da tela.
+        jornadas.length > 0 ? null : (
+          <p className="rounded-md border border-emerald-500/30 bg-emerald-500/5 p-3 text-sm">
+            {t(
+              "Seu funcionário montou este quadro olhando o que você me contou sobre o negócio. Ajuste o que quiser.",
+            )}
+          </p>
+        )
       ) : (
+        /*
+          ⚠️ O AVISO DA CHAVE DE IA APARECE COM JORNADA MARCADA TAMBÉM.
+
+          Ele é o ÚNICO lugar do wizard onde a pessoa descobre que a chave que
+          ela acabou de colar não respondeu. E `jornadasSugeridas` chega marcado
+          para qualquer vinícola, que é justamente o público deste produto —
+          esconder o bloco inteiro aqui faria o diagnóstico sumir para quase
+          todo mundo, e o defeito só apareceria no primeiro cliente real.
+
+          O que some com jornada marcada é só a metade que fala do quadro
+          pronto: essa sim seria falsa, porque nenhum pacote vai ser gravado.
+        */
         <div className="space-y-2 rounded-md border border-amber-500/30 bg-amber-500/5 p-3 text-sm">
           <p>
             {t("Não consegui pedir uma sugestão para o seu funcionário agora")}
-            {sugestao.porque ? <> — {t(sugestao.porque)}</> : null}. {t("Comecei por um quadro pronto de")}{" "}
-            <strong>{t(sugestao.pacote.comoSeApresenta)}</strong>.
+            {sugestao.porque ? <> — {t(sugestao.porque)}</> : null}.
+            {jornadas.length === 0 ? (
+              <>
+                {" "}
+                {t("Comecei por um quadro pronto de")}{" "}
+                <strong>{t(sugestao.pacote.comoSeApresenta)}</strong>.
+              </>
+            ) : null}
           </p>
-          <p className="text-xs text-muted-foreground">
-            {t(
-              "Isso não trava nada: escolha outro modelo abaixo ou ajuste as colunas na mão. Dá para mudar tudo depois, quando quiser.",
-            )}
-          </p>
+          {jornadas.length === 0 ? (
+            <p className="text-xs text-muted-foreground">
+              {t(
+                "Isso não trava nada: escolha outro modelo abaixo ou ajuste as colunas na mão. Dá para mudar tudo depois, quando quiser.",
+              )}
+            </p>
+          ) : null}
         </div>
       )}
 

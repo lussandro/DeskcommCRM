@@ -202,6 +202,57 @@ describe("o passo do funil com jornada marcada", () => {
     expect(padrao[0]!.name).toBe(JORNADAS.enoturismo.nomeDoFunil);
   });
 
+  it("promoção que falha vira erro na tela, com o texto real do banco", async () => {
+    // `tornarPadrao` NÃO lança: devolve `{ ok: false, erro }`. Descartar isso
+    // deixaria a vinícola terminando o onboarding com "Loja online" como quadro
+    // padrão, depois de a tela ter prometido o contrário e sem uma palavra.
+    bancoDoOnboarding();
+    vi.mocked(tornarPadrao).mockResolvedValue({
+      ok: false,
+      erro: 'permission denied for table "crm_pipelines"',
+    });
+
+    const res = await aplicarQuadro(formulario({ jornadas: ["enoturismo"] }));
+
+    expect(res?.ok).toBe(false);
+    expect(res && !res.ok && res.erro).toContain('permission denied for table "crm_pipelines"');
+    expect(res && !res.ok && res.erro).toContain(JORNADAS.enoturismo.nomeDoFunil);
+  });
+
+  it("id de peça APAGADA não é promovido — isso deixaria a org sem funil padrão", async () => {
+    // A peça que a vinícola apagou CONTINUA no ledger de propósito. Promover
+    // esse id desmarcaria o default vigente e apontaria a flag para uma linha
+    // que não existe: `carregarQuadroAtual` passa a devolver null e o wizard
+    // quebra. O ledger tem o id; o relatório é quem sabe que ela está morta.
+    const banco = bancoDoOnboarding();
+    const idMorto = crypto.randomUUID();
+    vi.mocked(aplicarJornada).mockImplementation(async (_orgId, chave) => {
+      banco.ledger[chave] = {
+        versao_do_pacote: 1,
+        aplicada_em: new Date().toISOString(),
+        pecas: [{ id: idMorto, chave: `funil:${JORNADAS[chave].nomeDoFunil}` }],
+      };
+      return {
+        chave,
+        versao: 1,
+        pecas: [
+          {
+            tipo: "funil",
+            chave: `funil:${JORNADAS[chave].nomeDoFunil}`,
+            estado: "no_ledger_e_apagada",
+          },
+        ],
+        completa: false,
+      };
+    });
+
+    const res = await aplicarQuadro(formulario({ jornadas: ["enoturismo"] }));
+
+    expect(tornarPadrao, "promoveria um funil que não existe mais").not.toHaveBeenCalled();
+    expect(res?.ok).toBe(false);
+    expect(banco.tabelas.crm_pipelines!.filter((p) => p.is_default === true)).toHaveLength(1);
+  });
+
   it("chave inventada no formulário não vira jornada", async () => {
     // O que chega do formulário é entrada externa. Sem `ehChaveDeJornada`, um
     // `"admin"` no lugar da chave viraria `JORNADAS["admin"]` indefinido.

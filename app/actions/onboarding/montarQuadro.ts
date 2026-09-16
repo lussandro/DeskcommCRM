@@ -322,13 +322,34 @@ export async function aplicarQuadro(formData: FormData): Promise<ResultadoDoQuad
     // Qual funil cada jornada tem no banco AGORA. A autoridade é o id do ledger:
     // `RelatorioDaJornada` carrega o rótulo legível da peça, não o id dela.
     const ledger = await lerLedger(ctx.orgId);
+
+    /**
+     * ⚠️ Id do ledger NÃO basta: a peça que a vinícola APAGOU continua no ledger
+     * de propósito (`no_ledger_e_apagada`), para a aplicação seguinte não a
+     * trazer de volta. Promover esse id desmarcaria o funil padrão vigente e
+     * apontaria a flag para uma linha que não existe mais — a organização
+     * terminaria SEM funil padrão, e `carregarQuadroAtual` devolve `null` nesse
+     * estado, que é o que quebra o próprio wizard.
+     */
+    const funilDePe = (c: ChaveDeJornada): boolean => {
+      const peca = relatorios.find((r) => r.chave === c)?.pecas.find((p) => p.tipo === "funil");
+      return peca?.estado === "criada" || peca?.estado === "ja_existia";
+    };
     const funilDaJornada = (c: ChaveDeJornada): string | null =>
-      ledger[c]?.pecas.find((p) => p.chave === `funil:${JORNADAS[c].nomeDoFunil}`)?.id ?? null;
+      funilDePe(c)
+        ? (ledger[c]?.pecas.find((p) => p.chave === `funil:${JORNADAS[c].nomeDoFunil}`)?.id ?? null)
+        : null;
+
+    // A primeira jornada que REALMENTE deixou funil de pé — não a primeira
+    // marcada. Se a de cima falhou e a de baixo entrou, quem vira o quadro
+    // principal é a que existe; senão ninguém viraria, e a vinícola ficaria com
+    // o quadro de loja online como padrão.
+    const alvo = marcadas.find((c) => funilDaJornada(c) !== null) ?? null;
 
     // Nenhum funil de pé: a vinícola sairia do passo com o quadro de loja online
     // que o gatilho semeou e sem uma palavra. O texto real do banco viaja junto,
     // sem máscara.
-    if (marcadas.every((c) => funilDaJornada(c) === null)) {
+    if (!alvo) {
       const falha = relatorios.flatMap((r) => r.pecas.filter((p) => p.estado === "falhou"))[0];
       return {
         ok: false,
@@ -336,11 +357,25 @@ export async function aplicarQuadro(formData: FormData): Promise<ResultadoDoQuad
       };
     }
 
-    // O primeiro funil marcado vira o quadro principal — é o que o passo promete
-    // em texto, e com a RPC fora do caminho ninguém mais substitui o quadro de
-    // loja online que o gatilho semeou.
-    const primeiro = funilDaJornada(marcadas[0]!);
-    if (primeiro) await tornarPadrao(ctx.orgId, primeiro);
+    // O funil da jornada vira o quadro principal — é o que o passo promete em
+    // texto, e com a RPC fora do caminho ninguém mais substitui o quadro de loja
+    // online que o gatilho semeou.
+    //
+    // ⚠️ O RETORNO É LIDO. `tornarPadrao` não lança: ela devolve
+    // `{ ok: false, erro }`. Descartar isso deixaria a vinícola terminando o
+    // onboarding com "Loja online" como quadro padrão, depois de a tela ter
+    // prometido o contrário, e sem uma palavra — exatamente o defeito que este
+    // caminho existe para consertar.
+    const promocao = await tornarPadrao(ctx.orgId, funilDaJornada(alvo)!);
+    if (!promocao.ok) {
+      return {
+        ok: false,
+        erro:
+          `Montei os funis, mas não consegui deixar "${JORNADAS[alvo].nomeDoFunil}" como o seu ` +
+          `quadro principal: ${promocao.erro ?? "o banco não disse o motivo"}. ` +
+          `Você pode tentar continuar de novo, ou trocar o quadro em Configurações › Funis.`,
+      };
+    }
   }
 
   const origem = String(formData.get("origem") ?? "pacote") === "ia" ? "ia" : "pacote";
