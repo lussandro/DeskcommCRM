@@ -71,10 +71,29 @@ function espalhaPorDia(
 ): { inicio: Date; fim: Date }[] {
   const porDia = new Map<string, { inicio: Date; fim: Date }[]>();
   for (const s of slots) {
-    const dia = rotuloLocal(s.inicio, fuso).slice(0, 20);
+    // A chave é o DIA CIVIL no fuso da regra. Era `rotuloLocal(...).slice(0, 20)`,
+    // e esse rótulo carrega a hora: cada horário virava um "dia" próprio, o
+    // espalhamento nunca agia, e o que saía eram os primeiros N da lista.
+    const dia = diaLocalISO(s.inicio, fuso);
     const lista = porDia.get(dia);
     if (lista) lista.push(s);
     else porDia.set(dia, [s]);
+  }
+  // Dentro de UM dia, os candidatos ficam espalhados pela jornada antes das
+  // rodadas: com 18 horários e teto 10, os "10 primeiros" terminavam às 13h30 e
+  // o agente dizia "17h30 não apareceu livre" com a tarde inteira livre
+  // (medido em 2026-09-16). Primeiro e último sempre entram; o resto é
+  // amostrado em passo constante.
+  for (const [dia, lista] of porDia) {
+    if (lista.length <= teto) continue;
+    const passo = (lista.length - 1) / (teto - 1);
+    const amostra: { inicio: Date; fim: Date }[] = [];
+    for (let i = 0; i < teto; i += 1) {
+      const idx = Math.round(i * passo);
+      const s = lista[idx];
+      if (s !== undefined && amostra[amostra.length - 1] !== s) amostra.push(s);
+    }
+    porDia.set(dia, amostra);
   }
   const escolhidos: { inicio: Date; fim: Date }[] = [];
   // Rodadas: um de cada dia por vez, na ordem em que os dias aparecem.

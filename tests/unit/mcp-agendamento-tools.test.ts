@@ -140,6 +140,25 @@ describe("crm_find_free_slots", () => {
     expect(params.ate.toISOString()).toBe("2026-09-14T14:00:00.000Z");
   });
 
+  it("um dia cheio com teto menor devolve horários ESPALHADOS pela jornada — o fim da tarde aparece", async () => {
+    // Medido em 2026-09-16: 18 horários livres, `limite: 10`, e o agente recebia
+    // 09:00–13:30 — dizia "17h30 não apareceu livre" com a tarde inteira aberta.
+    const slots = Array.from({ length: 18 }, (_, i) => {
+      const inicio = new Date(Date.UTC(2026, 8, 13, 12, 0) + i * 30 * 60_000); // 09:00–17:30 SP
+      return { inicio, fim: new Date(inicio.getTime() + 30 * 60_000) };
+    });
+    respondeCom({ ...SUCESSO, slots });
+    const r = (await crmFindFreeSlots.handler(
+      { event_type_slug: "c", dia: "2026-09-13", limite: 10 },
+      ctx,
+    )) as { horarios: { inicio: string }[]; total_de_horarios: number; ha_mais: boolean };
+    expect(r.horarios).toHaveLength(10);
+    expect(r.horarios[0]!.inicio).toBe(slots[0]!.inicio.toISOString());
+    expect(r.horarios[9]!.inicio).toBe(slots[17]!.inicio.toISOString());
+    expect(r.total_de_horarios).toBe(18);
+    expect(r.ha_mais).toBe(true);
+  });
+
   it("dia específico E período relativo juntos: o dia vence, a consulta acontece", async () => {
     // Já foi uma recusa (`periodo_ambiguo`). Medido em produção em 2026-09-16:
     // o modelo manda os dois em TODA chamada, cada consulta morria em 0 ms e o
