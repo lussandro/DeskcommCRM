@@ -262,10 +262,13 @@ cria e o botão **Ativar jornada**.
 letras, junto do que falta. **Ativar jornada** sobre uma parcial não recria o que foi apagado (§4.3);
 cria só o que nunca constou no ledger.
 
-**Papel: `admin`.** É o papel do aplicador inteiro (§4.2) e o da tela; quem é gerente vê a tela em
-leitura, com o motivo escrito. Entra em `lib/navigation/catalogo.ts` no grupo `organizacao`, seção
-`"Sua empresa"` — junto de *Tipos de agendamento* (`lib/navigation/catalogo.ts:235-243`) —, com
-`minRole: "admin"` e sem `sidebar`, como as demais entradas desse grupo, que tem hub em Configurações.
+**Papel: a página é `manager+` em LEITURA; a ação de aplicar é `admin`.** São coisas diferentes e é
+deliberado — mesmo desenho de `app/app/settings/tenant/pipelines/page.tsx:26-31`, onde a página é
+`manager+` e `updatePipelineConfig` segue recusando quem não é `admin`: quem é gerente VÊ o que cada
+jornada cria e em que estado ela está, e o botão só é desenhado para quem a ação aceitaria. Entra em
+`lib/navigation/catalogo.ts` no grupo `organizacao`, seção `"Sua empresa"` — junto de *Tipos de
+agendamento* (`lib/navigation/catalogo.ts:226-249`) —, com `minRole: "manager"` (é quem VÊ que decide
+a porta) e sem `sidebar`, como as demais entradas desse grupo, que tem hub em Configurações.
 Todo texto novo **da tela** ganha espanhol.
 
 **O que ganha espanhol e o que não ganha.** A cerca
@@ -368,10 +371,15 @@ prometer o impossível — e descobrir isso no CI, depois do plano aprovado.
 
 ## 8. Prova em tela (na VPS, como sempre)
 
-Depois do deploy: aplicar uma jornada pela tela nova e capturar, nos dois temas, o funil no quadro, a
-resposta rápida no atendimento, o tipo de compromisso na agenda e a cadência em rascunho. Evidência em
-`evidence/bacco-jornadas/`, com revisão citando cada captura. Falha de medida vira causa raiz e nova
-release, nunca expectativa afrouxada.
+**A prova em tela acontece ANTES de a release ser declarada pronta** — numa candidata (o topo da
+`main`, que o `publish-image` publica como tag `main`), não depois de cortar a tag. É o que a doutrina
+de QA Visual exige: a experiência de quem instala É o produto, e uma tag cortada antes da prova
+transforma "achado" em "release nova". Só com a prova verde e o ok do dono é que a `v26.9.4` é cortada.
+
+O que se prova, depois do deploy da candidata: aplicar uma jornada pela tela nova e capturar, nos dois
+temas, o funil no quadro, a resposta rápida no atendimento, o tipo de compromisso na agenda e a
+cadência em rascunho. Evidência em `evidence/bacco-jornadas/`, com revisão citando cada captura. Falha
+de medida vira causa raiz e nova candidata, nunca expectativa afrouxada.
 
 ## 9. Entrega
 

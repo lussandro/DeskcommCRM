@@ -106,8 +106,28 @@ seção**, e quem confere é o teste de forma da Task 1, que compara as contagen
 - **Um commit por task**, com o trailer exato:
   `Co-Authored-By: Claude Opus 5 (1M context) <noreply@anthropic.com>`.
 - **Sem `git push` até a Task 5.**
-- **O check `e2e` não existe neste fork:** o workflow está `disabled_manually`. Os checks esperados
-  são `verify`, `build-and-size`, `invariants`, `imagens-ok` e os jobs do `publish-image`.
+- **Os checks obrigatórios são MEDIDOS, nunca afirmados de cor.** Uma lista escrita aqui envelhece e,
+  quando envelhece, a triagem mede contra a régua errada. Os dois comandos, com a expectativa
+  **derivada** da saída deles:
+
+  ```bash
+  # 1. Há branch protection na main deste fork?
+  gh api repos/lussandro/bacco-adega-crm/branches/main/protection --jq '.required_status_checks.contexts|join(", ")'
+  # 2. Que workflows existem, e quais estão ligados?
+  gh api repos/lussandro/bacco-adega-crm/actions/workflows --jq '.workflows[]|"\(.state)\t\(.path)"' | sort
+  ```
+
+  Medido em 2026-09-15, e é **diferente do upstream**: (1) responde
+  `HTTP 403 — Upgrade to GitHub Pro or make this repository public`, ou seja **a `main` deste fork não
+  tem branch protection** e não há lista de checks obrigatórios para ler; (2) devolve `ci` e `perf`
+  `active`, `publish-image` `active`, e **`e2e` `disabled_manually`** (junto de `acolhida`, `release` e
+  `relogio`).
+
+  **Expectativa derivada, e é assim que ela se lê:** o conjunto de checks que aparece num commit é o
+  dos workflows `active` — `verify` e `invariants` (do `ci`), `build-and-size` (do `perf`) e os jobs do
+  `publish-image`, incluindo `imagens-ok`. **Nenhum deles é obrigatório por configuração do repositório
+  — quem os exige é este plano.** Verde é condição de seguir; a ausência de `e2e` é o esperado, não uma
+  falta. Se o comando (1) passar a responder JSON algum dia, é ELE que manda, não esta prosa.
 
 ## Estrutura de arquivos
 
@@ -136,7 +156,11 @@ seção**, e quem confere é o teste de forma da Task 1, que compara as contagen
 | `lib/i18n/dicionario.ts` | modificado | Espanhol de todo texto **de interface** da tela nova. |
 | `.changes/bacco-jornadas-de-vinicola.md` | novo | Fragmento de release, `impacto: capacidade_nova`. |
 | `tests/e2e/bacco-jornadas.spec.ts` | novo | Prova em tela na VPS, autocontida. |
-| `evidence/bacco-jornadas/` | novo | Capturas + `revisao.md` citando cada PNG. |
+| `tests/e2e/bacco-evidencia.spec.ts` | modificado | A medida da linha 214 (`Clientes da vinícola` deixa de existir). |
+| `app/actions/onboarding/montarQuadro.test.ts` | modificado | Os quatro casos dos dois caminhos (Task 3 Step 8b). |
+| `docs/architecture/jornadas-de-vinicola.architecture.json` | novo | O mapa vivo da peça, com ≥2 arestas por nó. |
+| `docs/architecture/README.md` | modificado | A linha do mapa novo na tabela. |
+| `evidence/bacco-jornadas/` | novo | Capturas + `revisao.md` citando cada PNG + o Living System Checklist respondido. |
 
 ---
 
@@ -151,7 +175,14 @@ seção**, e quem confere é o teste de forma da Task 1, que compara as contagen
 ```bash
 cd /home/lussandro/Bacco-Crm && git status --short && git branch --show-current && git log --oneline -1
 ```
-Expected: saída de `--short` vazia; `bacco`; `03099807 docs(bacco): jornadas de vinícola com as correções do refutador e do Codex`. Árvore suja = **pare** e reporte: nunca mexer em worktree de outra sessão.
+Expected: saída de `--short` **vazia**; a branch é `bacco`; e o último commit é de documento — a linha
+do `git log` contém `docs(bacco)`.
+
+⚠️ **Sem SHA fixo aqui, de propósito.** Esta linha já trazia `03099807` como esperado, e um SHA
+esperado envelhece a cada commit de documento — inclusive os que corrigem este plano. O subagente que
+medisse contra ele pararia numa base que está certa. O que importa é o estado (árvore limpa, branch
+certa, topo ainda em documentação), não o identificador. Árvore suja = **pare** e reporte: nunca mexer
+em worktree de outra sessão.
 
 - [ ] **Step 2:** Node 22 no PATH.
 
@@ -268,6 +299,23 @@ export interface TipoDeCompromissoDaJornada {
   categoria: CategoriaDeAgendamento;
   duracaoMinutos: number;
   local: LocalDeAgendamento;
+  /**
+   * O complemento do local, quando "Presencial" sozinho mente.
+   *
+   * O anexo distingue **"Presencial"** (na vinícola) de **"Presencial (no
+   * canal)"** — a visita do representante, que acontece no estabelecimento do
+   * CLIENTE (anexo, linha 348). `LOCAIS_DE_AGENDAMENTO` não tem como separar os
+   * dois: é uma lista fechada de cinco valores (`lib/agenda/tipos.ts:56-64`) e
+   * `in_person` é o único presencial. Quem carrega a diferença é a coluna
+   * `location_details` (`supabase/baseline.sql:15127`), que já existe e é
+   * `text` livre — e é ela que a tela de Agenda mostra ao lado do local
+   * (`CAMPO_EXIGIDO_PELO_LOCAL` pede "endereco" justamente para `in_person`,
+   * `lib/agenda/tipos.ts:75`).
+   *
+   * Sem este campo, os dois tipos nasceriam indistinguíveis e quem marcasse a
+   * visita do representante não saberia para onde ir.
+   */
+  detalhesDoLocal?: string;
   /**
    * Antecedência SUGERIDA do lembrete, em minutos (15 a 10.080 pela rota).
    * O lembrete nasce DESLIGADO — quem liga é a vinícola, na tela de Agenda.
@@ -695,7 +743,11 @@ export const CANAL: JornadaDeVinicola = {
     // As dez do operador + as sete de cadência de §5, com título, atalho e corpo exatos.
   ],
   tiposDeCompromisso: [
-    // As quatro de §7.
+    // As quatro de §7. ⚠️ *Visita do representante* é o único "Presencial (no
+    // canal)" do pacote (anexo, linha 348): `local: "in_person"` MAIS
+    // `detalhesDoLocal: "No estabelecimento do cliente"`. Sem o complemento ele
+    // fica idêntico a uma visita na vinícola, e quem marcar vai para o lugar
+    // errado.
   ],
   cadencias: [
     {
@@ -840,6 +892,30 @@ export async function aplicarJornada(organizationId: string, chave: ChaveDeJorna
 export interface EntradaDoLedger { versao_do_pacote: number; aplicada_em: string; pecas: string[] }
 export async function lerLedger(organizationId: string): Promise<Partial<Record<ChaveDeJornada, EntradaDoLedger>>>;
 export async function estadoDaJornada(organizationId: string, chave: ChaveDeJornada): Promise<"nao_aplicada" | "aplicada" | "parcial">;
+
+/**
+ * Promove o funil da jornada a padrão da organização. Só o ONBOARDING chama.
+ *
+ * Existe porque o passo do funil do wizard promete, em texto, que o quadro de
+ * loja online "é substituído" (`app/onboarding/funil/_client.tsx:198`) — e com
+ * jornada marcada o wizard não chama mais a RPC que o substituía (Task 3). Sem
+ * isto, a vinícola termina o onboarding com "Carrinho abandonado" como quadro
+ * padrão e o funil dela ao lado, e a tela terá mentido.
+ *
+ * ⚠️ DUAS ESCRITAS, NESTA ORDEM, E NÃO DÁ PARA FAZER EM UMA.
+ * `uniq_crm_pipelines_org_default` é um índice único PARCIAL sobre
+ * `(organization_id) where is_default = true` (`supabase/baseline.sql:2902`):
+ * marcar o novo antes de desmarcar o velho colide com 23505. Primeiro apaga a
+ * flag do atual, depois acende a do novo — e, se a segunda falhar, DEVOLVE a
+ * flag ao antigo, porque uma organização sem funil padrão quebra o próprio
+ * wizard (`carregarQuadroAtual` filtra por `is_default` e devolve null,
+ * `app/actions/onboarding/montarQuadro.ts:89-94`).
+ *
+ * É a ÚNICA escrita do pacote sobre linha que já existia, fora o merge de
+ * `organizations.settings` — e por isso está aqui, nomeada, e não escondida
+ * dentro de `aplicarJornada`.
+ */
+export async function tornarPadrao(organizationId: string, pipelineId: string): Promise<{ ok: boolean; erro?: string }>;
 ```
 
 - [ ] **Step 1:** Acrescentar a ação de auditoria **no fim** de `AUDIT_ACTIONS`.
@@ -890,7 +966,8 @@ vi.mock("@/lib/audit", () => ({ audit: vi.fn(async () => undefined) }));
 import { createAdminClient } from "@/lib/supabase/admin";
 import { audit } from "@/lib/audit";
 import { aplicarJornada, estadoDaJornada, lerLedger } from "@/lib/vertical/vinicola/aplicar";
-import { JORNADAS, VERSAO_DO_PACOTE } from "@/lib/vertical/vinicola";
+import { JORNADAS, VERSAO_DO_PACOTE, type ChaveDeJornada } from "@/lib/vertical/vinicola";
+import { slugDeNome } from "@/lib/leads/stage-editing";
 
 const ORG = "22222222-2222-4222-8222-222222222222";
 const OUTRA_ORG = "33333333-3333-4333-8333-333333333333";
@@ -912,19 +989,69 @@ function bancoFalso(inicial: Partial<Record<string, Linha[]>> = {}) {
 
   /** Toda escrita que chegou, na ordem — é o que prova a ordem obrigatória. */
   const ordem: string[] = [];
-  let proximoId = 0;
-  const novoId = () => `id-${String(++proximoId).padStart(4, "0")}`;
+  /**
+   * ⚠️ ID É UUID, e isto não é preciosismo de dublê.
+   *
+   * Duas peças do contrato real exigem UUID e reprovariam um `id-0001`:
+   * `actionConfigSchema` modo `template` pede `template_id: z.string().uuid()`
+   * (`lib/followup/graph-schema.ts:222`) e o gatilho `stage_change` pede
+   * `params.stage_id: z.string().uuid()` (`lib/followup/api-schemas.ts:32`).
+   * Como o Step 7 passa o grafo e o gatilho pelos schemas DE VERDADE, um id
+   * sintético faria o teste reprovar **por construção** — e a leitura natural
+   * seria "o aplicador está errado", quando o errado era o banco de mentira.
+   * `crypto.randomUUID()` é do runtime do Node 22, sem dependência nova.
+   */
+  const novoId = () => crypto.randomUUID();
   /** Tabelas que devem falhar no insert, para o caso de relatório parcial. */
   const quebradas = new Set<string>();
 
+  /**
+   * As tabelas em que TODA query precisa filtrar `organization_id` na mão.
+   *
+   * O aplicador roda com admin client, que bypassa a RLS: aqui o filtro não é
+   * otimização, é a única fronteira que existe. O dublê o COBRA — sem isto,
+   * apagar um `.eq("organization_id", …)` do aplicador deixaria o caso de
+   * isolamento verde, que é o modo de falha nº 10 do CLAUDE.md.
+   */
+  const TENANT_AWARE = new Set([
+    "crm_pipelines",
+    "crm_stages",
+    "message_templates",
+    "calendar_event_types",
+    "followup_flow_pointers",
+  ]);
+
   function builder(tabela: string) {
-    const filtros: Record<string, unknown> = {};
+    const filtros: Record<string, unknown[]> = {};
     let op: "select" | "insert" | "update" = "select";
     let campos: Record<string, unknown> = {};
 
-    const casa = (l: Linha) => Object.entries(filtros).every(([k, v]) => l[k] === v);
+    /** Um filtro casa quando o valor da linha está no CONJUNTO pedido. */
+    const casa = (l: Linha) =>
+      Object.entries(filtros).every(([k, vs]) => vs.includes(l[k]));
+
+    /**
+     * `organizations` é filtrada por `id`, as demais por `organization_id`.
+     * Insert declara a organização no corpo, não no filtro.
+     */
+    function exigirFiltroDeOrganizacao() {
+      if (!TENANT_AWARE.has(tabela)) return;
+      if (op === "insert") {
+        expect(
+          campos.organization_id,
+          `insert em ${tabela} sem organization_id no corpo — a linha nasceria órfã`,
+        ).toBeDefined();
+        return;
+      }
+      expect(
+        filtros.organization_id,
+        `${op} em ${tabela} SEM filtro de organization_id — o admin client bypassa a RLS, ` +
+          `então esta query alcançaria a organização do vizinho`,
+      ).toBeDefined();
+    }
 
     function resolver(um: boolean) {
+      exigirFiltroDeOrganizacao();
       if (op === "insert") {
         ordem.push(`insert:${tabela}`);
         if (quebradas.has(tabela)) {
@@ -948,8 +1075,19 @@ function bancoFalso(inicial: Partial<Record<string, Linha[]>> = {}) {
       select: () => api,
       insert: (v: Record<string, unknown>) => { op = "insert"; campos = v; return api; },
       update: (v: Record<string, unknown>) => { op = "update"; campos = v; return api; },
-      eq: (c: string, v: unknown) => { filtros[c] = v; return api; },
-      in: (c: string, vs: unknown[]) => { filtros[c] = vs[0]; return api; },
+      eq: (c: string, v: unknown) => { filtros[c] = [v]; return api; },
+      // `.in()` é CONJUNTO. A versão anterior deste dublê fazia
+      // `filtros[c] = vs[0]` — guardava só o primeiro valor —, e com isso a
+      // pré-leitura dos 17 atalhos de uma jornada devolvia só o primeiro,
+      // fazendo o aplicador recriar os 16 restantes: o caso "reaplicar não
+      // duplica" mediria o defeito do dublê e passaria assim mesmo.
+      in: (c: string, vs: unknown[]) => { filtros[c] = [...vs]; return api; },
+      neq: (c: string, v: unknown) => {
+        // Só o `select` de slugs de funil usa; nega dentro do mesmo conjunto.
+        const todos = tabelas[tabela]!.map((l) => l[c]).filter((x) => x !== v);
+        filtros[c] = [...new Set(todos)];
+        return api;
+      },
       order: () => api,
       single: async () => resolver(true),
       maybeSingle: async () => resolver(true),
@@ -963,6 +1101,41 @@ function bancoFalso(inicial: Partial<Record<string, Linha[]>> = {}) {
   } as unknown as ReturnType<typeof createAdminClient>);
 
   return { tabelas, ordem, quebradas };
+}
+
+/**
+ * A segunda organização, semeada com as chaves naturais EM CONFLITO.
+ *
+ * Os slugs e atalhos são exatamente os que a jornada vai criar em `ORG`. Se o
+ * aplicador ler sem filtrar `organization_id`, ele acha estas linhas, conclui
+ * "já existia" e NÃO cria nada em `ORG` — a jornada sai vazia e o relatório
+ * mente. É o vazamento silencioso, e é por isso que o conflito é proposital.
+ */
+function semearOutraOrganizacao(banco: ReturnType<typeof bancoFalso>, chave: ChaveDeJornada) {
+  const j = JORNADAS[chave];
+  banco.tabelas.crm_pipelines!.push({
+    id: crypto.randomUUID(),
+    organization_id: OUTRA_ORG,
+    name: j.nomeDoFunil,
+    slug: slugDeNome(j.nomeDoFunil, [], "funil"),
+  });
+  for (const r of j.respostasRapidas) {
+    banco.tabelas.message_templates!.push({
+      id: crypto.randomUUID(),
+      organization_id: OUTRA_ORG,
+      shortcut: r.atalho,
+      title: r.titulo,
+      body: "TEXTO DA OUTRA VINÍCOLA — não pode ser lido nem alterado",
+    });
+  }
+  for (const t of j.tiposDeCompromisso) {
+    banco.tabelas.calendar_event_types!.push({
+      id: crypto.randomUUID(),
+      organization_id: OUTRA_ORG,
+      slug: slugDeNome(t.nome, [], "tipo"),
+      name: t.nome,
+    });
+  }
 }
 
 beforeEach(() => vi.clearAllMocks());
@@ -988,6 +1161,44 @@ describe("aplicar numa organização vazia", () => {
     for (const t of ["crm_pipelines", "crm_stages", "message_templates", "calendar_event_types", "followup_flow_pointers"]) {
       for (const l of banco.tabelas[t]!) expect(l.organization_id, t).toBe(ORG);
     }
+  });
+});
+
+describe("a organização do vizinho", () => {
+  // O caso que o dublê antigo não conseguia medir. A outra organização é
+  // semeada com os MESMOS slugs e atalhos que a jornada vai criar: é a
+  // coincidência de chave natural que um `select` sem filtro confundiria.
+  it("não é lida: o pacote entra inteiro mesmo com as chaves naturais ocupadas lá", async () => {
+    const banco = bancoFalso();
+    semearOutraOrganizacao(banco, "canal");
+    const j = JORNADAS.canal;
+
+    const r = await aplicarJornada(ORG, "canal", ATOR);
+
+    expect(r.completa, "ler a outra organização faria tudo parecer 'já existia'").toBe(true);
+    const daOrg = (t: string) => banco.tabelas[t]!.filter((l) => l.organization_id === ORG);
+    expect(daOrg("crm_pipelines")).toHaveLength(1);
+    expect(daOrg("message_templates")).toHaveLength(j.respostasRapidas.length);
+    expect(daOrg("calendar_event_types")).toHaveLength(j.tiposDeCompromisso.length);
+    expect(r.pecas.every((p) => p.estado === "criada")).toBe(true);
+  });
+
+  it("não é alterada: nenhuma linha dela muda de conteúdo", async () => {
+    const banco = bancoFalso();
+    semearOutraOrganizacao(banco, "canal");
+    const antes = JSON.stringify(
+      Object.values(banco.tabelas).flat().filter((l) => l.organization_id === OUTRA_ORG),
+    );
+
+    await aplicarJornada(ORG, "canal", ATOR);
+
+    const depois = JSON.stringify(
+      Object.values(banco.tabelas).flat().filter((l) => l.organization_id === OUTRA_ORG),
+    );
+    expect(depois, "o aplicador tocou a organização do vizinho").toBe(antes);
+    // E o `settings` dela também não recebeu ledger nenhum.
+    const outra = banco.tabelas.organizations!.find((o) => o.id === OUTRA_ORG)!;
+    expect((outra.settings as Record<string, unknown>).bacco_jornadas).toBeUndefined();
   });
 
   it("a resposta rápida nasce compartilhada — a cadência aponta para ela", async () => {
@@ -1185,11 +1396,42 @@ Expected: falha resolvendo `@/lib/vertical/vinicola/aplicar`.
 Regras que a implementação segue, uma a uma:
 
 1. **Ledger antes de tudo.** Ler `organizations.settings` (`select("settings").eq("id", organizationId).maybeSingle()`),
-   extrair `bacco_jornadas[chave]`. O conjunto `jaConstou` = `new Set(entrada?.pecas ?? [])`.
-   Peça cuja chave está em `jaConstou` **não é criada**; se ela também não existe no banco, o
-   relatório recebe `no_ledger_e_apagada`.
-2. **Chave da peça no ledger:** `funil:<slug>`, `etapa:<slug>`, `resposta:<atalho>`,
-   `tipo:<slug>`, `cadencia:<nome>`, `config:<slug do funil>`, `tag:<tag>`.
+   extrair `bacco_jornadas[chave]`. Peça que **já consta no ledger não é criada**; se ela também não
+   existe no banco, o relatório recebe `no_ledger_e_apagada`.
+2. **A peça do ledger grava o ID DA LINHA e a chave natural — e quem decide existência é o ID.**
+   A entrada é `{ id, chave }`, nunca a string solta:
+
+   ```ts
+   export interface PecaDoLedger {
+     /** O `id` uuid que o INSERT devolveu. É a identidade. */
+     id: string;
+     /** `resposta:/canal-tabela-1`, `etapa:novo_contato`, … — rótulo LEGÍVEL. */
+     chave: string;
+   }
+   ```
+
+   **Por que o id manda, e a chave natural não pode mandar.** A existência é decidida por
+   `select("id").in("id", idsDoLedger)`: um id é imutável e não é editável por ninguém na tela. A chave
+   natural, não — e cada uma das três é editável pela própria vinícola:
+
+   | Peça | Chave natural | O que a vinícola faz com ela |
+   |---|---|---|
+   | resposta rápida | `shortcut` | edita o atalho na tela de modelos |
+   | cadência | `name` | renomeia o fluxo |
+   | funil | `name` | renomeia o funil |
+
+   Decidir existência pela chave natural faria **renomear** ler como **apagar**: a peça sumiria da
+   conta, a jornada apareceria como *parcial* na tela, e a tela diria à vinícola que ela removeu algo
+   que está lá, com outro nome. Pior, no sentido inverso: reaplicar recriaria uma segunda cópia com o
+   nome antigo, ao lado da renomeada.
+
+   ⚠️ **Uma correção de medida, porque a versão anterior deste passo citava a evidência errada.** A
+   justificativa dizia que *renomear etapa recalcula o slug*, apontando
+   `lib/leads/stage-operations.ts:244`. **Medido, é o contrário:** aquela linha é do caminho de
+   CRIAÇÃO, e o comentário imediatamente acima dela (`:242-243`) diz textualmente *"Slug nasce com a
+   etapa e nunca muda (renomear não o toca)"*. O slug de etapa é estável. A decisão continua de pé —
+   ela se sustenta nas três linhas da tabela acima, que são editáveis de verdade —, e a chave natural
+   fica no ledger como **rótulo legível**, para a tela poder dizer *o que* falta em vez de listar uuid.
 3. **Funil.** Ler os slugs dos funis existentes da organização, derivar o do funil com
    `slugDeNome(j.nomeDoFunil, existentes, "funil")`, `insert` com `is_default: false`,
    `position: 1000`, `vocabulary` e `settings` já montados (passo 2 na **mesma** linha — um insert só).
@@ -1197,6 +1439,26 @@ Regras que a implementação segue, uma a uma:
    identity_resolution: { fields_in_priority_order: ["cpf", "phone_e164", "email"] } }` (o mesmo
    default do DDL, `supabase/baseline.sql:1487`). Auditar `pipeline.created`; e `pipeline.config_updated`
    para a configuração.
+
+   ⚠️ **`vocabulary` tem OITO chaves no DDL e a jornada define QUATRO — mescle, nunca substitua.** O
+   default da coluna é
+   `jsonb_build_object('lead','Cliente','lead_plural','Clientes','deal','Pedido','deal_plural','Pedidos','won','Pago','lost','Cancelado','stage','Etapa','stage_plural','Etapas')`
+   (`supabase/baseline.sql:1486`). Gravar só as quatro da jornada **apaga as outras quatro** — os
+   plurais e o nome de "Etapa" —, e o que aparece na tela no lugar delas é o que cada consumidor puser
+   de fallback, tela a tela. O insert monta o objeto completo:
+
+   ```ts
+   const VOCABULARIO_PADRAO = {
+     lead: "Cliente", lead_plural: "Clientes",
+     deal: "Pedido", deal_plural: "Pedidos",
+     won: "Pago", lost: "Cancelado",
+     stage: "Etapa", stage_plural: "Etapas",
+   } as const;
+
+   // As quatro da jornada POR CIMA das oito do default. O plural fica o do
+   // produto até alguém decidir o contrário — e "Etapas" continua "Etapas".
+   const vocabulary = { ...VOCABULARIO_PADRAO, ...j.vocabulario };
+   ```
 4. **Etapas.** `etapasParaGravar({ nome: j.nomeDoFunil, etapas: j.etapas }, slugDeNome)` e um insert
    por linha, com `organization_id` e `pipeline_id`. Guardar `nome → id` num `Map` — é ele que as
    cadências consultam. Auditar `pipeline.stage_created` por etapa.
@@ -1222,8 +1484,28 @@ Regras que a implementação segue, uma a uma:
     seguinte, salvo quando o funil falha (sem funil não há onde pendurar nada: aí o relatório volta
     com só essa peça).
 11. **Ledger no fim**, por merge, com `versao_do_pacote: VERSAO_DO_PACOTE`,
-    `aplicada_em: new Date().toISOString()` e `pecas` = união das chaves já constantes com as criadas
-    agora. Depois, `audit({ action: "vertical.jornada_aplicada", ... metadata: { jornada, versao, pecas } })`.
+    `aplicada_em: new Date().toISOString()` e `pecas` = união das peças já constantes com as criadas
+    agora (cada uma `{ id, chave }`, regra 2). Depois,
+    `audit({ action: "vertical.jornada_aplicada", ... metadata: { jornada, versao, pecas } })`.
+12. **A promessa de concorrência é IDEMPOTÊNCIA SEQUENCIAL, e o plano diz isso com todas as letras.**
+    Uma aplicação depois da outra não duplica nada. **Duas abas ao mesmo tempo NÃO estão protegidas**, e
+    não adianta prometer que estão: não há trava no banco para pendurar a promessa —
+    `message_templates` não tem unique por `shortcut` (`supabase/baseline.sql:7598`), o ledger é um
+    `jsonb` cujo merge é ler-modificar-gravar (a segunda gravação vence), e esta entrega **não abre
+    migration** (Global Constraints). O que existe, e que basta para o uso real:
+
+    - **A tela desabilita o botão enquanto a aplicação corre** (Task 4) — é o que fecha a porta do
+      clique duplo, que é a corrida que acontece de verdade;
+    - **duas abas simultâneas** podem produzir peça duplicada. Declarado aqui, não escondido. Quem
+      quiser a garantia forte paga uma unique parcial numa fase própria, com migration e apêndice.
+
+    ⚠️ **A pré-leitura por chave natural vale SEMPRE, mesmo antes de existir ledger**, e é ela que
+    protege o desfecho mais provável de todos: a aplicação que **falha no meio**, depois de criar
+    metade das peças e antes de gravar o ledger. Na tentativa seguinte o ledger está vazio para aquela
+    jornada — e é a pré-leitura (`select` por `shortcut`, por `slug`, por `name`) que encontra o que já
+    entrou e o marca como `ja_existia` em vez de criar a segunda cópia. Ledger e pré-leitura respondem a
+    perguntas diferentes: a pré-leitura responde *"isto existe agora?"*, o ledger responde *"isto já
+    existiu alguma vez?"* — e só a segunda distingue apagado de nunca-criado.
 
 O construtor do grafo, que é a parte com armadilha:
 
@@ -1241,14 +1523,177 @@ O construtor do grafo, que é a parte com armadilha:
  * `ai_message` — `lib/followup/validate-publish.ts:216`.)
  *
  * `esperaMs === 0` NÃO vira nó `wait`: o piso do `waitConfigSchema` é 300.000 ms
- * e um nó de espera zerada seria recusado na validação.
+ * (`lib/followup/graph-schema.ts:88-90`) e um nó de espera zerada seria
+ * recusado na validação.
+ *
+ * ⚠️ IDS ÚNICOS DE NÓ **E DE ARESTA**. O `superRefine` do `flowGraphSchema`
+ * (`lib/followup/graph-schema.ts:436-474`) reprova id de nó repetido, id de
+ * ARESTA repetido e aresta apontando para nó inexistente. O contador `n` abaixo
+ * serve aos dois: nome de nó e nome de aresta saem dele.
+ *
+ * ⚠️ `priority` é obrigatório na prática: `flowEdgeSchema` o declara com
+ * `.default(0)` (`:396`), e como o grafo é gravado como `jsonb` — e não passa
+ * pelo parse na gravação — omiti-lo deixaria a aresta sem o campo no banco.
+ * Escrevemos `priority: 0` explícito, como faz o único grafo do repo que passa
+ * pelo schema num teste (`scripts/lib/grafo-de-demonstracao.ts:93-111`).
  */
 function grafoDaCadencia(
   cad: CadenciaDaJornada,
   idDaEtapa: (nome: string) => string,
   idDoModelo: (atalho: string) => string,
-): { nodes: unknown[]; edges: unknown[] } { /* … */ }
+): { nodes: unknown[]; edges: unknown[] } {
+  const nodes: unknown[] = [];
+  const edges: unknown[] = [];
+  let n = 0;
+  /** Um id por nó, e o mesmo contador nomeia a aresta que chega nele. */
+  const proximo = (prefixo: string) => `${prefixo}-${++n}`;
+  let x = 0;
+  const pos = () => ({ x: (x += 240), y: 0 });
+
+  const ligar = (source: string, target: string, condicao: unknown) => {
+    edges.push({ id: `e-${edges.length + 1}`, source, target, priority: 0, condition: condicao });
+  };
+  const SEMPRE = { type: "always" } as const;
+
+  // ── início ────────────────────────────────────────────────────────────────
+  const inicio = proximo("trigger");
+  nodes.push({ id: inicio, type: "trigger", label: "Início", position: { x: 0, y: 0 }, config: {} });
+
+  // ── o fim, criado já: toda saída precisa de caminho até ele ───────────────
+  const fim = "end-1";
+  const fimCedo = "end-2";
+
+  let anterior = inicio;
+
+  // ── a condição por etapa, quando a cadência a declara ─────────────────────
+  //
+  // ⚠️ MODO `combined`, E É POR ISSO QUE AS DUAS ARESTAS SÃO ESCRITAS À MÃO.
+  // `validateFlowForPublish` só cobra cobertura de ramo no modo `per_check`
+  // (`lib/followup/validate-publish.ts:343-348`: "É deliberado que o modo
+  // combinado fique de fora"). Ou seja: um nó `condition` combinado com apenas
+  // a aresta do "sim" PASSA no publish — e o lead que cair no "não" fica parado
+  // no nó, para sempre, sem erro em lugar nenhum. O validador não pega; quem
+  // pega é escrever as duas, sempre, e o teste do Step 7.
+  if (cad.somenteNaEtapa) {
+    const cond = proximo("condition");
+    nodes.push({
+      id: cond,
+      type: "condition",
+      label: "Ainda está nesta etapa?",
+      position: pos(),
+      config: {
+        combinator: "and",
+        checks: [{ field: "lead_stage", op: "eq", value: idDaEtapa(cad.somenteNaEtapa) }],
+      },
+    });
+    ligar(anterior, cond, SEMPRE);
+    // Sim: segue a cadência. Não: encerra na hora, sem mandar nada.
+    ligar(cond, fimCedo, { type: "cond_result", value: false });
+    anterior = cond;
+    // A aresta do "sim" sai do `cond` para o primeiro passo, logo abaixo.
+  }
+
+  const saidaDaCondicao = cad.somenteNaEtapa
+    ? ({ type: "cond_result", value: true } as const)
+    : SEMPRE;
+
+  // ── os passos: (espera) → mensagem ────────────────────────────────────────
+  cad.passos.forEach((passo, i) => {
+    const condicaoDaAresta = i === 0 ? saidaDaCondicao : SEMPRE;
+
+    let origem = anterior;
+    if (passo.esperaMs > 0) {
+      const espera = proximo("wait");
+      nodes.push({
+        id: espera,
+        type: "wait",
+        label: `Espera ${Math.round(passo.esperaMs / 86_400_000)}d`,
+        position: pos(),
+        config: { mode: "fixed", duration_ms: passo.esperaMs },
+      });
+      ligar(origem, espera, condicaoDaAresta);
+      origem = espera;
+    }
+
+    const msg = proximo("action");
+    nodes.push({
+      id: msg,
+      type: "action",
+      label: passo.atalho,
+      position: pos(),
+      // Sempre `template`: o texto fica editável fora do construtor e serve ao
+      // operador no envio manual. `template_id` é `z.string().uuid()`
+      // (`lib/followup/graph-schema.ts:222`) — o id REAL do modelo desta
+      // organização, resolvido agora.
+      config: { mode: "template", template_id: idDoModelo(passo.atalho) },
+    });
+    ligar(origem, msg, passo.esperaMs > 0 ? SEMPRE : condicaoDaAresta);
+    anterior = msg;
+  });
+
+  // ── o fim ─────────────────────────────────────────────────────────────────
+  nodes.push({
+    id: fim,
+    type: "end",
+    label: "Encerra",
+    position: pos(),
+    config: { outcome: "exhausted" },
+  });
+  ligar(anterior, fim, SEMPRE);
+
+  if (cad.somenteNaEtapa) {
+    nodes.push({
+      id: fimCedo,
+      type: "end",
+      label: "Encerra: mudou de etapa",
+      position: { x: 240, y: 200 },
+      config: { outcome: "exhausted" },
+    });
+  }
+
+  return { nodes, edges };
+}
 ```
+
+**O grafo que isso gera para uma cadência real** — *Enoturismo · silêncio antes de marcar a data*
+(anexo, cadência **B** da jornada 2: gatilho de silêncio de 3 dias, condição em *Escolhendo data*,
+passo 1 imediato `/eno-data-1`, passo 2 com 4 dias `/eno-data-2`). É o caso mais completo do pacote —
+o único com nó de condição — e por isso é o que vale escrever por extenso:
+
+```jsonc
+{
+  "nodes": [
+    { "id": "trigger-1",   "type": "trigger",   "label": "Início",                 "position": { "x": 0,    "y": 0 },   "config": {} },
+    { "id": "condition-2", "type": "condition", "label": "Ainda está nesta etapa?", "position": { "x": 240,  "y": 0 },
+      "config": { "combinator": "and",
+                  "checks": [{ "field": "lead_stage", "op": "eq",
+                               "value": "9f1c…-id-real-da-etapa-Escolhendo-data" }] } },
+    // passo 1 tem esperaMs 0 → NÃO gera nó `wait` (piso de 300.000 ms)
+    { "id": "action-3",    "type": "action",    "label": "/eno-data-1",             "position": { "x": 480,  "y": 0 },
+      "config": { "mode": "template", "template_id": "3b7a…-id-real-do-modelo" } },
+    { "id": "wait-4",      "type": "wait",      "label": "Espera 4d",               "position": { "x": 720,  "y": 0 },
+      "config": { "mode": "fixed", "duration_ms": 345600000 } },
+    { "id": "action-5",    "type": "action",    "label": "/eno-data-2",             "position": { "x": 960,  "y": 0 },
+      "config": { "mode": "template", "template_id": "c012…-id-real-do-modelo" } },
+    { "id": "end-1",       "type": "end",       "label": "Encerra",                 "position": { "x": 1200, "y": 0 },
+      "config": { "outcome": "exhausted" } },
+    { "id": "end-2",       "type": "end",       "label": "Encerra: mudou de etapa", "position": { "x": 240,  "y": 200 },
+      "config": { "outcome": "exhausted" } }
+  ],
+  "edges": [
+    { "id": "e-1", "source": "trigger-1",   "target": "condition-2", "priority": 0, "condition": { "type": "always" } },
+    // ⚠️ a aresta do "não" — a que o validador NÃO cobra no modo combinado
+    { "id": "e-2", "source": "condition-2", "target": "end-2",       "priority": 0, "condition": { "type": "cond_result", "value": false } },
+    { "id": "e-3", "source": "condition-2", "target": "action-3",    "priority": 0, "condition": { "type": "cond_result", "value": true } },
+    { "id": "e-4", "source": "action-3",    "target": "wait-4",      "priority": 0, "condition": { "type": "always" } },
+    { "id": "e-5", "source": "wait-4",      "target": "action-5",    "priority": 0, "condition": { "type": "always" } },
+    { "id": "e-6", "source": "action-5",    "target": "end-1",       "priority": 0, "condition": { "type": "always" } }
+  ]
+}
+```
+
+Sete nós, seis arestas, todos os ids únicos, todo nó alcançável a partir do `trigger-1` e todo nó com
+caminho até um `end` — que é exatamente o que o Step 7 mede.
 
 - [ ] **Step 6:** Rodar o teste do aplicador e ver **passar**.
 
@@ -1260,6 +1705,18 @@ Expected: `Test Files 1 passed`, todos os casos verdes.
 - [ ] **Step 7:** Provar que o grafo gerado passa pelo validador REAL, não só pelo dublê. Acrescentar
   ao fim de `tests/unit/jornadas-de-vinicola-aplicar.test.ts`:
 
+⚠️ **`flowGraphSchema` sozinho NÃO basta, e é a diferença entre um grafo bem formado e um grafo que
+funciona.** Ele é `strictObject` + um `superRefine` que só cobra ids únicos e aresta apontando para nó
+existente (`lib/followup/graph-schema.ts:436-474`). **Nada ali exige trigger único, alcançabilidade,
+nem caminho até um `end`** — isso mora em `validateFlowForPublish`
+(`lib/followup/validate-publish.ts:271-340`: `no_trigger`, `multiple_triggers`, `unreachable_node`,
+`no_end_path`). Um grafo com um nó órfão passaria no `safeParse`, seria gravado como `jsonb` sem
+reclamação, e só falharia no dia em que a vinícola clicasse em **Publicar**.
+
+O retorno **não** é uma lista: é `{ ok: true }` ou `{ ok: false; errors }`
+(`lib/followup/validate-publish.ts:34-36`) — `.errors` não existe no caso feliz, então a asserção é
+contra o objeto inteiro.
+
 ```ts
 describe("o grafo gerado é aceito pelo schema de verdade", () => {
   it.each(["canal", "enoturismo", "clube", "consumidor"] as const)("%s", async (chave) => {
@@ -1269,6 +1726,53 @@ describe("o grafo gerado é aceito pelo schema de verdade", () => {
     for (const f of banco.tabelas.followup_flow_pointers!) {
       const r = flowGraphSchema.safeParse(f.draft_graph);
       expect(r.success, `${chave}/${String(f.name)}: ${r.success ? "" : JSON.stringify(r.error.flatten())}`).toBe(true);
+    }
+  });
+
+  it.each(["canal", "enoturismo", "clube", "consumidor"] as const)(
+    "%s: e passa nas regras de PUBLICAÇÃO, que são as que o schema não tem",
+    async (chave) => {
+      const { flowGraphSchema } = await import("@/lib/followup/graph-schema");
+      const { validateFlowForPublish } = await import("@/lib/followup/validate-publish");
+      const banco = bancoFalso();
+      await aplicarJornada(ORG, chave, ATOR);
+      for (const f of banco.tabelas.followup_flow_pointers!) {
+        const grafo = flowGraphSchema.parse(f.draft_graph);
+        expect(validateFlowForPublish(grafo), `${chave}/${String(f.name)}`).toEqual({ ok: true });
+      }
+    },
+  );
+
+  it("o nó de condição tem as DUAS arestas — o publish não cobra isso", async () => {
+    // A cadência B do enoturismo é a única com `condition`, e ela é `combined`.
+    // `validateFlowForPublish` só cobra cobertura de ramo no modo `per_check`
+    // (`lib/followup/validate-publish.ts:343-348`, com o motivo escrito lá: não
+    // reprovar fluxos v1 que já rodam). Consequência medida: um `condition`
+    // combinado com só a aresta do "sim" PASSA no publish, e o lead que cair no
+    // "não" fica parado no nó para sempre, sem erro em lugar nenhum.
+    //
+    // Por isso a régua é aqui, e não no validador.
+    const banco = bancoFalso();
+    await aplicarJornada(ORG, "enoturismo", ATOR);
+    const comCondicao = banco.tabelas.followup_flow_pointers!.filter((f) =>
+      (f.draft_graph as { nodes: { type: string }[] }).nodes.some((n) => n.type === "condition"),
+    );
+    expect(comCondicao.length, "o enoturismo perdeu o nó de condição").toBeGreaterThan(0);
+
+    for (const f of comCondicao) {
+      const g = f.draft_graph as {
+        nodes: { id: string; type: string }[];
+        edges: { source: string; condition: { type: string; value?: boolean } }[];
+      };
+      for (const no of g.nodes.filter((x) => x.type === "condition")) {
+        const resultados = g.edges
+          .filter((e) => e.source === no.id && e.condition.type === "cond_result")
+          .map((e) => e.condition.value);
+        expect(
+          [...resultados].sort(),
+          `${String(f.name)}/${no.id}: ramo sem aresta — o lead para aqui em silêncio`,
+        ).toEqual([false, true]);
+      }
     }
   });
 
@@ -1321,7 +1825,10 @@ Co-Authored-By: Claude Opus 5 (1M context) <noreply@anthropic.com>"
 - Modify: `lib/onboarding/sugerir-funil.test.ts` (reescrito)
 - Modify: `app/onboarding/funil/_client.tsx` (seleção múltipla)
 - Modify: `app/onboarding/funil/page.tsx` (passa as jornadas sugeridas)
-- Modify: `app/actions/onboarding/montarQuadro.ts:190-274` (`aplicarQuadro` chama o aplicador)
+- Modify: `app/actions/onboarding/montarQuadro.ts:190-274` (`aplicarQuadro` ganha os **dois caminhos**)
+- Modify: `lib/i18n/dicionario.ts` (o espanhol da interface NOVA do passo do funil — ver Step 7b)
+- Modify: `tests/e2e/bacco-evidencia.spec.ts:214` (a medida do nome do funil, que os nomes novos tornam falsa)
+- Modify: `app/actions/onboarding/montarQuadro.test.ts` (os quatro casos dos dois caminhos — Step 8b)
 
 **Interfaces:**
 
@@ -1418,10 +1925,28 @@ export const PACOTES: readonly PacoteDeFunil[] = [
     // Último de propósito: quem não se reconhece em nenhum já leu todos.
     id: "generico",
     comoSeApresenta: "Outro tipo de negócio",
-    proposta: { /* inalterado — `pacotes-de-funil.ts:88-99` */ },
+    // As sete etapas atuais, copiadas sem uma vírgula de diferença
+    // (`lib/onboarding/pacotes-de-funil.ts:88-99`). Elas são o plano B de quem
+    // NÃO é vinícola, e nada nesta entrega as toca.
+    proposta: {
+      nome: "Clientes",
+      etapas: [
+        { nome: "Novo contato", passo: "new" },
+        { nome: "Já respondi", passo: "contacted" },
+        { nome: "Entendendo a necessidade", passo: "qualifying" },
+        { nome: "Proposta enviada", passo: "qualified" },
+        { nome: "Negociando", passo: "negotiating" },
+        { nome: "Fechou", passo: "won" },
+        { nome: "Não fechou", passo: "lost" },
+      ],
+    },
   },
-];
+] as const;
 ```
+
+⚠️ **O `as const` do fim do array é preservado** — ele está lá hoje
+(`lib/onboarding/pacotes-de-funil.ts:101`) e `PACOTE_PADRAO` depende do array continuar sendo o que é
+(`:104-110`, com o `throw` que existe justamente para o caso de o genérico sumir).
 
 - [ ] **Step 4:** Em `lib/onboarding/sugerir-funil.ts`, trocar as chaves de `PISTAS` (`:44-50`) para
   `canal` / `enoturismo` / `clube` / `consumidor`, separando o clube do consumidor (hoje `clube` e
@@ -1520,7 +2045,35 @@ export async function jornadasSugeridasDoPasso(orgId: string, negocio: string): 
               }
             />
             <span className="min-w-0">
-              <span className="font-medium">{t(JORNADAS[chave].comoSeApresenta)}</span>
+              {/*
+                ⚠️ SEM `t()`, e é decisão — não esquecimento.
+
+                Três razões que se somam:
+
+                1. `t(JORNADAS[chave].comoSeApresenta)` é ACESSO DINÂMICO, e a
+                   cerca de i18n não o enxerga: ela coleta o argumento de `t()`
+                   só quando ele é literal de string
+                   (`tests/unit/i18n-espanhol-cobre-a-tela.test.ts:283`). A
+                   chave nunca entraria na conta de cobertura — o `t()` daria a
+                   APARÊNCIA de estar traduzido sem nada garantir.
+                2. Contradiz a restrição desta entrega. "Conteúdo semeado não
+                   entra no dicionário" é Global Constraint, e
+                   `comoSeApresenta` é conteúdo do pacote: a mesma string vira
+                   nome de coisa no banco logo adiante.
+                3. O precedente prova o problema, não a solução: o passo já faz
+                   `t(p.comoSeApresenta)` nos PACOTES (`_client.tsx:213`), e por
+                   isso as três frases dos pacotes antigos foram parar no
+                   dicionário na mão (`lib/i18n/dicionario.ts:5250-5255`).
+                   Ninguém as colheu; alguém as digitou. É trabalho manual que
+                   envelhece calado quando o texto do pacote muda.
+
+                Renderizar cru também passa na cerca de prosa: ela só acusa
+                LITERAL de string em posição de filho JSX
+                (`i18n-espanhol-cobre-a-tela.test.ts:272-290`), e uma expressão
+                não é literal. O que a vinícola lê é o português do pacote, em
+                qualquer idioma de interface — que é a decisão nº 3 do anexo.
+              */}
+              <span className="font-medium">{JORNADAS[chave].comoSeApresenta}</span>
               <span className="mt-1 block text-xs text-muted-foreground">
                 {JORNADAS[chave].etapas.map((e) => e.nome).join(" → ")}
               </span>
@@ -1530,58 +2083,219 @@ export async function jornadasSugeridasDoPasso(orgId: string, negocio: string): 
       </fieldset>
 ```
 
+⚠️ **E o editor de colunas só aparece quando NENHUMA jornada está marcada.** Com jornada marcada quem
+cria o funil é o aplicador (Step 8), e deixar na tela um editor cujo resultado é descartado seria a
+falha calada clássica: a pessoa renomeia cinco colunas, clica em continuar, e nada do que ela digitou
+existe. O bloco do editor e o aviso "Este é o quadro padrão…" (`_client.tsx:192-199`) ficam sob
+`{jornadas.length === 0 ? … : …}`, e no lugar deles entra a frase do que vai ser criado:
+
+```tsx
+        {jornadas.length > 0 ? (
+          <p className="text-sm text-muted-foreground">
+            {t("Vou montar um funil para cada jornada marcada, com as colunas, as palavras, os campos e as mensagens daquele jeito de vender. O primeiro vira o seu quadro principal.")}
+          </p>
+        ) : (
+          /* o editor de colunas que já existe, inteiro, sem uma linha de diff */
+          null
+        )}
+```
+
+- [ ] **Step 7b:** O espanhol das frases NOVAS deste passo, em `lib/i18n/dicionario.ts`. São da
+  **interface**, então entram; o conteúdo do pacote não entra (acima). As quatro:
+
+```ts
+  "O que a sua vinícola faz": { es: "Qué hace su bodega" },
+  "Marque tudo que se aplica. Cada uma monta um funil próprio, com as mensagens, os campos e os lembretes daquele jeito de vender. Dá para ativar as outras depois, em Configurações › Jornadas.":
+    { es: "Marque todo lo que corresponda. Cada una arma su propio embudo, con los mensajes, los campos y los recordatorios de esa forma de vender. Puede activar las demás después, en Configuración › Recorridos." },
+  "Vou montar um funil para cada jornada marcada, com as colunas, as palavras, os campos e as mensagens daquele jeito de vender. O primeiro vira o seu quadro principal.":
+    { es: "Voy a armar un embudo para cada recorrido marcado, con las columnas, las palabras, los campos y los mensajes de esa forma de vender. El primero pasa a ser su tablero principal." },
+  "Não consegui ativar tudo": { es: "No pude activar todo" },
+```
+
+⚠️ **O dicionário é editado NESTA task, não na Task 4.** A cerca de i18n varre o AST de `app/` e
+`components/` inteiros e reprova chave usada sem espanhol — ela não sabe que a Task 4 viria depois.
+Deixar as quatro para lá deixaria a Task 3 vermelha no próprio commit dela.
+
 e, no envio (`_client.tsx`, dentro do `startTransition` do botão "Usar este quadro"):
 
 ```tsx
               fd.set("jornadas", JSON.stringify(jornadas));
 ```
 
-- [ ] **Step 8:** `app/actions/onboarding/montarQuadro.ts` — aplicar as jornadas marcadas depois de a
-  RPC gravar o quadro e ANTES do `redirect`. O `redirect` de Next lança: aplicar depois dele não
-  rodaria.
+- [ ] **Step 8:** `app/actions/onboarding/montarQuadro.ts` — **os dois caminhos de `aplicarQuadro`**.
+
+⚠️ **ESTE É O PASSO QUE EVITA DOIS FUNIS COM O MESMO NOME, e é o pior defeito que este plano já teve.**
+A medição: hoje o passo do funil grava a proposta pela RPC `fn_aplicar_quadro_do_onboarding` **sobre o
+funil que a organização já tem** (`app/actions/onboarding/montarQuadro.ts:232-247`). A Task 3 faz
+`PACOTES` virar **projeção da jornada** (Step 3) — ou seja, a proposta que a RPC grava passa a ser,
+byte a byte, o funil da jornada. Se `aplicarJornada` rodasse em seguida, ele criaria **um segundo
+funil com o mesmo nome**: `uniq_crm_pipelines_org_slug` (`supabase/baseline.sql:2906`) não impede,
+porque `slugDeNome` desambigua o slug com sufixo `_2` (`lib/leads/stage-editing.ts:141`) — **o slug
+desambigua, o NOME não**. A vinícola terminaria o onboarding com "Visitas e degustações" e "Visitas e
+degustações" lado a lado no seletor de funis, indistinguíveis.
+
+**A decisão, e ela é excludente:**
+
+> **Com pelo menos uma jornada marcada, o wizard NÃO chama a RPC.** Quem cria funil é o aplicador, uma
+> vez por jornada marcada. **Sem nenhuma marcada, o fluxo de hoje continua inteiro** — RPC sobre o
+> funil existente, com o pacote `generico` como sempre fez para quem não é vinícola.
+
+Um caminho ou o outro, nunca os dois. O código completo, substituindo o miolo de `aplicarQuadro`
+entre a validação da proposta e o `redirect`:
 
 ```ts
-  // As jornadas marcadas. Entrada externa, revalidada: o que chega de um
-  // formulário é externo mesmo tendo saído daqui há dois minutos.
+  // ── As jornadas marcadas ──────────────────────────────────────────────────
+  // Entrada externa, revalidada: o que chega de um formulário é externo mesmo
+  // tendo saído daqui há dois minutos. `ehChaveDeJornada` é a guarda única —
+  // sem ela, esta action e a da tela inventariam cada uma a sua.
   const marcadas: ChaveDeJornada[] = (() => {
     try {
       const bruto: unknown = JSON.parse(String(formData.get("jornadas") ?? "[]"));
-      return Array.isArray(bruto) ? bruto.filter(ehChaveDeJornada) : [];
+      return Array.isArray(bruto) ? [...new Set(bruto.filter(ehChaveDeJornada))] : [];
     } catch {
       return [];
     }
   })();
 
-  // Uma jornada que falha NÃO derruba o onboarding: o quadro já está gravado, e
-  // a pessoa consegue ativar a jornada de novo em Configurações › Jornadas. O
-  // relatório vai para o estado do passo, para a tela seguinte poder dizer o
-  // que entrou.
-  const relatorios = [];
-  for (const chave of marcadas) {
-    relatorios.push(await aplicarJornada(ctx.orgId, chave, ctx.userId));
+  const admin = createAdminClient();
+  const atual = await carregarQuadroAtual(admin, ctx.orgId);
+  if (!atual) return { ok: false, erro: "Não encontrei o quadro desta empresa." };
+
+  /** O que cada jornada criou. Vazio no caminho A, e é assim que fica. */
+  const relatorios: RelatorioDaJornada[] = [];
+
+  if (marcadas.length === 0) {
+    // ── CAMINHO A: sem jornada. EXATAMENTE o fluxo de hoje. ─────────────────
+    // Nem uma linha de diff daqui até o audit: a RPC grava a proposta sobre o
+    // funil que a organização já tem, e o pacote `generico` é o plano B de
+    // quem não é vinícola. Quem não marcou nada não pediu nada de vinícola.
+    const { data: outros } = await admin
+      .from("crm_pipelines")
+      .select("slug")
+      .eq("organization_id", ctx.orgId)
+      .neq("id", atual.pipelineId);
+    const slug = slugDeNome(proposta.nome, (outros ?? []).map((p) => String(p.slug ?? "")), "funil");
+
+    const { data: resposta, error } = await admin.rpc("fn_aplicar_quadro_do_onboarding", {
+      p_organization_id: ctx.orgId,
+      p_pipeline_id: atual.pipelineId,
+      p_nome: proposta.nome,
+      p_slug: slug,
+      p_etapas: etapasParaGravar(proposta, slugDeNome).map((e) => ({
+        nome: e.nome, slug: e.slug, position: e.position,
+        is_won: e.is_won, is_lost: e.is_lost, agent_stage_hint: e.agent_stage_hint,
+      })),
+    });
+    if (error) return { ok: false, erro: `Não consegui salvar o quadro: ${error.message}` };
+    const r = (resposta ?? {}) as { ok?: boolean; motivo?: string; quantos?: number };
+    if (!r.ok) return { ok: false, erro: explicarRecusa(r.motivo, r.quantos) };
+  } else {
+    // ── CAMINHO B: com jornada. A RPC NÃO É CHAMADA. ────────────────────────
+    // Chamá-la aqui gravaria a proposta (= a projeção da jornada) sobre o funil
+    // existente, e o aplicador criaria o segundo funil de mesmo nome logo
+    // abaixo. O editor de colunas da tela também não aparece neste caminho
+    // (Step 7), então não há quadro editado sendo descartado em silêncio.
+    for (const chave of marcadas) {
+      // Uma jornada que falha NÃO derruba o onboarding: a pessoa consegue
+      // ativar de novo em Configurações › Jornadas, e o relatório diz o que
+      // entrou. O erro real do banco viaja junto, sem máscara.
+      relatorios.push(await aplicarJornada(ctx.orgId, chave, ctx.userId));
+    }
+
+    // O primeiro funil marcado vira o quadro principal — é o que o passo
+    // promete em texto, e com a RPC fora do caminho ninguém mais substitui o
+    // quadro de loja online que o gatilho semeou.
+    const primeiro = relatorios[0]?.pecas.find((p) => p.tipo === "funil" && p.estado === "criada");
+    if (primeiro) await tornarPadrao(ctx.orgId, primeiro.id);
   }
+
+  const relatorios: RelatorioDaJornada[] = [];  // declarado antes do bloco acima
 ```
 
-e o `patchOnboardingState` passa a registrar `jornadas: marcadas` junto de `funil`.
+e o `patchOnboardingState` passa a registrar `jornadas: marcadas` junto de `funil`, e o `audit` de
+`onboarding.quadro_montado` ganha `jornadas: marcadas` no `metadata` — sem isso, a auditoria de uma
+instalação que aplicou quatro jornadas fica indistinguível da que não aplicou nenhuma.
 
-- [ ] **Step 9:** Rodar a suíte de onboarding inteira mais os invariantes de unidade que a tocam.
+- [ ] **Step 8b:** O teste que prende o defeito. Em `app/actions/onboarding/montarQuadro.test.ts`
+  (o arquivo existe; acrescentar o `describe`):
+
+```ts
+describe("o passo do funil com jornada marcada", () => {
+  it("NÃO cria dois funis com o mesmo nome", async () => {
+    // O defeito que este teste existe para impedir: a RPC grava a proposta (que
+    // é a projeção da jornada) no funil existente E o aplicador cria o funil da
+    // jornada — dois funis com o MESMO nome. O slug desambigua com `_2`; o nome
+    // não desambigua com nada, e é o nome que a vinícola lê no seletor.
+    const banco = bancoDoOnboarding();
+    await aplicarQuadro(formulario({ jornadas: ["enoturismo"], quadro: propostaQualquer }));
+
+    const nomes = banco.tabelas.crm_pipelines.map((p) => p.name);
+    expect(new Set(nomes).size, `funis com nome repetido: ${nomes.join(", ")}`).toBe(nomes.length);
+    expect(nomes).toContain(JORNADAS.enoturismo.nomeDoFunil);
+  });
+
+  it("com jornada marcada, a RPC não é chamada", async () => {
+    const banco = bancoDoOnboarding();
+    await aplicarQuadro(formulario({ jornadas: ["enoturismo"], quadro: propostaQualquer }));
+    expect(banco.rpcs, "a RPC reescreveria o funil existente com o nome da jornada").toEqual([]);
+  });
+
+  it("SEM jornada marcada, o fluxo de hoje continua inteiro", async () => {
+    // A outra metade da decisão, e a que protege quem não é vinícola.
+    const banco = bancoDoOnboarding();
+    await aplicarQuadro(formulario({ jornadas: [], quadro: propostaQualquer }));
+    expect(banco.rpcs.map((r) => r.nome)).toEqual(["fn_aplicar_quadro_do_onboarding"]);
+    expect(banco.tabelas.crm_pipelines).toHaveLength(1); // nenhum funil novo
+  });
+
+  it("o funil da primeira jornada vira o padrão", async () => {
+    const banco = bancoDoOnboarding();
+    await aplicarQuadro(formulario({ jornadas: ["enoturismo", "clube"], quadro: propostaQualquer }));
+    const padrao = banco.tabelas.crm_pipelines.filter((p) => p.is_default === true);
+    expect(padrao, "uniq_crm_pipelines_org_default é parcial: só pode haver um").toHaveLength(1);
+    expect(padrao[0]!.name).toBe(JORNADAS.enoturismo.nomeDoFunil);
+  });
+});
+```
+
+- [ ] **Step 9:** Corrigir a medida do e2e de evidência, que os nomes novos tornam falsa.
+  `tests/e2e/bacco-evidencia.spec.ts:214` registra hoje:
+
+```ts
+      registrar({ funil_mostra_clientes_da_vinicola: nomes.includes("Clientes da vinícola") });
+```
+
+"Clientes da vinícola" era o nome do pacote `clientes_vinicola`, que **deixa de existir** no Step 3. A
+linha continuaria rodando e registrando `false` para sempre — uma medida que não mede mais nada, no
+arquivo de evidência que serve justamente para provar o que a tela mostra. O funil da jornada `canal`
+chama-se **"Canal e revenda"**, e é ele que o texto do e2e ("Vendemos vinho para restaurantes e
+empórios", `:206`) faz o passo sugerir:
+
+```ts
+      registrar({ funil_mostra_canal_e_revenda: nomes.includes("Canal e revenda") });
+```
+
+- [ ] **Step 10:** Rodar a suíte de onboarding inteira, as cercas de i18n e os invariantes de unidade
+  que esta task toca.
 
 ```bash
-export PATH=/home/lussandro/.nvm/versions/node/v22.23.2/bin:$PATH && cd /home/lussandro/Bacco-Crm && pnpm exec vitest run lib/onboarding app/actions/onboarding tests/unit/jornadas-de-vinicola-forma.test.ts tests/unit/jornadas-de-vinicola-aplicar.test.ts 2>&1 | tail -12
+export PATH=/home/lussandro/.nvm/versions/node/v22.23.2/bin:$PATH && cd /home/lussandro/Bacco-Crm && pnpm exec vitest run lib/onboarding app/actions/onboarding app/onboarding tests/unit/i18n-espanhol-cobre-a-tela.test.ts tests/unit/jornadas-de-vinicola-forma.test.ts tests/unit/jornadas-de-vinicola-aplicar.test.ts 2>&1 | tail -12
 ```
-Expected: exit 0.
+Expected: exit 0. `i18n-espanhol-cobre-a-tela` entra **aqui** e não na Task 4: as frases novas do passo
+do funil são desta task, e a cerca varre `app/` inteiro — ela reprovaria o commit desta task, não o da
+seguinte.
 
-- [ ] **Step 10:** Typecheck e lint.
+- [ ] **Step 11:** Typecheck e lint.
 
 ```bash
 export PATH=/home/lussandro/.nvm/versions/node/v22.23.2/bin:$PATH && cd /home/lussandro/Bacco-Crm && NODE_OPTIONS=--max-old-space-size=6144 pnpm typecheck && pnpm lint 2>&1 | tail -5
 ```
 Expected: exit 0 nos dois.
 
-- [ ] **Step 11: Commit**
+- [ ] **Step 12: Commit**
 
 ```bash
-cd /home/lussandro/Bacco-Crm && git add lib/onboarding app/onboarding/funil app/actions/onboarding/montarQuadro.ts && git commit -m "feat(bacco): onboarding oferece as quatro jornadas em seleção múltipla
+cd /home/lussandro/Bacco-Crm && git add lib/onboarding lib/i18n/dicionario.ts app/onboarding/funil app/actions/onboarding tests/e2e/bacco-evidencia.spec.ts && git commit -m "feat(bacco): onboarding oferece as quatro jornadas em seleção múltipla
 
 Os três pacotes de vinícola saem; os quatro que entram são projeção das
 jornadas, para o quadro do wizard e o que a jornada semeia não divergirem.
@@ -1679,18 +2393,132 @@ export default async function JornadasPage() {
 }
 ```
 
-- [ ] **Step 3:** O cliente. Os três estados vêm do ledger e a tela os diz com todas as letras:
+- [ ] **Step 3:** O cliente, `app/app/settings/tenant/jornadas/_client.tsx`. Os três estados vêm do
+  ledger e a tela os diz com todas as letras — e o botão **desabilita enquanto a aplicação corre**,
+  que é a única proteção de corrida que esta entrega tem (Task 2, regra 12):
+
+```tsx
+"use client";
+
+import { useState, useTransition } from "react";
+import { toast } from "sonner";
+import { useT } from "@/hooks/i18n/useT";
+
+import { Button } from "@/components/ui/button";
+import { aplicarJornadaDeVinicola } from "@/app/actions/settings/aplicarJornadaDeVinicola";
+import { CHAVES_DE_JORNADA, JORNADAS, type ChaveDeJornada } from "@/lib/vertical/vinicola";
+
+type Estado = "nao_aplicada" | "aplicada" | "parcial";
+
+export function JornadasClient({
+  estados,
+  podeAplicar,
+}: {
+  estados: Record<ChaveDeJornada, Estado>;
+  podeAplicar: boolean;
+}) {
+  const t = useT();
+  const [pending, startTransition] = useTransition();
+  /**
+   * Qual jornada está sendo aplicada AGORA.
+   *
+   * Não é enfeite de carregamento: é a trava. `pending` sozinho não diz qual
+   * botão foi clicado, e sem isso os quatro continuariam clicáveis durante a
+   * aplicação — o clique duplo é a corrida que acontece de verdade, e é a única
+   * que dá para fechar sem trava no banco (Task 2, regra 12).
+   */
+  const [correndo, setCorrendo] = useState<ChaveDeJornada | null>(null);
+
+  function ativar(chave: ChaveDeJornada) {
+    setCorrendo(chave);
+    startTransition(async () => {
+      const fd = new FormData();
+      fd.set("jornada", chave);
+      const r = await aplicarJornadaDeVinicola(fd);
+      setCorrendo(null);
+      if (!r.ok) {
+        // O texto real do erro, sem máscara — quem lê precisa saber o que falhou.
+        toast.error(r.erro);
+        return;
+      }
+      const falhas = r.relatorio.pecas.filter((p) => p.estado === "falhou");
+      if (falhas.length > 0) {
+        toast.warning(`${t("Não consegui ativar tudo")}: ${falhas.map((f) => f.erro).join(" · ")}`);
+        return;
+      }
+      toast.success(t("Jornada ativada"));
+    });
+  }
+
+  return (
+    <div className="space-y-4">
+      {/* O aviso que a §4.4 da spec obriga, sempre visível — não é rodapé. */}
+      <p className="rounded-md border bg-muted/40 p-3 text-sm text-muted-foreground">
+        {t("As cadências entram como rascunho. Para elas começarem a mandar mensagem, é preciso um agente de IA publicado, com follow-up ligado, e o WhatsApp conectado.")}
+      </p>
+
+      {CHAVES_DE_JORNADA.map((chave) => {
+        const j = JORNADAS[chave];
+        const estado = estados[chave];
+        return (
+          <section key={chave} className="rounded-lg border p-4">
+            {/* Conteúdo do pacote: sem `t()`, como no passo do onboarding. */}
+            <h2 className="font-medium">{j.nomeDoFunil}</h2>
+            <p className="mt-1 text-sm text-muted-foreground">{j.comoSeApresenta}</p>
+
+            <p className="mt-3 text-sm">
+              {estado === "nao_aplicada" ? t("Não ativada") : null}
+              {estado === "aplicada" ? t("Ativada") : null}
+              {estado === "parcial" ? t("Ativada, com peças removidas") : null}
+            </p>
+
+            {estado === "parcial" ? (
+              <p className="mt-1 text-xs text-muted-foreground">
+                {t("Ativar de novo não recria o que você apagou — só cria o que nunca existiu.")}
+              </p>
+            ) : null}
+
+            {/* O que ela cria, em números, para a decisão não ser às cegas. */}
+            <p className="mt-2 text-xs text-muted-foreground">
+              {j.etapas.length} {t("colunas")} · {j.campos.length} {t("campos")} ·{" "}
+              {j.respostasRapidas.length} {t("respostas rápidas")} ·{" "}
+              {j.tiposDeCompromisso.length} {t("tipos de compromisso")} ·{" "}
+              {j.cadencias.length} {t("cadências em rascunho")}
+            </p>
+
+            {podeAplicar ? (
+              <Button
+                type="button"
+                className="mt-3"
+                // ⚠️ DESABILITADO ENQUANTO QUALQUER APLICAÇÃO CORRE. Não só a
+                // desta jornada: o aplicador escreve no MESMO
+                // `organizations.settings`, e duas aplicações concorrentes
+                // perdem uma das gravações do ledger (ler-modificar-gravar).
+                disabled={pending}
+                onClick={() => ativar(chave)}
+              >
+                {correndo === chave ? t("Ativando…") : t("Ativar jornada")}
+              </Button>
+            ) : (
+              // Honestidade, não permissão nova: quem é gerente vê o estado e
+              // sabe por que não pode agir.
+              <p className="mt-3 text-xs text-muted-foreground">
+                {t("Só quem administra a empresa pode ativar uma jornada.")}
+              </p>
+            )}
+          </section>
+        );
+      })}
+    </div>
+  );
+}
+```
 
 | Estado | O que a tela escreve |
 |---|---|
 | `nao_aplicada` | "Não ativada" + o que ela cria (contagens da jornada) |
 | `aplicada` | "Ativada" + a data de `aplicada_em` |
-| `parcial` | "Ativada, com peças removidas" + a lista do que não existe mais, e a frase: *"Ativar de novo não recria o que você apagou — só cria o que nunca existiu."* |
-
-E o aviso que a §4.4 da spec obriga, sempre visível:
-
-> As cadências entram como **rascunho**. Para elas começarem a mandar mensagem, é preciso um agente de
-> IA publicado, com follow-up ligado, e o WhatsApp conectado.
+| `parcial` | "Ativada, com peças removidas" + a frase: *"Ativar de novo não recria o que você apagou — só cria o que nunca existiu."* |
 
 - [ ] **Step 4:** A entrada de navegação, em `lib/navigation/catalogo.ts`, imediatamente depois da de
   *Tipos de agendamento* (`:228-249`):
@@ -1706,7 +2534,19 @@ E o aviso que a §4.4 da spec obriga, sempre visível:
     href: "/app/settings/tenant/jornadas",
     label: "Jornadas",
     description: "Funis, mensagens e lembretes prontos para cada jeito de vender vinho.",
-    icon: "Path",
+    // ⚠️ `Signpost`, e a escolha é MEDIDA. `icon` é uma string, mas o mapa que a
+    // resolve é FECHADO: `ICONS` em `lib/navigation/registry.ts:53-90`, e
+    // `NAV_DESTINATIONS` faz `ICONS[d.icon]` (`:94`) sem fallback. Um nome fora
+    // do mapa vira `undefined`, o React tenta renderizar um componente que não
+    // existe e a tela QUEBRA NO BROWSER — com typecheck, lint e a suíte toda
+    // verdes, porque nada disso resolve a string.
+    //
+    // "Path" não existe: nem no mapa, nem em `lib/ui/icons.ts`. `Signpost` está
+    // nos dois — `lib/navigation/registry.ts:84` (dentro do mapa) e
+    // `lib/ui/icons.ts:125` — e é a placa que indica caminhos, que é o que uma
+    // jornada é. (`FlowArrow`, `:66`, também serviria, mas já é a cara de
+    // fluxo/follow-up no produto.)
+    icon: "Signpost",
     group: "organizacao",
     section: "Sua empresa",
     // `manager` vê; o botão de ativar é só de `admin`, como em Etapas do funil.
@@ -1755,7 +2595,10 @@ Co-Authored-By: Claude Opus 5 (1M context) <noreply@anthropic.com>"
 - Create: `.changes/bacco-jornadas-de-vinicola.md`
 
 **Interfaces:** Consumes: `pnpm release:conferir` (`scripts/cortar-release.ts`). Produces: a `bacco`
-empurrada para a `main` com os cinco checks verdes.
+empurrada para a `main` com **todos os checks que aparecerem** verdes — quem aparece é derivado dos
+workflows `active` (Global Constraints), não de um número escrito aqui. Este parágrafo já dizia "os
+cinco checks", herdando a contagem do upstream: neste fork não há branch protection para definir
+cinco, e o `e2e` nem roda.
 
 - [ ] **Step 1:** O fragmento. Declara o **efeito no operador**, nunca o número da versão — o número
   sai do conjunto, e é por isso que duas sessões paralelas não colidem.
@@ -1820,10 +2663,17 @@ SHA=$(git rev-parse bacco); echo "$SHA"
 ```bash
 cd /home/lussandro/Bacco-Crm && SHA=$(git rev-parse bacco) && gh api "repos/lussandro/bacco-adega-crm/commits/$SHA/check-runs?per_page=100" --jq '.check_runs[] | [.name, .status, .conclusion] | @tsv' | sort
 ```
-Expected: `verify`, `build-and-size`, `invariants`, `imagens-ok` e os jobs do `publish-image`
-(`a-tag-veio-da-main`, os três `build-and-push`, `imagem-do-app-sobe`) `completed success`. **O check
-`e2e` não aparece: o workflow está `disabled_manually` neste fork** — a ausência dele aqui é o
-esperado, não uma falta. Depois, ler as três linhas do rodapé do `verify`:
+Expected: **todo check que aparecer está `completed success`** — e quem aparece é derivado dos
+workflows `active`, medidos em Global Constraints, não desta lista. Na medição de 2026-09-15 isso dá
+`verify`, `invariants` (do `ci`), `build-and-size` (do `perf`) e os jobs do `publish-image`
+(`a-tag-veio-da-main`, os três `build-and-push`, `imagem-do-app-sobe`, `imagens-ok`). **O check `e2e`
+não aparece porque o workflow está `disabled_manually` neste fork** — ausência esperada, não falta.
+
+Se a lista que voltar for **diferente** da que Global Constraints mediu, é a medição que manda: rode os
+dois `gh api` de lá antes de concluir qualquer coisa. Um check novo que apareça vermelho reprova; um
+check que sumiu é mudança de configuração do repositório, e precisa ser entendida, não ignorada.
+
+Depois, ler as três linhas do rodapé do `verify`:
 
 ```bash
 SHA=$(git rev-parse bacco); JOB=$(gh api "repos/lussandro/bacco-adega-crm/commits/$SHA/check-runs?per_page=100" --jq '.check_runs[] | select(.name == "verify") | .id')
@@ -1834,13 +2684,154 @@ recomeça no SHA novo.
 
 ---
 
-## Task 6 — Release v26.9.4 e VPS
+## Task 6 — Candidata na VPS e prova em tela
+
+⚠️ **ESTA TASK VEM ANTES DA TAG, e a ordem é doutrina, não preferência.** O CLAUDE.md é literal: *"a
+experiência de quem instala numa VPS É o produto"*, e prova em tela é **critério de aceite**, não
+verificação pós-lançamento. Cortar `v26.9.4` primeiro inverteria isso — um achado na tela viraria
+"release nova" (`v26.9.5`) em vez de "conserto antes de lançar", e o número queimado seria o registro
+permanente de que a régua foi aplicada tarde. Aqui se prova **a candidata**; só depois se corta a tag.
+
+**O que é a candidata:** o topo da `main`, que o `publish-image` publica como tag `main`
+(`type=ref,event=branch`, `.github/workflows/publish-image.yml:150`) no mesmo push da Task 5. É o
+MESMO código que a tag vai carregar — a tag não reconstrói nada, ela só nomeia o commit.
+
+**Files:**
+- Create: `tests/e2e/bacco-jornadas.spec.ts`
+- Create: `evidence/bacco-jornadas/` (PNGs + `revisao.md` + `medidas.jsonl`)
+- Modify: `.github/workflows/e2e.yml` (a spec nova entra em `FORA_DO_CI`, **com motivo escrito** — o
+  teste `tests/unit/e2e-cobertura-completa.test.ts` reprova spec que não esteja em `SPECS_PARTE_*` nem
+  em `FORA_DO_CI`)
+
+**Interfaces:** Consumes: `BASE_URL`, `QA_EMAIL`, `QA_SENHA` (de `/root/.bacco_qa`). Produces:
+evidência citada em `evidence/bacco-jornadas/revisao.md`, e o **ok do dono** — sem ele a Task 7 não
+começa.
+
+**Volta declarada:** a candidata volta para a `v26.9.3` com o mesmo caminho e `--to v26.9.3`. Como
+aqui ainda não há tag nova, um achado **não** custa número de versão: conserta-se na `bacco`, empurra-se
+de novo (a Task 5 recomeça no SHA novo), e a candidata é reinstalada.
+
+- [ ] **Step 1:** Subir a candidata na VPS, **pelo caminho do produto** — o mesmo `update.sh` que o
+  cliente roda, não um `up -d` à mão. Ele aceita qualquer ref que o git resolva (`--to`,
+  `hostgator-setup-kit/update.sh:24` e `:47`), e `gravar_imagens` já trata `main` como **canal móvel**,
+  gravando `pull_policy=always` nas três imagens (`hostgator-setup-kit/_common.sh:641`). Nada de editar
+  `.env` na mão: a Task 7 reescreve tudo para a tag imutável depois.
+
+⚠️ **Por script em arquivo, NUNCA por heredoc no stdin.** O motivo medido: o `update.sh` tem **um**
+`read` (`hostgator-setup-kit/update.sh:123`), e ele só é alcançado quando o **backup preventivo
+falha** e a sessão é interativa (`[ -t 0 ]`, `:121`). Nesse caminho ele pede a palavra `CONTINUAR` — e
+um heredoc no stdin entrega a ele a **próxima linha do próprio script**, que não é `CONTINUAR`: a
+atualização morre com "cancelada pelo operador" e o resto do script some engolido. Não é que o script
+consuma o stdin sempre; é que, no único dia em que consome, é o dia em que algo já deu errado. O
+`< /dev/null` faz o `read` falhar na hora e o `die` dizer a verdade.
+
+```bash
+cat > /tmp/candidata-jornadas.sh <<'SCRIPT'
+set -e
+cd /opt/bacco-adega-crm
+PW="$(grep ^POSTGRES_PASSWORD= /opt/supabase/docker/.env | cut -d= -f2-)"
+export SUPABASE_DB_ADMIN_URL="postgresql://postgres.bacco-adega:${PW}@172.17.0.1:5432/postgres"
+bash hostgator-setup-kit/update.sh --to main > /root/bacco-candidata-jornadas.log 2>&1
+SCRIPT
+scp /tmp/candidata-jornadas.sh root@2.25.222.110:/root/candidata-jornadas.sh
+ssh root@2.25.222.110 'bash /root/candidata-jornadas.sh < /dev/null; echo "exit=$?"; tail -8 /root/bacco-candidata-jornadas.log; curl -s -o /dev/null -w "raiz %{http_code}\n" https://adega-crm.baccosistemas.com.br/'
+```
+Expected: `exit=0` e `raiz 307` (redireciona para o login). **`404` é roteamento perdido** — ver
+`docs/runbooks/deploy.md` e a volta declarada acima.
+
+- [ ] **Step 2:** Escrever `tests/e2e/bacco-jornadas.spec.ts`, **autocontido** — só importa
+  `@playwright/test` e `node:fs`, sem helpers do repo e sem `playwright.config.ts`, porque roda num
+  contêiner `mcr.microsoft.com/playwright:v1.63.0-noble` com `/work` montado. O molde é
+  `tests/e2e/bacco-evidencia.spec.ts:1-55`. O que ele mede, pela tela, como um leigo faria:
+
+  1. **Configurações › Jornadas** existe e é alcançável **pela navegação** (não digitando a URL):
+     abrir `/app`, clicar em Configurações, achar "Jornadas" em *Sua empresa*.
+  2. Ativar cada uma das quatro pelo botão, e ver o estado virar "Ativada".
+  3. **O funil aparece no quadro, com as etapas na ordem**: abrir `/app/leads`, trocar para o funil
+     da jornada, ler os nomes das colunas na ordem e compará-los com a ordem esperada.
+  4. **A resposta rápida está disponível no atendimento**: abrir uma conversa, abrir o seletor de
+     respostas rápidas, digitar o atalho e ver o título aparecer.
+  5. **O tipo de compromisso está na agenda**: `/app/settings/tenant/agenda`, achar o nome — e, para
+     *Visita do representante*, ver o complemento do local (`detalhesDoLocal`), que é o que distingue
+     "no canal" de "na vinícola".
+  6. **A cadência está listada como rascunho**: abrir a lista de fluxos de follow-up e ler o nome
+     com o selo de rascunho.
+  7. **O quadro principal é o da primeira jornada** — não "Carrinho abandonado". É a promessa do
+     Step 8 da Task 3, e é a que some se `tornarPadrao` falhar em silêncio.
+  8. Capturas **nos dois temas** (`localStorage` `deskcomm-theme` + reload), com cada medida
+     registrada em `/work/out/medidas.jsonl`.
+
+  Medidas por ferramenta (`getBoundingClientRect` / `getComputedStyle`), **nunca a olho**.
+
+- [ ] **Step 3:** Declarar a spec fora do CI, com motivo, em `.github/workflows/e2e.yml` (`FORA_DO_CI`):
+  *"roda na VPS contra a produção, com a conta QA real e as jornadas já aplicadas; o CI não tem nem a
+  conta nem o banco."*
+
+```bash
+export PATH=/home/lussandro/.nvm/versions/node/v22.23.2/bin:$PATH && cd /home/lussandro/Bacco-Crm && pnpm exec vitest run tests/unit/e2e-cobertura-completa.test.ts 2>&1 | tail -8
+```
+Expected: exit 0. (O workflow está `disabled_manually` neste fork, mas o teste de cobertura lê o
+**arquivo**, não o estado do workflow — ele reprova do mesmo jeito.)
+
+- [ ] **Step 4:** Aplicar as quatro jornadas **pela tela** na organização de QA, com a conta QA, e
+  rodar a prova.
+
+```bash
+scp tests/e2e/bacco-jornadas.spec.ts root@2.25.222.110:/root/bacco-e2e/
+ssh root@2.25.222.110 'set -a; . /root/.bacco_qa; set +a; cd /root/bacco-e2e && mkdir -p out && rm -f out/jornadas-*.png out/medidas.jsonl; docker run --rm --network host -e BASE_URL=https://adega-crm.baccosistemas.com.br -e QA_EMAIL -e QA_SENHA -v /root/bacco-e2e:/work -w /work mcr.microsoft.com/playwright:v1.63.0-noble npx playwright test bacco-jornadas.spec.ts --reporter=list 2>&1 | grep -vE "npm notice" | tail -30'
+```
+Expected: `passed`, sem `failed`. **Falha de medida vira causa raiz, conserto na `bacco` e candidata
+nova** — nunca expectativa afrouxada, e nunca uma tag cortada "para consertar depois".
+
+- [ ] **Step 5:** Trazer a evidência.
+
+```bash
+cd /home/lussandro/Bacco-Crm && mkdir -p evidence/bacco-jornadas && scp 'root@2.25.222.110:/root/bacco-e2e/out/jornadas-*.png' root@2.25.222.110:/root/bacco-e2e/out/medidas.jsonl evidence/bacco-jornadas/ && ls evidence/bacco-jornadas/*.png | wc -l
+```
+Expected: uma captura por tela × 2 temas, e o `medidas.jsonl` com uma linha por medida.
+
+- [ ] **Step 6:** Aplicar as quatro jornadas **na organização do dono**, pela tela, com a conta dele
+  (decisão do dono, spec §5.3). Registrar no `revisao.md` qual organização recebeu o quê e quando.
+
+- [ ] **Step 7:** Escrever `evidence/bacco-jornadas/revisao.md`, citando **cada PNG pelo caminho
+  completo em crase**, com o que foi visto em cada um e as medidas de
+  `evidence/bacco-jornadas/medidas.jsonl`. Depois:
+
+```bash
+export PATH=/home/lussandro/.nvm/versions/node/v22.23.2/bin:$PATH && cd /home/lussandro/Bacco-Crm && git add evidence/bacco-jornadas && pnpm exec vitest run tests/unit/evidencia-citada.test.ts 2>&1 | tail -8
+```
+Expected: exit 0. (O teste só enxerga o que o **git entrega** — `git ls-files` —, por isso o `git add`
+vem antes.)
+
+- [ ] **Step 8: Aprovação do dono.** Mostrar as capturas e as quatro jornadas aplicadas nas duas
+  organizações. **É aqui que a entrega vira "pronta", e não na tag.** Registrar a resposta no
+  `revisao.md`. Reprovação = conserto na `bacco` e candidata nova; a Task 7 só começa com o ok.
+
+- [ ] **Step 9: Commit e push.**
+
+```bash
+cd /home/lussandro/Bacco-Crm && git add tests/e2e/bacco-jornadas.spec.ts .github/workflows/e2e.yml evidence/bacco-jornadas && git commit -m "test(bacco): prova em tela das jornadas de vinícola na VPS
+
+Spec autocontida que ativa as quatro pela tela e mede o funil no quadro, a
+resposta rápida no atendimento, o tipo de compromisso na agenda e a cadência
+em rascunho, nos dois temas. Provado na candidata (topo da main), antes da tag.
+
+Co-Authored-By: Claude Opus 5 (1M context) <noreply@anthropic.com>"
+git push --no-tags origin bacco:main
+```
+
+---
+
+## Task 7 — Release v26.9.4 e VPS
 
 **Files:** nenhum arquivo do repo. Task de operação.
 
-**Volta declarada:** se o health não vier `26.9.4`, se a raiz não vier `307`, ou se a Task 7 reprovar
-algo que não se corrige de imediato, a VPS volta para a `v26.9.3` com o mesmo comando e `--to v26.9.3`
-(bloco no Step 4). A correção sai numa `v26.9.5`, pelo mesmo caminho.
+**Só começa com o ok do dono (Task 6 Step 8) e com os checks verdes no MESMO SHA.** A tag nomeia um
+commit já provado em tela; ela não é o momento de descobrir nada.
+
+**Volta declarada:** se o health não vier `26.9.4` ou se a raiz não vier `307`, a VPS volta para a
+`v26.9.3` com o mesmo comando e `--to v26.9.3` (bloco no Step 4). A correção sai numa `v26.9.5`, pelo
+mesmo caminho — e passa pela Task 6 de novo antes de virar tag.
 
 - [ ] **Step 1:** Tag anotada, com a mensagem do fragmento, só com os checks da Task 5 verdes no mesmo SHA.
 
@@ -1872,8 +2863,14 @@ done'
 Expected: três linhas `stable = 26.9.4`. Divergência = **pare**: a VPS puxaria imagem que não é a
 desta release.
 
-- [ ] **Step 4:** Atualizar a VPS. ⚠️ **Por script em arquivo, NUNCA por heredoc no stdin** — o
-  `update.sh` consome o stdin, e um heredoc o faz engolir o resto do próprio script.
+- [ ] **Step 4:** Atualizar a VPS para a **tag**. ⚠️ **Por script em arquivo, NUNCA por heredoc no
+  stdin** — pelo motivo medido na Task 6 Step 1: o `update.sh` tem um único `read`
+  (`hostgator-setup-kit/update.sh:123`), alcançado só quando o backup preventivo falha numa sessão
+  interativa, e nesse caminho um heredoc lhe entrega a próxima linha do próprio script no lugar da
+  palavra `CONTINUAR`. O `< /dev/null` faz o `read` falhar na hora, e o `die` diz a verdade.
+
+Aqui `gravar_imagens` grava `pull_policy=missing` nas três imagens, porque `26.9.4` é tag **imutável**
+(`hostgator-setup-kit/_common.sh:638-642`) — é o que desfaz o `always` que a candidata deixou.
 
 ```bash
 cat > /tmp/atualizar-26.9.4.sh <<'SCRIPT'
@@ -1892,101 +2889,142 @@ script com `--to v26.9.3` e a expectativa `"version":"26.9.3"`.
 
 ---
 
-## Task 7 — Aplicar e provar em tela
+## Task 8 — Living System Checklist e o mapa vivo
 
 **Files:**
-- Create: `tests/e2e/bacco-jornadas.spec.ts`
-- Create: `evidence/bacco-jornadas/` (PNGs + `revisao.md` + `medidas.jsonl`)
-- Modify: `.github/workflows/e2e.yml` (a spec nova entra em `FORA_DO_CI`, **com motivo escrito** — o
-  teste `tests/unit/e2e-cobertura-completa.test.ts` reprova spec que não esteja em `SPECS_PARTE_*` nem
-  em `FORA_DO_CI`)
+- Create: `docs/architecture/jornadas-de-vinicola.architecture.json`
+- Modify: `docs/architecture/README.md` (a linha da tabela de mapas)
 
-**Interfaces:** Consumes: `BASE_URL`, `QA_EMAIL`, `QA_SENHA` (de `/root/.bacco_qa`). Produces:
-evidência citada em `evidence/bacco-jornadas/revisao.md`.
+**Interfaces:** Consumes: o que as Tasks 1-7 construíram. Produces: a resposta do item 13 da Definition
+of Done, com **artefato nomeado** em cada linha, e a peça nova no mapa vivo.
 
-- [ ] **Step 1:** Escrever `tests/e2e/bacco-jornadas.spec.ts`, **autocontido** — só importa
-  `@playwright/test` e `node:fs`, sem helpers do repo e sem `playwright.config.ts`, porque roda num
-  contêiner `mcr.microsoft.com/playwright:v1.63.0-noble` com `/work` montado. O molde é
-  `tests/e2e/bacco-evidencia.spec.ts:1-55`. O que ele mede, pela tela, como um leigo faria:
+Esta task existe porque o item 13 da DoD não é papelada: *"a feature não é ilha"*. E porque a resposta
+inválida é a fácil — responder o que a peça **poderia** fazer. Cada linha abaixo nomeia o artefato
+concreto, como `docs/doctrine/sistema-vivo.md:107` exige.
 
-  1. **Configurações › Jornadas** existe e é alcançável **pela navegação** (não digitando a URL):
-     abrir `/app`, clicar em Configurações, achar "Jornadas" em *Sua empresa*.
-  2. Ativar cada uma das quatro pelo botão, e ver o estado virar "Ativada".
-  3. **O funil aparece no quadro, com as etapas na ordem**: abrir `/app/leads`, trocar para o funil
-     da jornada, ler os nomes das colunas na ordem e compará-los com a ordem esperada.
-  4. **A resposta rápida está disponível no atendimento**: abrir uma conversa, abrir o seletor de
-     respostas rápidas, digitar o atalho e ver o título aparecer.
-  5. **O tipo de compromisso está na agenda**: `/app/settings/tenant/agenda`, achar o nome.
-  6. **A cadência está listada como rascunho**: abrir a lista de fluxos de follow-up e ler o nome
-     com o selo de rascunho.
-  7. Capturas **nos dois temas** (`localStorage` `deskcomm-theme` + reload), com cada medida
-     registrada em `/work/out/medidas.jsonl`.
+- [ ] **Step 1:** Responder o checklist, no `revisao.md` da evidência (é lá que ele fica junto da prova):
 
-  Medidas por ferramenta (`getBoundingClientRect` / `getComputedStyle`), **nunca a olho**.
-
-- [ ] **Step 2:** Declarar a spec fora do CI, com motivo, em `.github/workflows/e2e.yml` (`FORA_DO_CI`):
-  *"roda na VPS contra a produção, com a conta QA real e as jornadas já aplicadas; o CI não tem nem a
-  conta nem o banco."*
-
-```bash
-export PATH=/home/lussandro/.nvm/versions/node/v22.23.2/bin:$PATH && cd /home/lussandro/Bacco-Crm && pnpm exec vitest run tests/unit/e2e-cobertura-completa.test.ts 2>&1 | tail -8
 ```
-Expected: exit 0.
+Living System Checklist — Jornadas de vinícola
 
-- [ ] **Step 3:** Aplicar as quatro jornadas **pela tela** na organização de QA, com a conta QA, e
-  rodar a prova.
+[x] Quem me alimenta?
+    Duas entradas REAIS, nenhuma inventada:
+    · `app/actions/onboarding/montarQuadro.ts` (caminho B do Step 8 da Task 3) — a
+      vinícola marca no wizard;
+    · `app/actions/settings/aplicarJornadaDeVinicola.ts` — a tela, depois.
+    As duas chamam `aplicarJornada()`, que é o único caminho para o banco.
 
-```bash
-scp tests/e2e/bacco-jornadas.spec.ts root@2.25.222.110:/root/bacco-e2e/
-ssh root@2.25.222.110 'set -a; . /root/.bacco_qa; set +a; cd /root/bacco-e2e && mkdir -p out && rm -f out/jornadas-*.png out/medidas.jsonl; docker run --rm --network host -e BASE_URL=https://adega-crm.baccosistemas.com.br -e QA_EMAIL -e QA_SENHA -v /root/bacco-e2e:/work -w /work mcr.microsoft.com/playwright:v1.63.0-noble npx playwright test bacco-jornadas.spec.ts --reporter=list 2>&1 | grep -vE "npm notice" | tail -30'
+[x] Quem eu alimento?
+    Cinco consumidores que JÁ EXISTEM e passam a ter conteúdo:
+    · `crm_pipelines`/`crm_stages` → o quadro em `/app/leads`;
+    · `message_templates` → o seletor de respostas rápidas do Inbox
+      (`components/inbox/Composer.tsx:148`, que resolve `{{nome}}`);
+    · `calendar_event_types` → a tela de Agenda e o que o agente oferece ao marcar;
+    · `followup_flow_pointers` → o construtor de fluxos;
+    · `crm_pipelines.settings.fields`/`lost_reasons` → a ficha do lead e o motivo de perda.
+
+[x] Que atividade/log eu emito?
+    `api_audit_log`, por peça (`pipeline.created`, `pipeline.stage_created`,
+    `pipeline.config_updated`, `template.created`, `agenda.tipo_criado`,
+    `followup_flow.created`) MAIS a linha da aplicação inteira:
+    `vertical.jornada_aplicada` (Task 2 Step 1), com jornada, versão do pacote e
+    relatório por peça no `metadata`.
+
+[x] Onde eu apareço na tela?
+    `/app/settings/tenant/jornadas` — com os três estados lidos do ledger. E o
+    painel de auditoria recebe a ação nova sem ninguém mexer nele: a lista é
+    derivada de `AUDIT_ACTIONS` (`tests/unit/audit-lista-do-painel-e-derivada.test.tsx`).
+
+[x] Por qual porta se chega até mim?
+    `lib/navigation/catalogo.ts`, grupo `organizacao`, seção "Sua empresa",
+    `icon: "Signpost"`, `minRole: "manager"`. Vigiado por
+    `tests/unit/navegacao-completude.test.ts` — sem allowlist, sem exceção.
+
+[x] Qual meu mecanismo anti-morte?
+    As cadências. Cada jornada entra com 3 ou 4 fluxos de follow-up que garantem
+    próximo passo a um lead parado — que é o invariante 4 em forma de conteúdo.
+    ⚠️ Elas nascem em RASCUNHO: o anti-morte só liga quando a vinícola publicar,
+    e a tela diz, em texto fixo, o que falta (agente publicado + follow-up ligado
+    + WhatsApp conectado). Prometer anti-morte ativo aqui seria falso.
+
+[x] Onde se CONFIGURA o que eu uso?
+    Ver: a própria tela de Jornadas (estado por jornada). Mudar: cada peça na tela
+    dela — Etapas do funil, Modelos, Tipos de agendamento, construtor de fluxos.
+    Se faltar: a tela mostra "parcial" e LISTA o que não existe mais.
+
+[x] Qual a continuidade IA↔humano?
+    N/A justificado nesta entrega: o pacote é conteúdo, não turno de agente. O que
+    ele deixa pronto para a fase do agente são as respostas rápidas (que o humano
+    manda e o motor de follow-up também) e as FAQs do anexo, que NÃO são semeadas
+    aqui (decisão 18).
+
+[x] Qual meu LAÇO DE RETORNO?  (invariante 7 — o que muda quando eu erro)
+    Três, e nenhum é silencioso:
+    · peça que falha → `{ estado: "falhou", erro: <texto real do banco> }` no
+      relatório, que a tela mostra e o `metadata` da auditoria guarda;
+    · peça apagada pela vinícola → a jornada lê como PARCIAL na tela, com a lista
+      do que sumiu — o sistema aprende que a decisão foi dela e não a desfaz;
+    · aplicação que morre no meio → a pré-leitura por chave natural da tentativa
+      seguinte encontra o que já entrou e não duplica (Task 2, regra 12).
+
+[x] Atualizei o mapa vivo?
+    `docs/architecture/jornadas-de-vinicola.architecture.json` (Step 2).
 ```
-Expected: `passed`, sem `failed`. **Falha de medida vira causa raiz e nova release (`v26.9.5`)** —
-nunca expectativa afrouxada.
 
-- [ ] **Step 4:** Trazer a evidência.
+- [ ] **Step 2:** O mapa vivo. **Peça nova entra com ≥2 arestas** — é a doutrina, e desta vez é gate:
+  `tests/unit/mapas-de-arquitetura.test.ts` lê todo `*.architecture.json` do diretório, exige `nodes` e
+  `edges`, e reprova aresta apontando para nó inexistente. A forma é a dos mapas que já existem
+  (`schema_version`, `diagram_type`, `meta`, `lanes`, `mainPath`, `nodes`, `edges` — ver
+  `docs/architecture/central-avisos.architecture.json`).
+
+  As peças e as arestas mínimas, que são as do checklist acima:
+
+  | Peça (`id`) | Faixa | Liga-se a |
+  |---|---|---|
+  | `definicoes` | código | → `aplicador`, → `pacotes` |
+  | `pacotes` | código | ← `definicoes`, → `wizard` |
+  | `wizard` | app | → `aplicador`, → `tornar_padrao` |
+  | `tela_jornadas` | app | → `aplicador`, ← `ledger` |
+  | `aplicador` | app | ← `wizard`, ← `tela_jornadas`, → `funil`, → `modelos`, → `tipos`, → `cadencias`, → `ledger`, → `auditoria` |
+  | `ledger` | banco | ← `aplicador`, → `tela_jornadas` |
+  | `funil` / `modelos` / `tipos` / `cadencias` | banco | ← `aplicador`, → as telas que já os leem |
+  | `auditoria` | banco | ← `aplicador`, → `painel_auditoria` |
+
+  ⚠️ **NÃO re-renderize com archify.** Medido no próprio README (`docs/architecture/README.md`, seção
+  *"só o `agent-turn.workflow.json` é renderizável hoje"`): os `*.architecture.json` não validam no
+  archify 2.11.0. O JSON é a fonte e é o que o gate lê; não existe HTML para este mapa.
+
+  E a linha na tabela de mapas do `docs/architecture/README.md` — o próprio README avisa que ela já
+  apodreceu uma vez por mapa novo sem linha.
 
 ```bash
-cd /home/lussandro/Bacco-Crm && mkdir -p evidence/bacco-jornadas && scp 'root@2.25.222.110:/root/bacco-e2e/out/jornadas-*.png' root@2.25.222.110:/root/bacco-e2e/out/medidas.jsonl evidence/bacco-jornadas/ && ls evidence/bacco-jornadas/*.png | wc -l
+export PATH=/home/lussandro/.nvm/versions/node/v22.23.2/bin:$PATH && cd /home/lussandro/Bacco-Crm && pnpm exec vitest run tests/unit/mapas-de-arquitetura.test.ts 2>&1 | tail -8
+ls docs/architecture/*.json | wc -l   # o README tem de listar todos
 ```
-Expected: uma captura por tela × 2 temas, e o `medidas.jsonl` com uma linha por medida.
+Expected: exit 0, e a contagem batendo com a tabela do README.
 
-- [ ] **Step 5:** Aplicar as quatro jornadas **na organização do dono**, pela tela, com a conta dele
-  (decisão do dono, spec §5.3). Registrar no `revisao.md` qual organização recebeu o quê e quando.
+- [ ] **Step 3: Vault** — escrever em `/home/lussandro/Obsidian/Vault/projetos/bacco-adega-crm/` só o
+  que é **durável**:
+  · que o `update.sh` tem um `read` (`:123`) alcançado só quando o backup falha em sessão interativa —
+    por isso script em arquivo + `< /dev/null`, nunca heredoc;
+  · que `calendar_event_types.reminder_enabled` tem default `true` no DDL base e `false` só no
+    apêndice, então quem grava passa o valor explícito;
+  · que o ledger de jornadas mora em `organizations.settings.bacco_jornadas`, grava **id + chave
+    natural**, e decide existência pelo **id** — chave natural é editável e renomear leria como apagar;
+  · que `uniq_crm_pipelines_org_default` é parcial, então trocar o funil padrão são duas escritas em
+    ordem, com volta se a segunda falhar;
+  · que a `main` deste fork **não tem branch protection** (a API responde 403 sem GitHub Pro) e que o
+    workflow `e2e` está `disabled_manually` — quem for medir checks mede pelos workflows `active`.
+  Atualizar `ultima_revisao`. **Não** escrever log de sessão nem plano com checkbox.
 
-- [ ] **Step 6:** Escrever `evidence/bacco-jornadas/revisao.md`, citando **cada PNG pelo caminho
-  completo em crase**, com o que foi visto em cada um e as medidas de
-  `evidence/bacco-jornadas/medidas.jsonl`. Depois:
-
-```bash
-export PATH=/home/lussandro/.nvm/versions/node/v22.23.2/bin:$PATH && cd /home/lussandro/Bacco-Crm && git add evidence/bacco-jornadas && pnpm exec vitest run tests/unit/evidencia-citada.test.ts 2>&1 | tail -8
-```
-Expected: exit 0. (O teste só enxerga o que o **git entrega** — `git ls-files` —, por isso o `git add`
-vem antes.)
-
-- [ ] **Step 7:** Aprovação do dono: mostrar as capturas e as quatro jornadas aplicadas nas duas
-  organizações. Pronto só com o ok dele; registrar a resposta no `revisao.md`. Reprovação = correção
-  em `v26.9.5` ou volta declarada da Task 6.
-
-- [ ] **Step 8: Commit e push.**
+- [ ] **Step 4: Commit e push.**
 
 ```bash
-cd /home/lussandro/Bacco-Crm && git add tests/e2e/bacco-jornadas.spec.ts .github/workflows/e2e.yml evidence/bacco-jornadas && git commit -m "test(bacco): prova em tela das jornadas de vinícola na VPS
-
-Spec autocontida que ativa as quatro pela tela e mede o funil no quadro, a
-resposta rápida no atendimento, o tipo de compromisso na agenda e a cadência
-em rascunho, nos dois temas.
+cd /home/lussandro/Bacco-Crm && git add docs/architecture evidence/bacco-jornadas && git commit -m "docs(bacco): mapa vivo das jornadas e o checklist do sistema vivo
 
 Co-Authored-By: Claude Opus 5 (1M context) <noreply@anthropic.com>"
 git push --no-tags origin bacco:main
 ```
-
-- [ ] **Step 9: Vault** — escrever em `/home/lussandro/Obsidian/Vault/projetos/bacco-adega-crm/` só o
-  que é **durável**: que o `update.sh` consome o stdin (por isso script em arquivo, nunca heredoc);
-  que `calendar_event_types.reminder_enabled` tem default `true` no DDL base e `false` só no apêndice,
-  então quem grava passa o valor explícito; que o ledger de jornadas mora em
-  `organizations.settings.bacco_jornadas` e é ele — não a chave natural — que faz reaplicar não
-  duplicar; que o check `e2e` está `disabled_manually` neste fork. Atualizar `ultima_revisao`. **Não**
-  escrever log de sessão nem plano com checkbox.
 
 ---
 
@@ -2006,12 +3044,20 @@ git push --no-tags origin bacco:main
 | Reaplicar duplicando resposta rápida | `message_templates` **não tem unique por shortcut** (`baseline.sql:7598`) | Ledger + pré-leitura; caso "reaplica sem duplicar" na Task 2 |
 | Ressuscitar o que a vinícola apagou | chave natural ausente não distingue "nunca criei" de "criaram e apagaram" | Ledger: só cria peça que **nunca constou** |
 | Substituir o `settings` da organização e perder chave irmã | `organizations.settings` guarda o estado do onboarding | Gravação por **merge**; o teste do ledger afirma que `settings.onboarding` sobrevive |
-| Tela nova sem porta na navegação | `tests/unit/navegacao-completude.test.ts` | Entrada no catálogo com grupo e seção; Task 4 Step 6 |
-| Texto de interface sem espanhol | `tests/unit/i18n-espanhol-cobre-a-tela.test.ts` varre o AST de toda tela | Task 4 Step 5, e a cerca rodada no Step 6 |
+| Tela nova sem porta na navegação | `tests/unit/navegacao-completude.test.ts` | Entrada no catálogo com grupo, seção e `minRole` (Task 4 Step 4), com a cerca rodada no Task 4 Step 6 |
+| Texto de interface sem espanhol | `tests/unit/i18n-espanhol-cobre-a-tela.test.ts` varre o AST de toda tela, e reprova a task que INTRODUZ a string — não a seguinte | As frases do onboarding entram na Task 3 Step 7b (com a cerca rodada no Step 10); as da tela nova, na Task 4 Step 5 (cerca no Step 6) |
 | Reprovar `sugerir-funil.test.ts` sem perceber | 13 casos + a asserção da linha 118 usam os ids antigos | Task 3 Step 1 reescreve o arquivo **antes** de trocar os ids, preservando a régua |
 | Grafo recusado gravado sem erro | o INSERT só vê `jsonb`; a falha aparece quando alguém abre o construtor | Task 2 Step 7 passa cada grafo pelo `flowGraphSchema` real |
-| `update.sh` engolindo o script na VPS | o `update.sh` consome o stdin | Task 6 Step 4: script em arquivo + `< /dev/null` |
-| Esperar um check `e2e` que não existe | o workflow está `disabled_manually` neste fork | Declarado em Global Constraints e na Task 5 Step 6 |
+| `update.sh` engolindo o script na VPS | o único `read` do script (`hostgator-setup-kit/update.sh:123`) é alcançado quando o **backup preventivo falha** em sessão interativa; um heredoc lhe entrega a linha seguinte do próprio script no lugar de `CONTINUAR`, e a atualização morre dizendo "cancelada pelo operador" | Task 6 Step 1 e Task 7 Step 4: script em arquivo + `< /dev/null`, para o `read` falhar na hora |
+| Medir os checks contra uma lista escrita | a `main` deste fork **não tem branch protection** (a API responde 403 sem GitHub Pro) e o `e2e` está `disabled_manually` | Global Constraints traz os dois `gh api`; a expectativa é **derivada** deles, não afirmada |
+| **Dois funis com o mesmo nome** | `PACOTES` vira projeção da jornada, e a RPC grava a proposta no funil existente (`montarQuadro.ts:232-247`); o slug desambigua com `_2`, o **nome não desambigua com nada** | Task 3 Step 8: com jornada marcada o wizard **não** chama a RPC; sem jornada, o fluxo de hoje inteiro. Medido em Task 3 Step 8b |
+| Quadro de loja online sobrando como padrão | com a RPC fora do caminho, ninguém substitui o funil que o gatilho semeou — e a tela promete que ele "é substituído" (`_client.tsx:198`) | `tornarPadrao()` promove o funil da primeira jornada, em duas escritas ordenadas (`uniq_crm_pipelines_org_default` é parcial, `baseline.sql:2902`) |
+| Editor de colunas descartado em silêncio | com jornada marcada, o que a pessoa digitar no editor não é gravado por ninguém | Task 3 Step 7: o editor só aparece quando nenhuma jornada está marcada |
+| Ícone que não existe no mapa fechado | `NAV_DESTINATIONS` faz `ICONS[d.icon]` sem fallback (`lib/navigation/registry.ts:94`): nome fora do mapa vira `undefined` e **quebra a tela no browser**, com typecheck e suíte verdes | `icon: "Signpost"`, que está no mapa (`:84`) e em `lib/ui/icons.ts:125` |
+| Ramo de condição sem aresta | `validateFlowForPublish` só cobra cobertura de ramo no modo `per_check` (`lib/followup/validate-publish.ts:343-348`); um `condition` combinado com só a saída "sim" **passa no publish** e o lead para no nó | `grafoDaCadencia` escreve as duas `cond_result`, e o Step 7 da Task 2 as mede |
+| Grafo bem formado que não publica | `flowGraphSchema` não exige trigger único, alcançabilidade nem caminho até `end` | Task 2 Step 7 passa cada grafo por `validateFlowForPublish`, esperando `{ ok: true }` |
+| Vocabulário perdendo chave | o default do DDL tem **8** chaves (`supabase/baseline.sql:1486`) e a jornada define 4 | O insert mescla as 4 sobre as 8 (Task 2, regra 3) |
+| Tag cortada antes da prova em tela | doutrina de QA Visual: a prova é critério de aceite, não verificação posterior | A prova roda na **candidata** (Task 6) e a tag só sai depois do ok do dono (Task 7) |
 
 ## Fora deste plano
 
@@ -2027,3 +3073,31 @@ git push --no-tags origin bacco:main
 - **Conteúdo em espanhol.** Decisão do dono: pacote só em português; a interface segue bilíngue.
 - **Migration de qualquer espécie.** Se uma fase futura exigir coluna nova, ela sai como migration
   idempotente + apêndice do `baseline.sql` + linha no MANIFEST, declarada antes.
+- **Garantia forte contra duas abas simultâneas.** Esta entrega promete idempotência **sequencial** e
+  fecha o clique duplo pela tela (Task 2, regra 12). A garantia forte custa unique parcial em
+  `message_templates` — migration, apêndice e MANIFEST —, e vira fase própria se o dono quiser.
+
+## Conferência final do próprio plano
+
+Antes de dar a execução por encerrada, provar que nenhum step ficou com buraco — plano com
+`/* … */` no lugar do código é plano que empurra a decisão para quem executa, às cegas:
+
+```bash
+cd /home/lussandro/Bacco-Crm && for f in \
+  docs/superpowers/plans/2026-09-15-bacco-jornadas-de-vinicola.md \
+  docs/superpowers/specs/2026-09-15-bacco-jornadas-de-vinicola-design.md; do
+  # A própria seção sai da varredura: ela CITA os padrões que procura.
+  sed '/^## Conferência final/,$d' "$f" \
+    | grep -nE 'TODO:|\bTBD\b|FIXME|/\* ?(…|\.\.\.) ?\*/|(similar|igual|análogo|idêntico) à Task' \
+    | sed "s|^|$f:|"
+done
+```
+Expected: **nenhuma linha**. Ocorrência = o step não tem código real; escreva-o antes de executar.
+
+⚠️ **Dois falsos positivos previsíveis, e nenhum dos dois é defeito** — a régua é `TODO:` com
+dois-pontos justamente por causa do primeiro:
+
+- **`TODO` é palavra portuguesa.** "único em TODO o pacote" aparece duas vezes no plano (no tipo da
+  resposta rápida e no teste dos 67 atalhos) e está correto. Um `grep TODO` solto acusa as duas, e
+  quem "consertar" a prosa piora o documento.
+- **O comando casa a si mesmo.** Ele cita os próprios padrões; o `grep -v` do fim tira a seção.
