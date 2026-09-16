@@ -21,7 +21,7 @@ import type { McpAuthResult } from "@/lib/mcp/auth";
 import { logger } from "@/lib/logger";
 import { allTools, getToolByName } from "@/lib/mcp/tools";
 import { catalogEntry } from "@/lib/mcp/tools/catalog";
-import { higienizarUuidsDeAterro } from "@/lib/mcp/uuid-de-aterro";
+import { ehUuidDeAterro, higienizarUuidsDeAterro } from "@/lib/mcp/uuid-de-aterro";
 import { recusaDeCapacidadeParaOModelo } from "@/lib/mcp/recusa-para-o-modelo";
 import type { McpContext, McpToolDefinition } from "@/lib/mcp/types";
 import { resolveActiveLeadForContact, type LeadCandidate } from "@/lib/leads/active-lead";
@@ -49,6 +49,15 @@ export interface PickToolsInput {
   pipelineIds?: readonly string[];
   /** Mutable signal — runtime checks after each step. */
   handoffSignal: RuntimeHandoffSignal;
+  /**
+   * O contato do turno. Toda tool que pede `contact_id` (marcar, remarcar,
+   * confirmar agendamento, ler contato) o recebe daqui quando o modelo não o
+   * manda — e o modelo NUNCA o tem: o uuid não está no contexto, e o que ele
+   * inventa a higiene acima descarta. Medido em 2026-09-16: a agente ofereceu
+   * horários reais, o cliente escolheu, e a marcação nunca aconteceu porque
+   * `crm_book_appointment` exige `contact_id` e ninguém o fornecia.
+   */
+  contactId?: string | null;
 }
 
 const HANDOFF_TOOL_NAME = "crm_request_human_handoff";
@@ -86,6 +95,25 @@ function wrapMcpTool(
         (args ?? {}) as Record<string, unknown>,
       );
       const argsRecord = higiene.limpos;
+      // O contato é do turno, não do modelo: quem está sendo atendido é quem
+      // escreveu. Só preenche quando a tool pede o campo e ele veio vazio (ou
+      // era sentinela e a higiene o apagou) — um id legítimo passado pelo
+      // modelo atravessa intacto.
+      // Em campo OBRIGATÓRIO a higiene não apaga a sentinela (apagar viraria
+      // erro de validação), então ela é tratada aqui como "vazio".
+      // Só quando o campo é OBRIGATÓRIO: em `crm_list_appointments` o
+      // `contact_id` é um filtro opcional, e preenchê-lo transformaria
+      // "compromissos de amanhã" em "compromissos deste contato amanhã".
+      const campoContato = (def.inputSchema as Record<string, z.ZodTypeAny>)['contact_id'];
+      const contatoObrigatorio = campoContato !== undefined && !campoContato.safeParse(undefined).success;
+      if (
+        contatoObrigatorio &&
+        (argsRecord['contact_id'] === undefined || ehUuidDeAterro(argsRecord['contact_id'])) &&
+        typeof input.contactId === 'string' &&
+        input.contactId !== ''
+      ) {
+        argsRecord['contact_id'] = input.contactId;
+      }
       if (higiene.descartados.length > 0) {
         // Não é cosmético: sem esta linha o defeito passa a se curar em
         // silêncio e ninguém descobre que um modelo faz isso o tempo todo.

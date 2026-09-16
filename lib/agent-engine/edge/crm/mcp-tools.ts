@@ -47,7 +47,7 @@ export interface McpTurnTools {
 
 export async function buildMcpTurnTools(
   cfg: CrmEdgeConfig,
-  ids: { organizationId: string; jobId: string },
+  ids: { organizationId: string; jobId: string; contactId?: string | null },
   agentConfig: PublishedAgentConfig,
   log: Logger,
   options?: { readOnly: boolean },
@@ -119,6 +119,7 @@ export async function buildMcpTurnTools(
     // por isso TODA escrita de lead era recusada — com a capacidade ligada na
     // tela e o card parado. Quem passava era só o dispatcher antigo.
     pipelineIds: agentConfig.pipelineIds,
+    contactId: ids.contactId ?? null,
   });
 
   return {
