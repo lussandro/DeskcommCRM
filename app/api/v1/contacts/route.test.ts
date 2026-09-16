@@ -137,6 +137,19 @@ describe("GET /api/v1/contacts — Bearer (integrações externas)", () => {
     expect(listContactsHandler).not.toHaveBeenCalled();
   });
 
+  it("Bearer de organização suspensa → 403 tenant_suspended, não forbidden genérico", async () => {
+    vi.mocked(validateBearerToken).mockRejectedValue(
+      new McpAuthError(-32002, 403, "Organization suspended.", "tenant_suspended"),
+    );
+    const { GET } = await import("./route");
+    const res = await GET(req("http://localhost/api/v1/contacts", { authorization: "Bearer dsk_abc_def" }));
+
+    expect(res.status).toBe(403);
+    const body = (await res.json()) as { error: { code: string } };
+    expect(body.error.code).toBe("tenant_suspended");
+    expect(listContactsHandler).not.toHaveBeenCalled();
+  });
+
   it("Bearer sem o header Authorization → cai no modo sessão (não trata string vazia como token)", async () => {
     sessaoOk();
     const { GET } = await import("./route");

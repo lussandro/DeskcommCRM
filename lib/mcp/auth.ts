@@ -33,6 +33,13 @@ export class McpAuthError extends Error {
     public readonly mcpCode: number,
     public readonly httpStatus: number,
     message: string,
+    /**
+     * Código canônico do envelope REST (`lib/api/errors.ts`), quando existe um
+     * mais específico que o genérico. Opcional de propósito: os erros de token
+     * (ausente, inválido, revogado, expirado) continuam sem ele, e o
+     * `resolveAuthDual` segue devolvendo o que sempre devolveu.
+     */
+    public readonly apiCode?: string,
   ) {
     super(message);
     this.name = "McpAuthError";
@@ -100,7 +107,7 @@ export async function validateBearerToken(
   const supabase = createAdminClient();
   const { data, error } = await supabase
     .from("api_tokens")
-    .select("id, organization_id, scopes, revoked_at, expires_at")
+    .select("id, organization_id, scopes, revoked_at, expires_at, organizations(status)")
     .eq("token_hash", hashLiteral)
     .maybeSingle();
 
@@ -115,6 +122,21 @@ export async function validateBearerToken(
   }
   if (data.expires_at && new Date(data.expires_at) < new Date()) {
     throw new McpAuthError(-32001, 401, "Token expired.");
+  }
+
+  // Organização suspensa não opera por integração. `-32002`/403 é o par que o
+  // vizinho `ensureRole` já usa para "autenticou, não pode" — 401 diria ao
+  // cliente que o token está errado, e ele tentaria de novo para sempre.
+  //
+  // O embed vem objeto ou array conforme a inferência do PostgREST; tratar só
+  // um dos dois é o jeito silencioso de o gate nunca disparar.
+  const orgJoin = data.organizations as
+    | { status: string | null }
+    | { status: string | null }[]
+    | null;
+  const orgStatus = Array.isArray(orgJoin) ? (orgJoin[0]?.status ?? null) : (orgJoin?.status ?? null);
+  if (orgStatus === "suspended") {
+    throw new McpAuthError(-32002, 403, "Organization suspended.", "tenant_suspended");
   }
 
   const scopes = parseScopes(data.scopes);
