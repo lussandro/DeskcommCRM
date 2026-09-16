@@ -1,0 +1,32 @@
+{"etapa":"navegacao","href":"/app/settings/tenant/jornadas","url":"https://adega-crm.baccosistemas.com.br/app/settings/tenant/jornadas"}
+{"etapa":"aviso_de_rascunho","texto":"As cadências entram como rascunho. Para elas começarem a mandar mensagem, é preciso um agente de IA publicado, com follow-up ligado, e o WhatsApp conectado.","altura":66,"cor":"rgb(108, 100, 93)"}
+{"etapa":"ativar","funil":"Canal e revenda","status":200,"ms":662}
+{"etapa":"estado_na_tela","funil":"Canal e revenda","texto":"Esta jornada está ativada · 16/09/2026"}
+{"etapa":"ativar","funil":"Visitas e degustações","status":200,"ms":1341}
+{"etapa":"estado_na_tela","funil":"Visitas e degustações","texto":"Esta jornada está ativada · 16/09/2026"}
+{"etapa":"ativar","funil":"Clube de assinatura","status":200,"ms":1179}
+{"etapa":"estado_na_tela","funil":"Clube de assinatura","texto":"Esta jornada está ativada · 16/09/2026"}
+{"etapa":"ativar","funil":"Vendas ao consumidor","status":200,"ms":1454}
+{"etapa":"estado_na_tela","funil":"Vendas ao consumidor","texto":"Esta jornada está ativada · 16/09/2026"}
+{"etapa":"relatorio","funil":"Canal e revenda","linhas":[]}
+{"etapa":"ativar","funil":"Canal e revenda","status":200,"ms":1781}
+{"etapa":"relatorio_da_reaplicacao","funil":"Canal e revenda","linhas":[]}
+{"etapa":"funis_na_lista","nomes":["Clientes da vinícola","Canal e revenda","Visitas e degustações","Clube de assinatura","Vendas ao consumidor"],"padrao":["Clientes da vinícola"]}
+{"etapa":"quadro","funil":"Canal e revenda","url":"https://adega-crm.baccosistemas.com.br/app/pipelines/387d1aaa-baee-43c8-8592-3741388df4d4","colunas":[{"nome":"Novo contato","x":333},{"nome":"Entendendo o canal","x":665},{"nome":"Cadastro conferido","x":997},{"nome":"Tabela enviada","x":1329},{"nome":"Amostra ou degustação","x":1661},{"nome":"Negociando pedido","x":1993},{"nome":"Pedido fechado","x":2325},{"nome":"Não fechou","x":2657}],"droppables":8,"h2NaPagina":13,"carregando":false}
+{"etapa":"quadro","funil":"Visitas e degustações","url":"https://adega-crm.baccosistemas.com.br/app/pipelines/31bea848-cd6a-434a-9ce8-ab3c757d2de5","colunas":[{"nome":"Novo interessado","x":333},{"nome":"Tirando dúvidas","x":665},{"nome":"Escolhendo data","x":997},{"nome":"Aguardando confirmação","x":1329},{"nome":"Reserva confirmada","x":1661},{"nome":"Visita realizada","x":1993},{"nome":"Não veio","x":2325}],"droppables":7,"h2NaPagina":12,"carregando":false}
+{"etapa":"quadro","funil":"Clube de assinatura","url":"https://adega-crm.baccosistemas.com.br/app/pipelines/0ea6fe98-77c6-4125-86d3-450a5ee74306","colunas":[{"nome":"Interesse no clube","x":333},{"nome":"Explicando o clube","x":665},{"nome":"Escolhendo o plano","x":997},{"nome":"Plano escolhido","x":1329},{"nome":"Aguardando adesão","x":1661},{"nome":"Assinante ativo","x":1993},{"nome":"Não assinou","x":2325}],"droppables":7,"h2NaPagina":12,"carregando":false}
+{"etapa":"quadro","funil":"Vendas ao consumidor","url":"https://adega-crm.baccosistemas.com.br/app/pipelines/fa07c2a0-af2f-4216-a78c-45bbf1d96a1f","colunas":[{"nome":"Novo contato","x":333},{"nome":"Entendendo o gosto","x":665},{"nome":"Indiquei rótulos","x":997},{"nome":"Pedido montado","x":1329},{"nome":"Aguardando pagamento","x":1661},{"nome":"Pedido pago","x":1993},{"nome":"Não comprou","x":2325}],"droppables":7,"h2NaPagina":12,"carregando":false}
+{"etapa":"api_message_templates","status":200,"quantidade":67,"atalhos":["/loja-recompra-1","/loja-pos-2","/loja-pos-1","/loja-parado-2","/loja-parado-1","/loja-pos-venda","/loja-retomar","/loja-corporativo","/loja-presente","/loja-pagamento"]}
+{"etapa":"inbox","conversas":1}
+{"etapa":"resposta_rapida","atalho":"/canal-ola","titulos":["Boas-vindas do canal","Olá, {{nome}}! Aqui é a {{nome_da_vinicola}}. Que bom ter você por aqui. Me conta rapidinho: é restaurante, loja, distribuidora? E em que cidade vocês atuam?"],"textoDoMenu":"Boas-vindas do canalOlá, {{nome}}! Aqui é a {{nome_da_vinicola}}. Que bom ter você por aqui. Me conta rapidinho: é restaurante, loja, distribuidora? E em que cidade vocês atuam?"}
+{"etapa":"resposta_rapida","atalho":"/eno-ola","titulos":["Boas-vindas da visita","Olá, {{nome}}! Que bom que você quer conhecer a {{nome_da_vinicola}}. Me conta: para quantas pessoas e que dia você pensou?"],"textoDoMenu":"Boas-vindas da visitaOlá, {{nome}}! Que bom que você quer conhecer a {{nome_da_vinicola}}. Me conta: para quantas pessoas e que dia você pensou?"}
+{"etapa":"resposta_rapida","atalho":"/clube-explicar","titulos":["Explicar o clube","O clube funciona assim: {{como_funciona_o_clube}}. Você recebe {{o_que_vem_na_caixa}} a cada {{frequencia_do_clube}}."],"textoDoMenu":"Explicar o clubeO clube funciona assim: {{como_funciona_o_clube}}. Você recebe {{o_que_vem_na_caixa}} a cada {{frequencia_do_clube}}."}
+{"etapa":"resposta_rapida","atalho":"/loja-ola","titulos":["Boas-vindas","Olá, {{nome}}! Aqui é a {{nome_da_vinicola}}. Me conta o que você procura — é para presentear ou para beber com alguém?"],"textoDoMenu":"Boas-vindasOlá, {{nome}}! Aqui é a {{nome_da_vinicola}}. Me conta o que você procura — é para presentear ou para beber com alguém?"}
+{"etapa":"agenda","funil":"Canal e revenda","compromisso":"Visita do representante","texto":"Visita do representanteVisita60 minPresencial· No estabelecimento do clienteEditarDesativar"}
+{"etapa":"agenda","funil":"Visitas e degustações","compromisso":"Visita guiada","texto":"Visita guiadaVisita60 minPresencialEditarDesativar"}
+{"etapa":"agenda","funil":"Clube de assinatura","compromisso":"Degustação exclusiva de assinante","texto":"Degustação exclusiva de assinanteVisita60 minPresencialEditarDesativar"}
+{"etapa":"agenda","funil":"Vendas ao consumidor","compromisso":"Retirada na vinícola","texto":"Retirada na vinícolaVisita15 minPresencialEditarDesativar"}
+{"etapa":"cadencia","funil":"Canal e revenda","cadencia":"Canal · tabela enviada sem retorno","texto":"Canal · tabela enviada sem retornoRascunhoVersão—HandoffpauseAtualizado em 16/09/2026Excluir"}
+{"etapa":"cadencia","funil":"Visitas e degustações","cadencia":"Enoturismo · antes da visita","texto":"Enoturismo · antes da visitaRascunhoVersão—HandoffpauseAtualizado em 16/09/2026Excluir"}
+{"etapa":"cadencia","funil":"Clube de assinatura","cadencia":"Clube · interesse sem adesão","texto":"Clube · interesse sem adesãoRascunhoVersão—HandoffpauseAtualizado em 16/09/2026Excluir"}
+{"etapa":"cadencia","funil":"Vendas ao consumidor","cadencia":"Loja · pedido parado","texto":"Loja · pedido paradoRascunhoVersão—HandoffpauseAtualizado em 16/09/2026Excluir"}
