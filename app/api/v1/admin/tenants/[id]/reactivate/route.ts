@@ -15,6 +15,7 @@ import { requirePlatformAdmin } from "@/lib/auth/requirePlatformAdmin";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { ok, fail } from "@/lib/api/wrappers";
 import { audit } from "@/lib/audit";
+import { limparFilaRepresada } from "@/lib/tenancy/limpar-fila-represada";
 
 const bodySchema = z.object({
   reason: z
@@ -71,6 +72,23 @@ export async function POST(
     );
   }
 
+  // ANTES de virar o status, e não depois: enquanto a organização ainda está
+  // `suspended`, o claim a ignora e a limpeza não corre com worker em voo. Um
+  // milissegundo depois do commit, o `agent-worker` já estaria drenando tudo.
+  let jobsDescartados = 0;
+  try {
+    ({ descartados: jobsDescartados } = await limparFilaRepresada(admin, tenantId));
+  } catch (err) {
+    // Reativar com a fila cheia é o dano que esta task existe para impedir —
+    // então a reativação FALHA e o operador tenta de novo.
+    return fail(
+      "internal_error",
+      `Failed to clear queued work: ${err instanceof Error ? err.message : String(err)}`,
+      500,
+      { requestId },
+    );
+  }
+
   // Perform the UPDATE — clear all suspension fields
   const now = new Date().toISOString();
   const { error: updateError } = await admin
@@ -116,6 +134,7 @@ export async function POST(
       tenant_id: tenantId,
       reactivated_by: adminCtx.user.id,
       reason: body.reason,
+      jobs_descartados: jobsDescartados,
     },
   });
 
