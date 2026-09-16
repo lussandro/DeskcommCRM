@@ -2,7 +2,7 @@
  * A suspensão do tenant fecha a API de sessão — não só a tela.
  *
  * Antes deste teste, `organizations.status` era lido em UM lugar do produto
- * (`app/app/layout.tsx:109`, um redirect). Layout não roda em rota de API: a
+ * (`app/app/layout.tsx`, um redirect). Layout não roda em rota de API: a
  * mesma sessão que via a tela de "conta suspensa" seguia chamando
  * `/api/v1/*` normalmente — inclusive enviar mensagem pela inbox.
  *

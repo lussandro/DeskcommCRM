@@ -108,7 +108,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
     if (orgRow && !orgRow.onboarded_at && !user.support) redirect("/onboarding");
     // A sessão de acompanhamento SÓ-LEITURA entra: é para diagnosticar, e
     // "suspensa por inadimplência" é dos motivos mais comuns de pedir suporte.
-    // `full` NÃO entra — `require-role.ts:68` mapeia esse modo para papel
+    // `full` NÃO entra — `require-role.ts` mapeia esse modo para papel
     // `admin`, e isso seria escrita numa organização que o operador desligou.
     if (
       orgRow?.status === "suspended" &&
