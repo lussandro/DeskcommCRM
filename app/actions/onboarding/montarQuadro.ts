@@ -22,7 +22,19 @@ import {
   validarProposta,
   type PropostaDeFunil,
 } from "@/lib/onboarding/proposta-de-funil";
-import { escolherPacotePorTexto, sugerirFunil, type Sugestao } from "@/lib/onboarding/sugerir-funil";
+import {
+  escolherPacotePorTexto,
+  sugerirFunil,
+  sugerirJornadas,
+  type Sugestao,
+} from "@/lib/onboarding/sugerir-funil";
+import { JORNADAS, ehChaveDeJornada, type ChaveDeJornada } from "@/lib/vertical/vinicola";
+import {
+  aplicarJornada,
+  lerLedger,
+  tornarPadrao,
+  type RelatorioDaJornada,
+} from "@/lib/vertical/vinicola/aplicar";
 import { requireOnboardingCtx, patchOnboardingState, loadOnboardingState, OnboardingError } from "./_shared";
 
 /** O funil que o gatilho semeou — o que a pessoa tem antes deste passo. */
@@ -167,6 +179,26 @@ export async function dadosDoPasso(orgId: string, negocio: string): Promise<Dado
   return { atual, sugestao };
 }
 
+/**
+ * As jornadas de vinícola que o texto do dono nomeia — já marcadas na tela.
+ *
+ * Reusa o `o_que_faz` que `dadosDoPasso` já lê. Lista vazia é desfecho
+ * legítimo: quem não é vinícola não marca nada e segue pelo quadro genérico.
+ */
+export async function jornadasSugeridasDoPasso(
+  orgId: string,
+  negocio: string,
+): Promise<ChaveDeJornada[]> {
+  let oQueFaz = "";
+  try {
+    const { state } = await loadOnboardingState(orgId);
+    oQueFaz = state.welcome?.o_que_faz ?? "";
+  } catch {
+    oQueFaz = "";
+  }
+  return sugerirJornadas(`${negocio} ${oQueFaz}`);
+}
+
 export type ResultadoDoQuadro =
   | { ok: true }
   | {
@@ -211,50 +243,115 @@ export async function aplicarQuadro(formData: FormData): Promise<ResultadoDoQuad
   const veredito = validarProposta(proposta);
   if (!veredito.ok) return { ok: false, erro: veredito.erros.join(" ") };
 
+  // ── As jornadas marcadas ────────────────────────────────────────────────────
+  // Entrada externa, revalidada: o que chega de um formulário é externo mesmo
+  // tendo saído daqui há dois minutos. `ehChaveDeJornada` é a guarda única —
+  // sem ela, esta action e a da tela inventariam cada uma a sua.
+  const marcadas: ChaveDeJornada[] = (() => {
+    try {
+      const cru: unknown = JSON.parse(String(formData.get("jornadas") ?? "[]"));
+      return Array.isArray(cru) ? [...new Set(cru.filter(ehChaveDeJornada))] : [];
+    } catch {
+      return [];
+    }
+  })();
+
   const admin = createAdminClient();
   const atual = await carregarQuadroAtual(admin, ctx.orgId);
   if (!atual) return { ok: false, erro: "Não encontrei o quadro desta empresa." };
 
-  // O slug do funil não pode colidir com o de outro funil da organização
-  // (`uniq_crm_pipelines_org_slug`). O do próprio funil sai da lista: renomear
-  // "Pedidos" para "Pedidos" não pode virar "pedidos_2".
-  const { data: outros } = await admin
-    .from("crm_pipelines")
-    .select("slug")
-    .eq("organization_id", ctx.orgId)
-    .neq("id", atual.pipelineId);
-  const slug = slugDeNome(
-    proposta.nome,
-    (outros ?? []).map((p) => String(p.slug ?? "")),
-    "funil",
-  );
+  if (marcadas.length === 0) {
+    // ── CAMINHO A: sem jornada. EXATAMENTE o fluxo de hoje. ───────────────────
+    // A RPC grava a proposta sobre o funil que a organização já tem, e o pacote
+    // genérico é o plano B de quem não é vinícola. Quem não marcou nada não
+    // pediu nada de vinícola.
+    //
+    // O slug do funil não pode colidir com o de outro funil da organização
+    // (`uniq_crm_pipelines_org_slug`). O do próprio funil sai da lista: renomear
+    // "Pedidos" para "Pedidos" não pode virar "pedidos_2".
+    const { data: outros } = await admin
+      .from("crm_pipelines")
+      .select("slug")
+      .eq("organization_id", ctx.orgId)
+      .neq("id", atual.pipelineId);
+    const slug = slugDeNome(
+      proposta.nome,
+      (outros ?? []).map((p) => String(p.slug ?? "")),
+      "funil",
+    );
 
-  const { data: resposta, error } = await admin.rpc("fn_aplicar_quadro_do_onboarding", {
-    p_organization_id: ctx.orgId,
-    p_pipeline_id: atual.pipelineId,
-    p_nome: proposta.nome,
-    p_slug: slug,
-    p_etapas: etapasParaGravar(proposta, slugDeNome).map((e) => ({
-      nome: e.nome,
-      slug: e.slug,
-      position: e.position,
-      is_won: e.is_won,
-      is_lost: e.is_lost,
-      agent_stage_hint: e.agent_stage_hint,
-    })),
-  });
+    const { data: resposta, error } = await admin.rpc("fn_aplicar_quadro_do_onboarding", {
+      p_organization_id: ctx.orgId,
+      p_pipeline_id: atual.pipelineId,
+      p_nome: proposta.nome,
+      p_slug: slug,
+      p_etapas: etapasParaGravar(proposta, slugDeNome).map((e) => ({
+        nome: e.nome,
+        slug: e.slug,
+        position: e.position,
+        is_won: e.is_won,
+        is_lost: e.is_lost,
+        agent_stage_hint: e.agent_stage_hint,
+      })),
+    });
 
-  if (error) return { ok: false, erro: `Não consegui salvar o quadro: ${error.message}` };
+    if (error) return { ok: false, erro: `Não consegui salvar o quadro: ${error.message}` };
 
-  const r = (resposta ?? {}) as { ok?: boolean; motivo?: string; quantos?: number };
-  if (!r.ok) {
-    return { ok: false, erro: explicarRecusa(r.motivo, r.quantos) };
+    const r = (resposta ?? {}) as { ok?: boolean; motivo?: string; quantos?: number };
+    if (!r.ok) {
+      return { ok: false, erro: explicarRecusa(r.motivo, r.quantos) };
+    }
+  } else {
+    // ── CAMINHO B: com jornada. A RPC NÃO É CHAMADA. ──────────────────────────
+    // Chamá-la aqui gravaria a proposta — que desde esta entrega é a PROJEÇÃO da
+    // jornada — sobre o funil existente, e o aplicador criaria logo abaixo um
+    // segundo funil com o MESMO nome: `uniq_crm_pipelines_org_slug` não impede,
+    // porque `slugDeNome` desambigua o slug com sufixo `_2` e o nome não
+    // desambigua com nada. A vinícola terminaria o onboarding com dois "Visitas
+    // e degustações" indistinguíveis no seletor de funis.
+    //
+    // O editor de colunas da tela também não aparece neste caminho, então não há
+    // quadro editado sendo descartado em silêncio.
+    const relatorios: RelatorioDaJornada[] = [];
+    for (const chave of marcadas) {
+      // Uma jornada que falha NÃO derruba o onboarding: a pessoa consegue ativar
+      // de novo em Configurações › Jornadas, e o relatório diz o que entrou.
+      relatorios.push(await aplicarJornada(ctx.orgId, chave, ctx.userId));
+    }
+
+    // Qual funil cada jornada tem no banco AGORA. A autoridade é o id do ledger:
+    // `RelatorioDaJornada` carrega o rótulo legível da peça, não o id dela.
+    const ledger = await lerLedger(ctx.orgId);
+    const funilDaJornada = (c: ChaveDeJornada): string | null =>
+      ledger[c]?.pecas.find((p) => p.chave === `funil:${JORNADAS[c].nomeDoFunil}`)?.id ?? null;
+
+    // Nenhum funil de pé: a vinícola sairia do passo com o quadro de loja online
+    // que o gatilho semeou e sem uma palavra. O texto real do banco viaja junto,
+    // sem máscara.
+    if (marcadas.every((c) => funilDaJornada(c) === null)) {
+      const falha = relatorios.flatMap((r) => r.pecas.filter((p) => p.estado === "falhou"))[0];
+      return {
+        ok: false,
+        erro: `Não consegui montar os funis das jornadas${falha ? `: ${falha.erro ?? falha.chave}` : "."}`,
+      };
+    }
+
+    // O primeiro funil marcado vira o quadro principal — é o que o passo promete
+    // em texto, e com a RPC fora do caminho ninguém mais substitui o quadro de
+    // loja online que o gatilho semeou.
+    const primeiro = funilDaJornada(marcadas[0]!);
+    if (primeiro) await tornarPadrao(ctx.orgId, primeiro);
   }
 
   const origem = String(formData.get("origem") ?? "pacote") === "ia" ? "ia" : "pacote";
   try {
     await patchOnboardingState(ctx.orgId, {
-      funil: { pipeline_id: atual.pipelineId, origem, etapas: proposta.etapas.length },
+      funil: {
+        pipeline_id: atual.pipelineId,
+        origem,
+        etapas: proposta.etapas.length,
+        jornadas: marcadas,
+      },
     });
   } catch (err) {
     if (err instanceof OnboardingError) return { ok: false, erro: "Salvei o quadro, mas não consegui registrar o passo. Tente continuar de novo." };
@@ -267,7 +364,9 @@ export async function aplicarQuadro(formData: FormData): Promise<ResultadoDoQuad
     organizationId: ctx.orgId,
     resourceType: "crm_pipeline",
     resourceId: atual.pipelineId,
-    metadata: { origem, etapas: proposta.etapas.length, nome: proposta.nome },
+    // Sem `jornadas`, a auditoria de uma instalação que aplicou quatro jornadas
+    // fica indistinguível da que não aplicou nenhuma.
+    metadata: { origem, etapas: proposta.etapas.length, nome: proposta.nome, jornadas: marcadas },
   });
 
   redirect("/onboarding");

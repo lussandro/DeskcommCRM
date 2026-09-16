@@ -1,7 +1,7 @@
 import { redirect } from "next/navigation";
 
 import { requireAuth, resolveActiveOrg } from "@/lib/auth/server";
-import { dadosDoPasso } from "@/app/actions/onboarding/montarQuadro";
+import { dadosDoPasso, jornadasSugeridasDoPasso } from "@/app/actions/onboarding/montarQuadro";
 import { QuadroClient } from "./_client";
 import { traduzir } from "@/lib/i18n/dicionario";
 
@@ -26,6 +26,7 @@ export default async function FunilPage() {
   const idioma = user.idioma;
 
   const { atual, sugestao } = await dadosDoPasso(activeOrg.orgId, activeOrg.name);
+  const jornadasSugeridas = await jornadasSugeridasDoPasso(activeOrg.orgId, activeOrg.name);
 
   return (
     <div className="space-y-6">
@@ -40,7 +41,7 @@ export default async function FunilPage() {
           )}
         </p>
       </header>
-      <QuadroClient atual={atual} sugestao={sugestao} />
+      <QuadroClient atual={atual} sugestao={sugestao} jornadasSugeridas={jornadasSugeridas} />
     </div>
   );
 }

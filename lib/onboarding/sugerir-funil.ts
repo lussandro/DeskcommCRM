@@ -24,6 +24,7 @@ import {
   type PropostaDeFunil,
 } from "@/lib/onboarding/proposta-de-funil";
 import { PACOTES, PACOTE_PADRAO, type PacoteDeFunil } from "@/lib/onboarding/pacotes-de-funil";
+import { CHAVES_DE_JORNADA, type ChaveDeJornada } from "@/lib/vertical/vinicola";
 
 /** O que se sabe do negócio quando a sugestão é pedida. */
 export interface ContextoDoNegocio {
@@ -42,11 +43,12 @@ export interface ContextoDoNegocio {
  * estão na cabeça de quem atende no WhatsApp.
  */
 const PISTAS: Record<string, RegExp> = {
-  clientes_vinicola:
+  canal:
     /\b(restaurant|emp[óo]ri|distribuid|revend|atacad|bares\b|bar\b|hot[ée]is|hotel|sommelier|carta de vinho)/i,
-  consumidor_vinho:
-    /\b(consumidor|cliente final|varej|loja virtual|loja online|e-?commerce|clube|assinatura|delivery|venda direta)/i,
-  enoturismo_interesse: /\b(enoturism|visita|degusta[çc]|turist|passeio|tour\b|harmoniza[çc]|vindima)/i,
+  clube: /\b(clube|assinatura|assinante)/i,
+  consumidor:
+    /\b(consumidor|cliente final|varej|loja virtual|loja online|e-?commerce|delivery|venda direta)/i,
+  enoturismo: /\b(enoturism|visita|degusta[çc]|turist|passeio|tour\b|harmoniza[çc]|vindima)/i,
 };
 
 /** Quem só diz que é vinícola, sem nomear o público, recebe o B2B (decisão do dono, 2026-09-15). */
@@ -69,10 +71,27 @@ export function escolherPacotePorTexto(texto: string): PacoteDeFunil {
     }
   }
   if (PISTA_DE_VINICOLA.test(texto)) {
-    const p = PACOTES.find((x) => x.id === "clientes_vinicola");
+    const p = PACOTES.find((x) => x.id === "canal");
     if (p) return p;
   }
   return PACOTE_PADRAO;
+}
+
+/**
+ * TODAS as jornadas que o texto do dono nomeia — não só a primeira.
+ *
+ * `escolherPacotePorTexto` continua devolvendo UMA, porque o exemplo que vai no
+ * pedido à IA é um só. Aqui a pergunta é outra: quais jornadas marcar na tela.
+ * Uma vinícola que recebe visita, tem clube e vende na loja faz as três coisas,
+ * e obrigá-la a escolher uma seria escolher por ela.
+ *
+ * Lista vazia é desfecho legítimo: quem não é vinícola não marca nada, e o
+ * passo segue com o quadro que ele já monta.
+ */
+export function sugerirJornadas(texto: string): ChaveDeJornada[] {
+  const achadas = CHAVES_DE_JORNADA.filter((c) => PISTAS[c]?.test(texto));
+  if (achadas.length > 0) return [...achadas];
+  return PISTA_DE_VINICOLA.test(texto) ? ["canal"] : [];
 }
 
 /**

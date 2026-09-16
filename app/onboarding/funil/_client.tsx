@@ -11,6 +11,7 @@ import { explicacaoDoPasso } from "@/lib/leads/agent-mapping";
 import { MAX_ETAPAS, MIN_ETAPAS, type PropostaDeFunil } from "@/lib/onboarding/proposta-de-funil";
 import { PACOTES } from "@/lib/onboarding/pacotes-de-funil";
 import type { Sugestao } from "@/lib/onboarding/sugerir-funil";
+import { CHAVES_DE_JORNADA, JORNADAS, type ChaveDeJornada } from "@/lib/vertical/vinicola";
 
 /**
  * O quadro proposto, editável antes de existir.
@@ -22,15 +23,18 @@ import type { Sugestao } from "@/lib/onboarding/sugerir-funil";
 export function QuadroClient({
   atual,
   sugestao,
+  jornadasSugeridas,
 }: {
   atual: QuadroAtual | null;
   sugestao: Sugestao;
+  jornadasSugeridas: ChaveDeJornada[];
 }) {
   const t = useT();
   const inicial: PropostaDeFunil =
     sugestao.origem === "ia" ? sugestao.proposta : sugestao.pacote.proposta;
 
   const [quadro, setQuadro] = useState<PropostaDeFunil>(inicial);
+  const [jornadas, setJornadas] = useState<ChaveDeJornada[]>(jornadasSugeridas);
   const [origem, setOrigem] = useState<"ia" | "pacote">(sugestao.origem);
   const [trocando, setTrocando] = useState(false);
   const [pending, startTransition] = useTransition();
@@ -39,7 +43,10 @@ export function QuadroClient({
   // silêncio o que a pessoa acabou de acrescentar seria a falha calada clássica:
   // ela clica em salvar, avança, e a coluna simplesmente não existe. Barrar aqui
   // é o preço de ter o botão "Adicionar coluna".
-  const semNome = quadro.etapas.some((e) => !e.nome.trim());
+  // Com jornada marcada o editor de colunas não está na tela e o `quadro` não é
+  // gravado por ninguém: uma coluna em branco deixada antes da marcação não pode
+  // travar o botão de continuar.
+  const semNome = jornadas.length === 0 && quadro.etapas.some((e) => !e.nome.trim());
 
   function renomear(i: number, nome: string) {
     setQuadro((q) => ({ ...q, etapas: q.etapas.map((e, j) => (j === i ? { ...e, nome } : e)) }));
@@ -80,12 +87,70 @@ export function QuadroClient({
   return (
     <div className="space-y-6">
       {/*
+        As jornadas de vinícola. Marcadas por padrão as que o texto do dono
+        nomeia — e desmarcáveis: sugestão não é decisão.
+
+        ⚠️ NÃO MARCAR NADA É DESFECHO VÁLIDO, e é o que acontece com quem não é
+        vinícola. O passo segue gravando a proposta pela RPC sobre o funil que a
+        organização já tem; nenhuma jornada é aplicada. Nada fica sem funil, e
+        nada de vinícola entra sem escolha.
+      */}
+      <fieldset className="space-y-3 rounded-lg border bg-background p-6">
+        <legend className="text-sm font-medium">{t("O que a sua vinícola faz")}</legend>
+        <p className="text-xs text-muted-foreground">
+          {t(
+            "Marque tudo que se aplica. Cada uma monta um funil próprio, com as mensagens, os campos e os lembretes daquele jeito de vender. Dá para ativar as outras depois, em Configurações › Jornadas.",
+          )}
+        </p>
+        {CHAVES_DE_JORNADA.map((chave) => (
+          <label key={chave} className="flex items-start gap-3 rounded-md border p-3 text-sm">
+            <input
+              type="checkbox"
+              className="mt-1"
+              checked={jornadas.includes(chave)}
+              onChange={(e) =>
+                setJornadas((atuais) =>
+                  e.target.checked ? [...atuais, chave] : atuais.filter((c) => c !== chave),
+                )
+              }
+            />
+            <span className="min-w-0">
+              {/*
+                ⚠️ SEM `t()`, e é decisão — não esquecimento.
+
+                1. `t(JORNADAS[chave].comoSeApresenta)` é ACESSO DINÂMICO, e a
+                   cerca de i18n não o enxerga: ela coleta o argumento de `t()`
+                   só quando ele é literal de string. A chave nunca entraria na
+                   conta de cobertura — o `t()` daria a APARÊNCIA de estar
+                   traduzido sem nada garantir.
+                2. Conteúdo semeado não entra no dicionário, e `comoSeApresenta`
+                   é conteúdo do pacote: a mesma string vira nome de coisa no
+                   banco logo adiante.
+                3. O precedente prova o problema, não a solução: o passo já faz
+                   `t(p.comoSeApresenta)` nos PACOTES, e por isso as frases dos
+                   pacotes antigos foram parar no dicionário na mão. Ninguém as
+                   colheu; alguém as digitou.
+
+                Renderizar cru também passa na cerca de prosa: ela só acusa
+                LITERAL de string em posição de filho JSX, e uma expressão não é
+                literal.
+              */}
+              <span className="font-medium">{JORNADAS[chave].comoSeApresenta}</span>
+              <span className="mt-1 block text-xs text-muted-foreground">
+                {JORNADAS[chave].etapas.map((e) => e.nome).join(" → ")}
+              </span>
+            </span>
+          </label>
+        ))}
+      </fieldset>
+
+      {/*
         De onde veio o quadro. Quando a IA não respondeu, a pessoa PRECISA saber:
         ela acabou de configurar uma chave, e o silêncio aqui é a primeira pista
         de que ela não está funcionando — descoberta que, calada, só chegaria com
         o primeiro cliente real.
       */}
-      {sugestao.origem === "ia" ? (
+      {jornadas.length > 0 ? null : sugestao.origem === "ia" ? (
         <p className="rounded-md border border-emerald-500/30 bg-emerald-500/5 p-3 text-sm">
           {t(
             "Seu funcionário montou este quadro olhando o que você me contou sobre o negócio. Ajuste o que quiser.",
@@ -106,6 +171,21 @@ export function QuadroClient({
         </div>
       )}
 
+      {/*
+        ⚠️ O EDITOR DE COLUNAS SÓ APARECE QUANDO NENHUMA JORNADA ESTÁ MARCADA.
+
+        Com jornada marcada quem cria o funil é o aplicador, e deixar na tela um
+        editor cujo resultado é descartado seria a falha calada clássica: a
+        pessoa renomeia cinco colunas, clica em continuar, e nada do que ela
+        digitou existe.
+      */}
+      {jornadas.length > 0 ? (
+        <p className="text-sm text-muted-foreground">
+          {t(
+            "Vou montar um funil para cada jornada marcada, com as colunas, as palavras, os campos e as mensagens daquele jeito de vender. O primeiro vira o seu quadro principal.",
+          )}
+        </p>
+      ) : (
       <div className="space-y-3 rounded-lg border bg-background p-6">
         <div className="space-y-2">
           <label className="block text-sm font-medium" htmlFor="nome_do_quadro">
@@ -184,9 +264,10 @@ export function QuadroClient({
           ) : null}
         </div>
       </div>
+      )}
 
       {/* O que a instalação trouxe, para a troca não parecer mágica. */}
-      {atual && atual.colunas.length > 0 ? (
+      {jornadas.length === 0 && atual && atual.colunas.length > 0 ? (
         <details className="rounded-md border p-3 text-sm">
           <summary className="cursor-pointer text-muted-foreground">
             {t("O que veio na instalação")} ({atual.nome})
@@ -200,6 +281,9 @@ export function QuadroClient({
         </details>
       ) : null}
 
+      {/* Trocar por um quadro pronto edita o `quadro`, que no caminho das
+          jornadas ninguém grava — por isso some junto com o editor. */}
+      {jornadas.length === 0 ? (
       <div className="space-y-3">
         {trocando ? (
           <div className="grid gap-2 sm:grid-cols-2">
@@ -227,6 +311,7 @@ export function QuadroClient({
           </button>
         )}
       </div>
+      ) : null}
 
       {/* `flex-wrap`: com o aviso "Dê um nome..." mais os dois botões, a linha
           passava de 320-375px sem margem nenhuma — este é o rodapé de
@@ -255,6 +340,7 @@ export function QuadroClient({
               const fd = new FormData();
               fd.set("quadro", JSON.stringify(quadro));
               fd.set("origem", origem);
+              fd.set("jornadas", JSON.stringify(jornadas));
               const res = await aplicarQuadro(fd);
               // Sucesso redireciona no servidor; só o desfecho ruim volta.
               if (res && !res.ok) toast.error(res.erro);

@@ -211,7 +211,7 @@ async function concluirOnboarding(page: Page, largura: Largura): Promise<void> {
       // Com chave de IA a proposta pode vir com outro nome; sem ela, é o pacote do ramo.
       // O nome do quadro vive num <input> (medido: `getByText` não o enxerga).
       const nomes = await page.locator("input").evaluateAll((els) => els.map((e) => (e as HTMLInputElement).value));
-      registrar({ funil_mostra_clientes_da_vinicola: nomes.includes("Clientes da vinícola") });
+      registrar({ funil_mostra_canal_e_revenda: nomes.includes("Canal e revenda") });
       await nosDoisTemas(page, "onboarding-funil", largura, tituloPlayfair("onboarding-funil"));
       await page.getByRole("button", { name: "Usar este quadro" }).click();
     } else if (seg === "done") {

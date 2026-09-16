@@ -111,6 +111,16 @@ export const onboardingStateSchema = z.object({
       pipeline_id: z.string().optional(),
       origem: z.enum(["ia", "pacote"]).optional(),
       etapas: z.number().optional(),
+      /**
+       * As jornadas de vinícola que a pessoa marcou no passo. Lista vazia é o
+       * desfecho de quem não é vinícola — e é o que distingue, depois, a
+       * instalação que aplicou jornada da que seguiu pelo quadro genérico.
+       *
+       * `string` e não a união das quatro chaves de propósito: a união vive em
+       * `lib/vertical/vinicola`, e repeti-la aqui seria uma segunda lista para
+       * divergir. Quem valida o que entra é `ehChaveDeJornada`, na action.
+       */
+      jornadas: z.array(z.string()).optional(),
       skipped: z.boolean().optional(),
     })
     .optional(),

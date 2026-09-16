@@ -19,6 +19,7 @@
  * `proposta-de-funil.ts` para a medição.
  */
 import type { PropostaDeFunil } from "@/lib/onboarding/proposta-de-funil";
+import { CHAVES_DE_JORNADA, JORNADAS } from "@/lib/vertical/vinicola";
 
 export interface PacoteDeFunil {
   id: string;
@@ -31,60 +32,29 @@ export interface PacoteDeFunil {
   proposta: PropostaDeFunil;
 }
 
+/**
+ * Os quadros prontos. Os de vinícola são PROJEÇÃO das jornadas
+ * (`lib/vertical/vinicola/`), não uma segunda lista: o quadro que o wizard
+ * mostra e o que a jornada semeia têm de ser o MESMO, e duas listas divergiriam
+ * no primeiro ajuste de etapa.
+ *
+ * ⚠️ Os três pacotes antigos (`clientes_vinicola`, `enoturismo_interesse`,
+ * `consumidor_vinho`) saíram. Organizações já instaladas não são alteradas — o
+ * pacote só vive no passo do onboarding.
+ */
 export const PACOTES: readonly PacoteDeFunil[] = [
-  {
-    id: "clientes_vinicola",
-    comoSeApresenta: "Vender para restaurantes, empórios e distribuidores",
-    proposta: {
-      nome: "Clientes da vinícola",
-      etapas: [
-        { nome: "Novo contato", passo: "new" },
-        { nome: "Já respondi", passo: "contacted" },
-        { nome: "Entendendo o negócio dele", passo: "qualifying" },
-        { nome: "Enviei tabela ou amostra", passo: "qualified" },
-        { nome: "Negociando pedido", passo: "negotiating" },
-        { nome: "Pedido fechado", passo: "won" },
-        { nome: "Não fechou", passo: "lost" },
-      ],
-    },
-  },
-  {
-    id: "enoturismo_interesse",
-    comoSeApresenta: "Enoturismo — visitas e degustações",
-    proposta: {
-      nome: "Visitas",
-      etapas: [
-        { nome: "Novo interessado", passo: "new" },
-        { nome: "Já respondi", passo: "contacted" },
-        { nome: "Tirando dúvidas", passo: "qualifying" },
-        { nome: "Quer visitar", passo: "qualified" },
-        { nome: "Combinando data", passo: "negotiating" },
-        { nome: "Encaminhado para reserva", passo: "won" },
-        { nome: "Desistiu", passo: "lost" },
-      ],
-    },
-  },
-  {
-    id: "consumidor_vinho",
-    comoSeApresenta: "Vender vinho direto ao consumidor",
-    proposta: {
-      nome: "Vendas ao consumidor",
-      etapas: [
-        { nome: "Novo contato", passo: "new" },
-        { nome: "Já respondi", passo: "contacted" },
-        { nome: "Entendendo o gosto", passo: "qualifying" },
-        { nome: "Indiquei rótulos", passo: "qualified" },
-        { nome: "Fechando pedido", passo: "negotiating" },
-        { nome: "Pedido pago", passo: "won" },
-        { nome: "Não comprou", passo: "lost" },
-      ],
-    },
-  },
+  ...CHAVES_DE_JORNADA.map((chave) => ({
+    id: chave,
+    comoSeApresenta: JORNADAS[chave].comoSeApresenta,
+    proposta: { nome: JORNADAS[chave].nomeDoFunil, etapas: JORNADAS[chave].etapas },
+  })),
   {
     id: "generico",
     // Último de propósito: quem não se reconhece em nenhum dos outros já leu
     // todos antes de chegar aqui.
     comoSeApresenta: "Outro tipo de negócio",
+    // As sete etapas atuais, copiadas sem uma vírgula de diferença. Elas são o
+    // plano B de quem NÃO é vinícola, e nada nesta entrega as toca.
     proposta: {
       nome: "Clientes",
       etapas: [

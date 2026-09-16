@@ -5247,12 +5247,21 @@ export const DICIONARIO: Traducoes = {
   "a resposta não veio no formato esperado": { es: "la respuesta no vino en el formato esperado" },
 
   // ─── Onboarding: funil — pacotes prontos (lib/onboarding/pacotes-de-funil.ts) ───
-  "Vender para restaurantes, empórios e distribuidores": {
-    es: "Vender a restaurantes, tiendas gourmet y distribuidores",
-  },
-  "Enoturismo — visitas e degustações": { es: "Enoturismo — visitas y degustaciones" },
-  "Vender vinho direto ao consumidor": { es: "Vender vino directo al consumidor" },
+  // Só o genérico entra aqui. As quatro frases de vinícola são CONTEÚDO do
+  // pacote (`JORNADAS[chave].comoSeApresenta`), a mesma string que vira nome de
+  // coisa no banco logo adiante — e a tela as renderiza crua, sem `t()`.
   "Outro tipo de negócio": { es: "Otro tipo de negocio" },
+
+  // ─── Onboarding: funil — as jornadas de vinícola (app/onboarding/funil) ───
+  "O que a sua vinícola faz": { es: "Qué hace su bodega" },
+  "Marque tudo que se aplica. Cada uma monta um funil próprio, com as mensagens, os campos e os lembretes daquele jeito de vender. Dá para ativar as outras depois, em Configurações › Jornadas.":
+    {
+      es: "Marque todo lo que corresponda. Cada una arma su propio embudo, con los mensajes, los campos y los recordatorios de esa forma de vender. Puede activar las demás después, en Configuración › Recorridos.",
+    },
+  "Vou montar um funil para cada jornada marcada, com as colunas, as palavras, os campos e as mensagens daquele jeito de vender. O primeiro vira o seu quadro principal.":
+    {
+      es: "Voy a armar un embudo para cada recorrido marcado, con las columnas, las palabras, los campos y los mensajes de esa forma de vender. El primero pasa a ser su tablero principal.",
+    },
 
   // ─── Onboarding: tool catalog (capacidades) usadas em "Ele já vem sabendo" ───
   "Listar oportunidades do funil": { es: "Listar oportunidades del embudo" },

@@ -13,6 +13,7 @@ import {
   extrairJson,
   pedidoDeSugestao,
   sugerirFunil,
+  sugerirJornadas,
   type Gerar,
 } from "@/lib/onboarding/sugerir-funil";
 import { PACOTE_PADRAO } from "@/lib/onboarding/pacotes-de-funil";
@@ -32,24 +33,23 @@ const BOM = JSON.stringify({
 
 const responde = (texto: string): Gerar => vi.fn(async () => texto);
 
-describe("escolher o pacote pelo que o dono escreveu", () => {
+describe("escolher a jornada pelo que o dono escreveu", () => {
   // O dono digita no celular: sem acento, em maiúscula, no plural, no feminino.
   it.each([
-    ["Vendemos para restaurantes e empórios", "clientes_vinicola"],
-    ["distribuidora de vinhos", "clientes_vinicola"],
-    ["Venda para hotéis e bares", "clientes_vinicola"],
-    ["RESTAURANTES E EMPORIOS", "clientes_vinicola"],
-    ["Recebemos turistas para degustação", "enoturismo_interesse"],
-    ["degustacoes e visitas guiadas", "enoturismo_interesse"],
-    ["enoturismo", "enoturismo_interesse"],
-    ["Loja virtual de vinhos para o consumidor", "consumidor_vinho"],
-    // Canal de venda nomeado vence a menção a degustação/visita.
-    ["clube de assinatura com degustação", "consumidor_vinho"],
-    ["vinícola com visitas e loja virtual", "consumidor_vinho"],
+    ["Vendemos para restaurantes e empórios", "canal"],
+    ["distribuidora de vinhos", "canal"],
+    ["Venda para hotéis e bares", "canal"],
+    ["RESTAURANTES E EMPORIOS", "canal"],
+    ["Recebemos turistas para degustação", "enoturismo"],
+    ["degustacoes e visitas guiadas", "enoturismo"],
+    ["enoturismo", "enoturismo"],
+    ["clube de assinatura", "clube"],
+    ["assinatura mensal de vinhos", "clube"],
+    ["Loja virtual de vinhos para o consumidor", "consumidor"],
     // Só "vinícola"/"vinho", sem público: B2B (decisão do dono, 2026-09-15).
-    ["vinícola", "clientes_vinicola"],
-    ["VINICOLA", "clientes_vinicola"],
-    ["vendemos vinho", "clientes_vinicola"],
+    ["vinícola", "canal"],
+    ["VINICOLA", "canal"],
+    ["vendemos vinho", "canal"],
   ])("%s → %s", (texto, id) => {
     expect(escolherPacotePorTexto(texto).id).toBe(id);
   });
@@ -59,6 +59,19 @@ describe("escolher o pacote pelo que o dono escreveu", () => {
     expect(escolherPacotePorTexto("").id).toBe(PACOTE_PADRAO.id);
     // Outro setor não é mais nicho do produto.
     expect(escolherPacotePorTexto("consultório odontológico").id).toBe(PACOTE_PADRAO.id);
+  });
+
+  it("sugere VÁRIAS jornadas quando o texto nomeia várias", () => {
+    // É o que muda nesta entrega: a vinícola que faz as três coisas marca as três.
+    expect(sugerirJornadas("vinícola com visitas, clube de assinatura e loja virtual").sort()).toEqual(
+      ["clube", "consumidor", "enoturismo"],
+    );
+    expect(sugerirJornadas("só vendemos para restaurantes")).toEqual(["canal"]);
+  });
+
+  it("não sugere nada quando não reconhece vinícola nenhuma", () => {
+    // Não marcar nada é desfecho legítimo: o onboarding segue com o pacote genérico.
+    expect(sugerirJornadas("consultório odontológico")).toEqual([]);
   });
 });
 
@@ -115,7 +128,7 @@ describe("sugerir", () => {
     // faz não deve receber o quadro de "outro tipo de negócio".
     const s = await sugerirFunil(CTX, responde("Desculpe, não entendi."));
     expect(s.origem).toBe("pacote");
-    expect(s.origem === "pacote" && s.pacote.id).toBe("clientes_vinicola");
+    expect(s.origem === "pacote" && s.pacote.id).toBe("canal");
     expect(s.origem === "pacote" && s.porque).toBeTruthy();
   });
 
