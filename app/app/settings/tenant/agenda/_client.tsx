@@ -381,6 +381,16 @@ export function TiposDeAgendamentoClient({
               </span>
               <span className="text-xs tabular-nums text-text-muted">{tipo.duration_minutes} min</span>
               <span className="text-xs text-text-muted">{t(rotuloDe(LOCAIS, tipo.location_kind))}</span>
+              {/* O COMPLEMENTO DO LOCAL, que a coluna guarda e a tela não mostrava.
+                  Sem ele, "Presencial" não distingue a visita que acontece AQUI da
+                  que acontece no estabelecimento do cliente — e quem marca decide
+                  por onde ir lendo esta linha. Achado da prova em tela das jornadas
+                  de vinícola: a "Visita do representante" guardava "No estabelecimento
+                  do cliente" e a tela dizia só "Presencial".
+                  Sem `t()`: é texto que quem opera digitou, como o nome acima. */}
+              {tipo.location_details ? (
+                <span className="text-xs text-text-subtle">· {tipo.location_details}</span>
+              ) : null}
               {!tipo.default_owner_user_id ? (
                 // O aviso existe porque o sintoma é MUDO: sem dono, a tela de
                 // marcar simplesmente não mostra horário, sem dizer por quê.
