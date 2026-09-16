@@ -29,14 +29,16 @@
  * um humano confere de relance, e cada campo cita de onde saiu. Mudou o pacote,
  * muda aqui.
  *
- * ⚠️ UMA EXPECTATIVA NASCE VERMELHA E É ACHADO, NÃO FOLGA: o complemento do
+ * ⚠️ UMA EXPECTATIVA NASCEU VERMELHA, E ERA ACHADO — NÃO FOLGA. O complemento do
  * local ("No estabelecimento do cliente", `detalhesDoLocal` da Visita do
  * representante) é gravado em `calendar_event_types.location_details`, e a tela
- * de Agenda NÃO O RENDERIZA em lugar nenhum — nem na lista, nem no formulário
- * de edição (medido em `app/app/settings/tenant/agenda/_client.tsx`: a coluna só
- * aparece na interface de tipos, nunca no JSX). Quem marcar a visita não sabe
- * para onde ir. A medida fica aqui, `soft` e nomeada, para o defeito aparecer na
- * rodada em vez de ser combinado no silêncio.
+ * de Agenda NÃO O RENDERIZAVA em lugar nenhum — nem na lista, nem no formulário
+ * de edição. Quem marcasse a visita não sabia para onde ir. A medida ficou aqui,
+ * `soft` e nomeada, em vez de ser combinada no silêncio; o conserto de produto
+ * veio em `35960b90` ("fix(agenda): a tela diz onde o compromisso acontece") e a
+ * medida ficou VERDE na segunda rodada na VPS, com a tela mostrando "Presencial ·
+ * No estabelecimento do cliente". A expectativa continua aqui, agora como
+ * catraca: é ela que acusa se o complemento sumir de novo.
  *
  * Tema por `localStorage` `deskcomm-theme` + reload. Medidas em
  * `/work/out/jornadas-medidas.jsonl`, capturas em `/work/out/jornadas-*.png`.
@@ -516,10 +518,37 @@ test("as quatro jornadas de vinícola, da tela ao efeito", async ({ page }) => {
       await expect(menu, `"${j.atalho}": o menu de respostas rápidas abre`).toBeVisible({
         timeout: 30_000,
       });
+      /*
+       * ⚠️ O MENU ABRIR NÃO É O MENU TER CARREGADO — e essa diferença custou
+       * três rodadas de `titulos: []`.
+       *
+       * A inbox NÃO pede os modelos ao abrir: medido interceptando as respostas,
+       * nenhuma requisição a `/api/v1/message-templates` sai na tela de lista. Ela
+       * só parte quando o `Composer` MONTA, ao selecionar a conversa, porque é
+       * dele o `useMessageTemplates`. Até a busca voltar, `TemplateMenu` já
+       * renderiza — com o estado vazio, "Nenhum template. Crie em Configurações."
+       * Então `toBeVisible()` passa na hora, e ler `button span` nesse instante
+       * lê um menu sem botão nenhum: lista vazia, com a API respondendo 200 com
+       * 67 na mesma sessão.
+       *
+       * A espera é pelo PRIMEIRO BOTÃO do menu, que é o que só existe depois da
+       * busca voltar. Não é um `sleep`: se a lista vier mesmo vazia, isto falha
+       * por timeout dizendo qual atalho, em vez de seguir verde medindo nada.
+       */
+      await expect(
+        menu.getByRole("button").first(),
+        `"${j.atalho}": o menu terminou de buscar e tem ao menos uma resposta`,
+      ).toBeVisible({ timeout: 30_000 });
       const titulos = await menu
         .locator("button span")
         .evaluateAll((els) => els.map((el) => (el.textContent ?? "").trim()));
-      registrar({ etapa: "resposta_rapida", atalho: j.atalho, titulos });
+      /*
+       * O texto inteiro do menu vai junto dos títulos: `[]` é ambíguo — não
+       * distingue "a busca não voltou" de "voltou vazia" —, e o texto diz
+       * "Nenhum template. Crie em Configurações." quando é o estado vazio.
+       */
+      const textoDoMenu = ((await menu.textContent()) ?? "").trim();
+      registrar({ etapa: "resposta_rapida", atalho: j.atalho, titulos, textoDoMenu });
       expect
         .soft(titulos, `"${j.atalho}": o menu oferece "${j.tituloDaResposta}"`)
         .toContain(j.tituloDaResposta);
@@ -544,7 +573,7 @@ test("as quatro jornadas de vinícola, da tela ao efeito", async ({ page }) => {
     const texto = (await linha.first().textContent())?.trim() ?? "";
     registrar({ etapa: "agenda", funil: j.funil, compromisso: j.compromisso, texto });
     if (j.detalhesDoLocal) {
-      // ⚠️ VERMELHO ESPERADO ATÉ A TELA MOSTRAR O COMPLEMENTO — ver o cabeçalho.
+      // Foi achado, virou conserto (`35960b90`) e hoje é catraca — ver o cabeçalho.
       expect
         .soft(
           texto,
