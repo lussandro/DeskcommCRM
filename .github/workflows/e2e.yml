@@ -133,6 +133,25 @@ jobs:
     # e credenciais que só existem em `/root/.bacco_qa`. Roda no mesmo contêiner
     # `mcr.microsoft.com/playwright:v1.63.0-noble`, sem `playwright.config` do repo.
     #
+    # ═══ `bacco-suspensao`: SUSPENDE UMA ORGANIZAÇÃO REAL, E SÓ A DE QA ═══
+    #
+    # Fork Bacco (Plano 3 "Enforcement da suspensão", Task 6). Ela SUSPENDE e
+    # REATIVA a organização de QA na instalação de produção, com autorização
+    # escrita do dono, e mede o que só existe lá: a tela caindo em
+    # `/account-suspended`, a MESMA sessão levando 403 `tenant_suspended` na API,
+    # e o `CLAIM_SQL` deixando de entregar job de organização suspensa — este
+    # último contra o worker de verdade, com controle positivo (com a
+    # organização ativa, o mesmo job SAI de `pending`).
+    #
+    # Não roda no CI por três impedimentos que não são de conveniência: (a) ela
+    # escreve `organizations.status` numa instalação real, e o runner não tem
+    # nenhuma; (b) precisa do `agent-worker` de pé para que "continua pending"
+    # signifique alguma coisa — no CI não há worker, e a medida seria verde por
+    # vacuidade; (c) usa a conta QA e a URL de admin do banco, que só existem em
+    # `/root/.bacco_qa` e no `.env` da VPS. Roda no contêiner
+    # `mcr.microsoft.com/playwright:v1.63.0-noble`, sem `playwright.config` do
+    # repo. Evidência e o que ela NÃO alcança: `evidence/bacco-suspensao/revisao.md`.
+    #
     # ═══ `cadastro-sem-confirmacao-de-email`: A PRECONDIÇÃO É DO PROVEDOR ═══
     #
     # Ela mede o cadastro com "Confirm email" DESLIGADO no provedor de auth — o
@@ -634,6 +653,7 @@ jobs:
         bacco-evidencia.spec.ts
         bacco-qa-cadastro.spec.ts
         bacco-jornadas.spec.ts
+        bacco-suspensao.spec.ts
     steps:
       - uses: actions/checkout@v7
 
