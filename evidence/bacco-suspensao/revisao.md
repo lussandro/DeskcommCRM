@@ -22,11 +22,11 @@ real — o 403 abaixo é atribuível à mudança, não ao ambiente.
 | # | Linha | Medida na candidata |
 |---|---|---|
 | 1 | Ativa: tudo normal | login → `/app/inbox`; `/api/v1/contacts` **200**. Controle positivo da fila: job semeado com a org ativa **saiu de `pending`** (virou `dead`: `watchdog` não tem handler — nenhuma mensagem sai) |
-| 2 | Suspensa: tela redireciona | `goto /app` → **`/account-suspended`**, heading "Conta suspensa" visível (`02-tela-suspensa.png`) |
+| 2 | Suspensa: tela redireciona | `goto /app` → **`/account-suspended`**, heading "Conta suspensa" visível (`candidata-4291195e-02-tela-suspensa.png`) |
 | 3 | Suspensa: a MESMA sessão na API | **403** `{"error":{"code":"tenant_suspended","message":"Conta suspensa"}}` |
 | 4 | Suspensa: a fila não entrega | 3 jobs vencidos semeados após a suspensão; após **30 012 ms** (~15 rodadas de claim) os três continuam **`pending`** — com o worker de pé (linha 1 prova que ele claima) |
 | 5 | Descarte com a contagem | PostgREST real, chave de serviço do app, a MESMA consulta de `limpar-fila-represada.ts`: `Content-Range: 0-2/3`, **contagem 3**, os três `dead`. **Metade** — ver abaixo |
-| 6 | Reativada: volta, sem enxurrada | API **200**, `/app/inbox` abre (`03-reativada.png`); 10 s depois os três descartados seguem `dead` — nada disparou |
+| 6 | Reativada: volta, sem enxurrada | API **200**, `/app/inbox` abre (`candidata-4291195e-03-reativada.png`); 10 s depois os três descartados seguem `dead` — nada disparou |
 
 Log medido no banco depois da rodada: `api_audit_log` da org QA tem **2 × `authz.denied`** com
 `metadata.reason = tenant_suspended` (12:41:45Z) — uma por chamada de API feita suspensa.
