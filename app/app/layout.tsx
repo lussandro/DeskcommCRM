@@ -106,7 +106,16 @@ export default async function AppLayout({ children }: { children: React.ReactNod
     needsMfaGate = mfaRequired;
 
     if (orgRow && !orgRow.onboarded_at && !user.support) redirect("/onboarding");
-    if (orgRow?.status === "suspended") redirect("/account-suspended");
+    // A sessão de acompanhamento SÓ-LEITURA entra: é para diagnosticar, e
+    // "suspensa por inadimplência" é dos motivos mais comuns de pedir suporte.
+    // `full` NÃO entra — `require-role.ts:68` mapeia esse modo para papel
+    // `admin`, e isso seria escrita numa organização que o operador desligou.
+    if (
+      orgRow?.status === "suspended" &&
+      user.support?.access_mode !== "support_readonly"
+    ) {
+      redirect("/account-suspended");
+    }
     // G4-02: expõe visibility_mode ao client (inbox decide visões visíveis).
     // Fonte confiável (admin client, org do cookie validado) — nunca do body.
     const mode = (orgRow?.settings as { visibility_mode?: VisibilityMode } | null)

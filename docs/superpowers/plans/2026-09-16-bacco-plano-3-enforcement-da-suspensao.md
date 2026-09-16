@@ -462,7 +462,10 @@ O rodapé é a autoridade; a linha `Errors` precisa vir vazia (o Vitest sai 1 co
 
 **Files:**
 - Modify: `lib/mcp/auth.ts:100-138`
+- Modify: `lib/api/auth-dual.ts:83-91` (Step 4-A — propaga o `apiCode` no envelope REST)
+- Modify: `app/api/v1/contacts/route.ts:62-70` (catch inline próprio, a rota-bandeira da auth dual)
 - Test: `lib/mcp/auth-suspensao.test.ts`
+- Test: `app/api/v1/contacts/route.test.ts` (já existe — o caso novo entra nele)
 
 **Interfaces:**
 - Consumes: nada da Task 1 (caminho independente).

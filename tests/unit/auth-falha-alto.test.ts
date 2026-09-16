@@ -117,7 +117,10 @@ describe("loadAuthUser — falha de permissão não vira 'sem organização'", (
       // `locale` é o idioma padrão da organização, que entra na membership para
       // a resolução do idioma da sessão não precisar de uma segunda consulta.
       // Aqui vem `null` porque o dublê não devolve a coluna.
-      { organization_id: "o1", organization_name: "Acme", role: "admin", locale: null, interface_settings: { preset: "completa" } },
+      // `organization_status` entra pelo MESMO join, e pelo mesmo motivo: é a
+      // fonte do gate de suspensão em `requireRole`. `null` aqui porque o dublê
+      // também não devolve essa coluna.
+      { organization_id: "o1", organization_name: "Acme", role: "admin", locale: null, organization_status: null, interface_settings: { preset: "completa" } },
     ]);
   });
 });

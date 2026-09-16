@@ -85,8 +85,11 @@ describe("os elos que somem sem barulho", () => {
     // para preencher o próprio formulário. Sem este caso, ele volta a ser
     // decorativo no dia em que alguém "simplificar" o resolvedor.
     const servidor = readFileSync("lib/auth/server.ts", "utf8");
+    // O `[,)]` do fim admite COLUNA NOVA no mesmo embed (o gate de suspensão
+    // acrescentou `status`) sem afrouxar o que este caso vigia: se `locale`
+    // sumir da lista, não há casamento e isto fica vermelho — que é o ponto.
     expect(servidor, "a membership deixou de trazer o idioma da organização").toMatch(
-      /organizations\(display_name, locale\)/,
+      /organizations\(display_name, locale[,)]/,
     );
     expect(servidor, "o idioma da sessão parou de cair na organização").toMatch(
       /locale \?\? \(await localeDaOrgAtiva\(memberships\)\)/,

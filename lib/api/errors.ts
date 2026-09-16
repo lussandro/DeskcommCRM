@@ -26,6 +26,12 @@ export const ApiErrorCodes = {
   forbidden: "forbidden",
   forbidden_role: "forbidden_role",
   forbidden_tenant: "forbidden_tenant",
+  // Organização SUSPENSA pelo operador da plataforma. Código próprio e não
+  // `forbidden_tenant` porque as duas situações pedem telas diferentes: aquela
+  // é "você não tem organização ativa" (resolve trocando de org), esta é "esta
+  // organização está suspensa" (só o operador resolve). Uma integração que lê
+  // o código precisa distinguir para parar de tentar.
+  tenant_suspended: "tenant_suspended",
   lgpd_anonymization_irreversible: "lgpd_anonymization_irreversible",
 
   // 404

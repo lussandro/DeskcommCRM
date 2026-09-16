@@ -76,6 +76,14 @@ export interface UserOrgMembership {
    * para responder algo que a primeira já tinha em mãos.
    */
   locale?: string | null;
+  /**
+   * `organizations.status` — vem do MESMO join que já trazia nome e idioma.
+   *
+   * Não é campo decorativo: é a fonte do gate de suspensão em `requireRole`.
+   * Buscá-lo numa consulta própria seria uma segunda ida ao banco em TODA
+   * rota autenticada para responder o que a primeira já tinha em mãos.
+   */
+  organization_status?: string | null;
 }
 
 export interface AuthUser {
@@ -141,6 +149,16 @@ export interface ActiveOrg {
   orgId: string;
   name: string;
   role: Role;
+  /**
+   * `organizations.status` da organização ativa.
+   *
+   * Opcional porque a sessão de ACOMPANHAMENTO (`support`) resolve a
+   * organização por outro caminho, que não passa por `user_organizations` e
+   * portanto não tem o campo. Ausente significa "não sei", e não sei NÃO
+   * bloqueia — quem acompanha é o lado da plataforma, que precisa entrar
+   * justamente quando algo está errado.
+   */
+  status?: string | null;
   /**
    * Escopo de visualização da org (G4-01). Opcional: só é preenchido no client
    * context (AppLayout) para a UI do inbox decidir visões visíveis. Não é fonte

@@ -71,6 +71,7 @@ export async function requireRole(min: Role, opts: RequireRoleOpts = {}): Promis
           orgId: membership.organization_id,
           name: membership.organization_name,
           role: membership.role,
+          status: membership.organization_status ?? null,
         }
       : allowPlatformAdmin && user.is_platform_admin
         ? { orgId: organizationId, name: "—", role: "viewer" }
@@ -87,6 +88,31 @@ export async function requireRole(min: Role, opts: RequireRoleOpts = {}): Promis
 
   if (allowPlatformAdmin && user.is_platform_admin && !user.support) {
     return { ok: true, user, org };
+  }
+
+  // SUSPENSÃO É GATE DE ACESSO, NÃO DE PAPEL.
+  //
+  // Fica aqui, e não no início, por duas razões que não são estilo:
+  //   - DEPOIS do bypass de platform admin, porque é ele quem reativa. Um gate
+  //     antes trancaria a chave dentro do carro.
+  //   - ANTES da RPC de papel, porque quem está suspenso não precisa ter o
+  //     papel resolvido: é uma ida ao banco a menos numa resposta que já está
+  //     decidida.
+  //
+  // `status` ausente não bloqueia — ver o comentário em `ActiveOrg.status`.
+  if (org.status === "suspended") {
+    void audit({
+      action: "authz.denied",
+      actorUserId: user.id,
+      organizationId: org.orgId,
+      resourceType: resource ?? null,
+      requestId,
+      metadata: { reason: "tenant_suspended" },
+    });
+    return {
+      ok: false,
+      response: fail("tenant_suspended", t("Conta suspensa"), 403, { requestId }),
+    };
   }
 
   // Role efetivo do banco (não do snapshot do cookie/membership em memória).
