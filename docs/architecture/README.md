@@ -32,6 +32,7 @@ ser fonte sem ninguém decidir isso.
 | `indice-de-atrito.architecture.json` | índice de atrito — 24 peças, 31 arestas; a régua do atrito, o rádio que a lê e as demandas que entram nela |
 | `marca-propria.architecture.json` | marca própria (white-label) — 37 peças, 54 arestas, 6 faixas; a pilha org → instalação → `.env` → padrão, as saídas SEM DOM (`marcaDaSaida`) e a **não-ligação declarada** do PDF de LGPD, que imprime o CONTROLADOR e nunca a marca de quem revende |
 | `retencao-de-historico.architecture.json` | poda do histórico (issue #261) — 16 peças, 18 arestas, 6 faixas; o que sai (`done`/`failed`/`dead` velho), o que tem dono e **não** sai (`pending`/`running`, e `dead` com aviso ainda aberto), e por que o expurgo do audit é uma `security definer` sem seletor de linha em vez de uma porta |
+| `enforcement-da-suspensao.architecture.json` | suspensão que PARA o produto (Plano 3) — 14 peças, 19 arestas; o status lido nos três funis de superfície (sessão, token/MCP, claim da fila), por que o gate fica depois do bypass de platform admin, e o consumidor de `tenant.suspended` **e** `tenant.reactivated` que impede a reativação de virar enxurrada |
 | `jornadas-de-vinicola.architecture.json` | pacote de conteúdo por nicho (vinícola) — 18 peças, 20 arestas, 3 faixas; as duas entradas que chamam `aplicarJornada()` (onboarding e tela), o ledger `organizations.settings.bacco_jornadas` por id, e as cinco tabelas que a jornada passa a alimentar |
 
 > **Esta tabela já apodreceu uma vez:** ela listava 8 mapas quando o disco tinha 9 — faltava

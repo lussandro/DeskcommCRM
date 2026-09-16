@@ -1,0 +1,54 @@
+{
+  "schema_version": 1,
+  "diagram_type": "architecture",
+  "meta": {
+    "title": "Enforcement da suspensão",
+    "subtitle": "Um status, três funis de superfície e um consumidor que evita a enxurrada",
+    "output": "enforcement-da-suspensao.html",
+    "quality_profile": "standard"
+  },
+  "lanes": [
+    { "id": "admin", "label": "Plataforma" },
+    { "id": "codigo", "label": "Código" },
+    { "id": "superficie", "label": "Superfícies" },
+    { "id": "banco", "label": "Banco" }
+  ],
+  "mainPath": ["rota_suspender", "status", "require_role", "api_cookie", "handler", "fila"],
+  "nodes": [
+    { "id": "rota_suspender", "lane": "admin", "col": 0, "type": "route", "label": "POST /api/v1/admin/tenants/:id/suspend: grava o status e emite o evento" },
+    { "id": "rota_reativar", "lane": "admin", "col": 0, "type": "route", "label": "POST /api/v1/admin/tenants/:id/reactivate: status volta a 'active'" },
+    { "id": "status", "lane": "banco", "col": 1, "type": "table", "label": "organizations.status: 'active' | 'suspended' | 'redacted' | 'archived'" },
+    { "id": "evento", "lane": "banco", "col": 1, "type": "table", "label": "event_log 'tenant.suspended': emitido na suspensão" },
+    { "id": "evento_reativar", "lane": "banco", "col": 1, "type": "table", "label": "event_log 'tenant.reactivated': emitido na reativação" },
+    { "id": "require_role", "lane": "codigo", "col": 2, "type": "lib", "label": "lib/auth/require-role.ts: 403 tenant_suspended antes da RPC de papel" },
+    { "id": "bearer", "lane": "codigo", "col": 2, "type": "lib", "label": "lib/mcp/auth.ts: validateBearerToken recusa com -32002/403" },
+    { "id": "claim", "lane": "codigo", "col": 2, "type": "lib", "label": "lib/agent-engine/queue/queue.ts: CLAIM_SQL ignora job de org suspensa" },
+    { "id": "handler", "lane": "codigo", "col": 2, "type": "lib", "label": "lib/tenancy/fila-da-suspensao.handler.ts: descarta a fila represada nos dois eventos e avisa" },
+    { "id": "layout", "lane": "superficie", "col": 3, "type": "page", "label": "app/app/layout.tsx: redireciona para /account-suspended" },
+    { "id": "api_cookie", "lane": "superficie", "col": 3, "type": "route", "label": "/api/v1/* com sessão de navegador — inclui o envio humano pela inbox" },
+    { "id": "api_token", "lane": "superficie", "col": 3, "type": "route", "label": "/api/v1/* com Bearer e /api/mcp" },
+    { "id": "fila", "lane": "superficie", "col": 3, "type": "worker", "label": "agent-worker: agente, follow-up, automações e crons" },
+    { "id": "aviso", "lane": "superficie", "col": 3, "type": "page", "label": "Central: aviso job_dead com a contagem descartada" }
+  ],
+  "edges": [
+    { "id": "suspender-status", "from": "rota_suspender", "to": "status", "label": "status = 'suspended'" },
+    { "id": "suspender-evento", "from": "rota_suspender", "to": "evento", "label": "emite tenant.suspended" },
+    { "id": "reativar-status", "from": "rota_reativar", "to": "status", "label": "status = 'active'; nada é reenviado" },
+    { "id": "reativar-evento", "from": "rota_reativar", "to": "evento_reativar", "label": "emite tenant.reactivated" },
+    { "id": "eventoreativar-handler", "from": "evento_reativar", "to": "handler", "label": "limpa o que empilhou durante a suspensão" },
+    { "id": "status-requirerole", "from": "status", "to": "require_role", "label": "vem no join que já trazia nome e idioma" },
+    { "id": "status-bearer", "from": "status", "to": "bearer", "label": "embed organizations(status) no select do token" },
+    { "id": "status-claim", "from": "status", "to": "claim", "label": "NOT EXISTS por chave primária no claim" },
+    { "id": "evento-handler", "from": "evento", "to": "handler", "label": "registrado em register-handlers.ts" },
+    { "id": "requirerole-api", "from": "require_role", "to": "api_cookie", "label": "403 tenant_suspended" },
+    { "id": "requirerole-layout", "from": "require_role", "to": "layout", "label": "a tela já redirecionava; o gate cobre a API" },
+    { "id": "bearer-apitoken", "from": "bearer", "to": "api_token", "label": "403 nas duas superfícies, de um ponto só" },
+    { "id": "claim-fila", "from": "claim", "to": "fila", "label": "cinco produtores, um consumidor" },
+    { "id": "handler-fila", "from": "handler", "to": "fila", "label": "marca os pendentes como dead" },
+    { "id": "handler-aviso", "from": "handler", "to": "aviso", "label": "um aviso com a contagem, não um por job" },
+    { "id": "status-layout", "from": "status", "to": "layout", "label": "o Server Component lê organizations.status direto" },
+    { "id": "layout-apicookie", "from": "layout", "to": "api_cookie", "label": "a MESMA sessão que a tela redireciona seguia chamando a API — é o defeito que o gate fecha" },
+    { "id": "apitoken-fila", "from": "api_token", "to": "fila", "label": "o que a integração escrevia virava evento e job; com o 403, nada entra" },
+    { "id": "aviso-reativar", "from": "aviso", "to": "rota_reativar", "label": "a contagem descartada é o que o operador lê antes de reativar" }
+  ]
+}
