@@ -200,7 +200,10 @@ function wrapMcpTool(
           return { permitido: false, motivo: veredito.motivo, mensagem: explicacao };
         }
 
-        const result = await def.handler(argsRecord as never, input.ctx);
+        const result = await def.handler(argsRecord as never, {
+          ...input.ctx,
+          turnContactId: input.contactId ?? null,
+        });
 
         // Capture handoff signal so the runtime can short-circuit the loop.
         if (def.name === HANDOFF_TOOL_NAME) {

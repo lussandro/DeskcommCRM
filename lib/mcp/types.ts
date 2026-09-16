@@ -15,6 +15,13 @@ import type { Role } from "@/lib/auth/types";
 export interface McpContext {
   /** Somente o runtime in-process fornece o job original, nunca o cliente MCP. */
   meetingBooking?: MeetingBookingContext;
+  /**
+   * O contato do turno, quando quem chama é o AGENTE (o seam preenche; o cliente
+   * MCP externo não tem turno). Serve às tools que agem sobre UM compromisso
+   * existente: quando o `appointment_id` que o modelo mandou não existe e este
+   * contato tem exatamente um compromisso futuro em aberto, é dele que se trata.
+   */
+  turnContactId?: string | null;
   organizationId: string;
   role: Role;
   actor: Actor;

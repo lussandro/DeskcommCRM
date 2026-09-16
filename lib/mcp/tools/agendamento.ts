@@ -36,7 +36,7 @@ import {
 } from "@/app/api/v1/agenda/agendamentos/_handler";
 import { ApiError } from "@/lib/api/types";
 import { SITUACOES_DO_AGENDAMENTO } from "@/lib/agenda/tipos";
-import type { McpToolDefinition } from "@/lib/mcp/types";
+import type { McpContext, McpToolDefinition } from "@/lib/mcp/types";
 
 /** Teto do horizonte pedido — espelha o da rota, e o excesso é erro de chamada. */
 const DIAS_PADRAO = 14;
@@ -539,9 +539,48 @@ export const crmBookAppointment: McpToolDefinition<typeof marcarShape> = {
     }),
 };
 
+/**
+ * O compromisso sobre o qual a tool age. O id que o modelo manda pode não
+ * existir — medido em 2026-09-16: `004edec5…` para um compromisso `755e792a…`
+ * que a própria listagem tinha acabado de devolver. Quando o id não é desta
+ * organização e o contato do turno tem EXATAMENTE um compromisso futuro em
+ * aberto, é dele que a pessoa está falando. Dois ou nenhum: devolve o id
+ * original e o handler responde "não encontrado", como antes — adivinhar
+ * entre dois seria remarcar o compromisso errado.
+ */
+export async function compromissoAlvo(ctx: McpContext, appointmentId: string): Promise<string> {
+  try {
+    return await resolverCompromisso(ctx, appointmentId);
+  } catch {
+    // Falha de consulta não pode mudar o comportamento: o handler recebe o id
+    // original e responde como sempre respondeu.
+    return appointmentId;
+  }
+}
+
+async function resolverCompromisso(ctx: McpContext, appointmentId: string): Promise<string> {
+  const { data: existe } = await ctx.supabase
+    .from("calendar_appointments")
+    .select("id")
+    .eq("organization_id", ctx.organizationId)
+    .eq("id", appointmentId)
+    .maybeSingle();
+  if (existe || !ctx.turnContactId) return appointmentId;
+  const { data: abertos } = await ctx.supabase
+    .from("calendar_appointments")
+    .select("id")
+    .eq("organization_id", ctx.organizationId)
+    .eq("contact_id", ctx.turnContactId)
+    .in("status", ["pending", "confirmed"])
+    .gt("starts_at", new Date().toISOString())
+    .limit(2);
+  const lista = (abertos ?? []) as { id: string }[];
+  return lista.length === 1 ? lista[0]!.id : appointmentId;
+}
+
 const remarcarShape = {
   appointment_id: z.string().uuid(),
-  new_starts_at: z.string().datetime({ offset: true }).describe("o novo início, vindo de `crm_find_free_slots`"),
+  new_starts_at: z.string().datetime({ offset: true }).describe("o novo início: copie o `inicio` EXATO que `crm_find_free_slots` devolveu (com o Z/offset). Nunca converta uma hora local por conta própria — 16h30 em São Paulo NÃO é 16:30Z."),
   notes: z.string().max(2000).optional(),
 };
 
@@ -561,11 +600,12 @@ export const crmRescheduleAppointment: McpToolDefinition<typeof remarcarShape> =
   requiresScope: "mcp:write",
   handler: async (input, ctx) =>
     semDerrubarOTurno("remarcado", async () => {
+      const alvo = await compromissoAlvo(ctx, input.appointment_id);
       const r = await alterarAgendamentoHandler(
         ctx.supabase,
         { organization_id: ctx.organizationId, actor: ctx.actor, requestId: ctx.requestId },
         {
-          id: input.appointment_id,
+          id: alvo,
           starts_at: input.new_starts_at,
           ...(input.notes ? { notes: input.notes } : {}),
         },
@@ -600,10 +640,11 @@ export const crmCancelAppointment: McpToolDefinition<typeof cancelarShape> = {
   requiresScope: "mcp:write",
   handler: async (input, ctx) =>
     semDerrubarOTurno("cancelado", async () => {
+      const alvo = await compromissoAlvo(ctx, input.appointment_id);
       const r = await cancelarAgendamentoHandler(
         ctx.supabase,
         { organization_id: ctx.organizationId, actor: ctx.actor, requestId: ctx.requestId },
-        { id: input.appointment_id, reason: input.reason },
+        { id: alvo, reason: input.reason },
       );
       return { cancelado: true, compromisso: r };
     }),
@@ -630,11 +671,12 @@ export const crmConfirmAppointment: McpToolDefinition<typeof confirmarShape> = {
   requiresScope: "mcp:write",
   handler: async (input, ctx) =>
     semDerrubarOTurno("confirmado", async () => {
+      const alvo = await compromissoAlvo(ctx, input.appointment_id);
       const r = await alterarAgendamentoHandler(
         ctx.supabase,
         { organization_id: ctx.organizationId, actor: ctx.actor, requestId: ctx.requestId },
         {
-          id: input.appointment_id,
+          id: alvo,
           status: "confirmed",
           ...(input.notes ? { notes: input.notes } : {}),
         },
@@ -663,14 +705,15 @@ export const crmSetAppointmentOutcome: McpToolDefinition<typeof desfechoShape> =
   requiresScope: "mcp:write",
   handler: async (input, ctx) =>
     semDerrubarOTurno("registrado", async () => {
+      const alvo = await compromissoAlvo(ctx, input.appointment_id);
       if (ctx.actor.type !== "user") return { registrado: false, requer_confirmacao_humana: true,
         orientacao: "Peça à equipe para abrir o compromisso na Agenda e confirmar a presença.",
-        href: `/app/agenda?compromisso=${input.appointment_id}` };
+        href: `/app/agenda?compromisso=${alvo}` };
       const r = await alterarAgendamentoHandler(
         ctx.supabase,
         { organization_id: ctx.organizationId, actor: ctx.actor, requestId: ctx.requestId },
         {
-          id: input.appointment_id,
+          id: alvo,
           status: input.outcome,
           ...(input.notes ? { notes: input.notes } : {}),
         },
