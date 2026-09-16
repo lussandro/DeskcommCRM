@@ -140,14 +140,22 @@ describe("crm_find_free_slots", () => {
     expect(params.ate.toISOString()).toBe("2026-09-14T14:00:00.000Z");
   });
 
-  it("não aceita dia específico e período relativo juntos", async () => {
+  it("dia específico E período relativo juntos: o dia vence, a consulta acontece", async () => {
+    // Já foi uma recusa (`periodo_ambiguo`). Medido em produção em 2026-09-16:
+    // o modelo manda os dois em TODA chamada, cada consulta morria em 0 ms e o
+    // agente nunca viu um horário. Recusar aqui não ensinava o modelo — só
+    // deixava a agenda inútil. O dia nomeado pelo cliente é o mais específico.
+    respondeCom({ ...SUCESSO, slots: [{ inicio: new Date("2026-09-14T01:00:00.000Z"), fim: new Date("2026-09-14T01:30:00.000Z") }] });
     const r = (await crmFindFreeSlots.handler(
       { event_type_slug: "c", dia: "2026-09-13", dias_a_frente: 7 },
       ctx,
-    )) as { motivo: string; mensagem: string };
-    expect(r.motivo).toBe("periodo_ambiguo");
-    expect(r.mensagem).toMatch(/não os dois/);
-    expect(horariosLivresDaOrg).not.toHaveBeenCalled();
+    )) as { horarios: { inicio: string }[]; motivo?: string };
+    expect(r.motivo).toBeUndefined();
+    expect(horariosLivresDaOrg).toHaveBeenCalledTimes(1);
+    // A janela é a do DIA (14 h antes até 38 h depois da meia-noite UTC), não a dos 7 dias.
+    const params = vi.mocked(horariosLivresDaOrg).mock.calls[0]![2];
+    expect(params.de.toISOString()).toBe("2026-09-12T10:00:00.000Z");
+    expect(params.ate.toISOString()).toBe("2026-09-14T14:00:00.000Z");
   });
 
   it("⚠️ a recusa que sai é a do CLIENTE, nunca a do OPERADOR", async () => {

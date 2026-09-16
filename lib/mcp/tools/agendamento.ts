@@ -205,13 +205,14 @@ export const crmFindFreeSlots: McpToolDefinition<typeof horariosLivresShape> = {
   requiresScope: "mcp:read",
   handler: async (input, ctx) => {
     const agora = new Date();
-    if (input.dia !== undefined && input.dias_a_frente !== undefined) {
-      return {
-        horarios: [],
-        motivo: "periodo_ambiguo",
-        mensagem: "informe um dia específico ou quantos dias olhar, não os dois.",
-      };
-    }
+    // `dia` E `dias_a_frente` juntos: o dia específico vence. Isto já foi uma
+    // recusa (`periodo_ambiguo`), e a recusa deixou a agenda inútil: medido em
+    // 2026-09-16, o modelo mandava os dois em TODA chamada (`dia` do que o
+    // cliente pediu + `dias_a_frente: 5` por hábito), cada consulta morria em
+    // 0 ms, o agente nunca viu um horário e "confirmava com a equipe" para
+    // sempre. Um dia nomeado é mais preciso do que "quantos dias olhar"; a
+    // descrição continua pedindo um só, e `dias_a_frente` é simplesmente
+    // ignorado quando `dia` veio.
 
     // A faixa larga contém o dia civil em QUALQUER fuso. Depois de a coleta
     // revelar o fuso da regra, filtramos pelo mesmo dia local. Assim a IA não
@@ -444,6 +445,9 @@ export const crmBookAppointment: McpToolDefinition<typeof marcarShape> = {
     "lá é decisão interna nossa e o cliente não sabe de nada. " +
     "Chame `crm_find_free_slots` ANTES e use um `starts_at` que veio de lá — marcar em horário que " +
     "não está livre é recusado, e a recusa manda você consultar de novo. " +
+    "Você só precisa de `event_type_slug` e `starts_at`: quem vai ser atendido é o contato desta " +
+    "conversa (preenchido automaticamente) e o responsável é o dono do tipo de atendimento — NÃO " +
+    "informe `owner_user_id` nem `contact_id`, e nunca passe para uma pessoa por 'não saber o id'. " +
     "⚠️ Alguns atendimentos exigem que uma pessoa da equipe aprove: nesses, o horário fica " +
     "RESERVADO e o retorno traz `aguarda_confirmacao: true`. Quando vier assim, NÃO diga que está " +
     "confirmado — diga que separou o horário e que a equipe confirma.",
