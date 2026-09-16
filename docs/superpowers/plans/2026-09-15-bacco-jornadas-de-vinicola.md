@@ -212,6 +212,12 @@ export type ChaveDeJornada = "canal" | "enoturismo" | "clube" | "consumidor";
 export const JORNADAS: Readonly<Record<ChaveDeJornada, JornadaDeVinicola>>;
 export const CHAVES_DE_JORNADA: readonly ChaveDeJornada[];
 export const VERSAO_DO_PACOTE = 1;
+/**
+ * A guarda que a Task 3 (onboarding) e a Task 4 (tela) usam para validar o que
+ * chega de formulário — `FormData` devolve `string`, e sem esta função cada uma
+ * das duas inventaria a própria validação.
+ */
+export function ehChaveDeJornada(v: unknown): v is ChaveDeJornada;
 ```
 
 - [ ] **Step 1:** Criar `lib/vertical/vinicola/tipos.ts` com o tipo e nada mais.
