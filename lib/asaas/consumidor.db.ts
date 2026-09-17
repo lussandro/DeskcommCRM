@@ -56,6 +56,16 @@ export function createSupabaseConsumidorDb(admin: SupabaseClient, orgId: string,
       return data?.name ?? "empresa sem nome";
     },
 
+    async nomeDoCustomer(customerId) {
+      try {
+        const c = await integ.cliente.customer(customerId);
+        return c.name || null;
+      } catch (err) {
+        logger.warn("[asaas.consumidor] consulta do nome do customer falhou", { err: err instanceof Error ? err.message : String(err) });
+        return null;
+      }
+    },
+
     async enrollmentViva(enrollmentId) {
       const { data, error } = await admin.from("followup_enrollments").select("status").eq("id", enrollmentId).maybeSingle();
       if (error) throw new Error(error.message);

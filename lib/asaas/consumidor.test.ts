@@ -60,6 +60,7 @@ function fakeDb(opts: {
   vencidasAoVivo?: number | "falhou";
   existeAcao?: boolean;
   cancelaOk?: boolean;
+  nomeDoCustomer?: string | null;
 }): ConsumidorDb {
   return {
     async upsertCharge(input) {
@@ -73,6 +74,9 @@ function fakeDb(opts: {
     },
     async nomeDaEmpresa() {
       return "Empresa Exemplo";
+    },
+    async nomeDoCustomer() {
+      return opts.nomeDoCustomer === undefined ? "Fulano de Tal" : opts.nomeDoCustomer;
     },
     async enrollmentViva() {
       return opts.enrollmentViva ?? true;
@@ -157,6 +161,8 @@ describe("processarEvento — asaas.payment_overdue", () => {
     expect(reg.avisos).toHaveLength(1);
     expect(reg.avisos[0]!.kind).toBe("charge_unmatched");
     expect(reg.avisos[0]!.refKind).toBeNull();
+    expect(reg.avisos[0]!.body).toContain(CUSTOMER);
+    expect(reg.avisos[0]!.body).toContain("Fulano de Tal");
   });
 
   it("config sem followup_pointer_id → charge_overdue_no_flow 1x por dia (ref_id = data)", async () => {

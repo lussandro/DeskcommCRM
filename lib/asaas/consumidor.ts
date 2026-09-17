@@ -11,6 +11,7 @@ import { z } from "zod";
 import type { EventRow } from "@/lib/event-log/dispatcher";
 import type { EnrollFollowupResult } from "@/lib/followup/enroll";
 import { chaveDeAviso } from "./avisos";
+import { formatCentsBRL } from "@/lib/money";
 
 const payloadSchema = z.object({
   event: z.string(),
@@ -53,6 +54,8 @@ export interface ConsumidorDb {
   carregarCharge(organizationId: string, paymentId: string): Promise<{ enrollmentId: string | null; dueDate: string } | null>;
   titularPorCustomer(organizationId: string, customerId: string): Promise<Titular | null>;
   nomeDaEmpresa(organizationId: string, companyId: string): Promise<string>;
+  /** `null` quando a consulta ao Asaas falhar ou o nome não vier — nunca lança. */
+  nomeDoCustomer(customerId: string): Promise<string | null>;
   enrollmentViva(enrollmentId: string): Promise<boolean>;
   enroll(pointerId: string, contactId: string): Promise<EnrollFollowupResult>;
   cancelaEnrollment(id: string, reason: string, outcome: "converted" | "exhausted"): Promise<boolean>;
@@ -94,7 +97,9 @@ async function tratarOverdue(deps: ConsumidorDeps, row: EventRow, p: z.infer<typ
 
   const titular = await db.titularPorCustomer(orgId, p.customer);
   if (!titular) {
-    await db.abrirAviso("charge_unmatched", null, chaveDeAviso("charge_unmatched", p.customer), "Cobrança sem cliente cadastrado", `O Asaas enviou uma cobrança vencida (${p.id}) para um cliente que não está no CRM.`);
+    const nome = await db.nomeDoCustomer(p.customer);
+    const body = `Cliente do Asaas ${p.customer}${nome ? ` (${nome})` : ""}: cobrança vencida ${p.id}, ${formatCentsBRL(centavos(p.value))} com vencimento em ${p.dueDate}. Vincule a uma empresa ou a um contato.`;
+    await db.abrirAviso("charge_unmatched", null, chaveDeAviso("charge_unmatched", p.customer), "Cobrança sem cliente cadastrado", body);
     return { status: "skipped", detail: "titular_nao_encontrado" };
   }
   await db.upsertCharge({
