@@ -2142,8 +2142,17 @@ falhas.
 | J24.6 | Webhook de pagamento recebido chega | matrícula cancelada, atividade `charge_paid` registrada, agente deixa de oferecer ferramentas se era a última vencida |
 | J24.7 | Desativar módulo Asaas com matrícula viva | ferramentas somem do turno, webhook fica inerte (200), matrículas são canceladas com `cancel_reason='asaas_disabled'` |
 
-Spec: `tests/e2e/bacco-asaas.spec.ts` — roda na VPS contra a produção com
-conta QA, banco fresco com sandbox Asaas e WAHA real. **Status: spec escrita;
-execução na VPS pendente** — este checkpoint (Task 10 da spec) cobre mapa,
-fragmento e declaração em journey map; a execução E2E com evidência é
-checkpoint separado.
+Spec: `tests/e2e/bacco-asaas.spec.ts` — roda na VPS contra a produção com a
+conta QA e o sandbox Asaas (customer + cobrança PENDING criados pela própria
+spec via API). Cobre J24.1 (ativar, testar conexão) e a metade de leitura de
+J24.3/J24.5 (empresa vinculada pelo CNPJ mostra a pendência ao vivo), mais o
+desligamento (J24.7, só a parte de UI — sem matrícula viva para provar o
+`cancel_reason`). **Não cobre** J24.2, J24.4, J24.6 nem a parte de mensagem de
+J24.5/J24.7: medido em
+`docs/superpowers/specs/asaas-sandbox-medido-crm.md` que o sandbox Asaas
+recusa `dueDate` no passado (não dá para produzir `OVERDUE` sem esperar a
+data vencer de verdade) e que o sandbox é compartilhado com o Asaas ERP em
+produção (a spec nunca cria/edita webhook). **Status: spec escrita; execução
+na VPS pendente** — este checkpoint (Task 11 da spec) cobre spec, `FORA_DO_CI`
+e journey map; a corrida real, com evidência em `.superpowers/evidence/`, é
+checkpoint separado do controlador.

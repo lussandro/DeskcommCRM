@@ -144,6 +144,17 @@ jobs:
     # `mcr.microsoft.com/playwright:v1.63.0-noble`, sem `playwright.config` do
     # repo.
     #
+    # ═══ `bacco-asaas`: RODA NA VPS, CONTRA A PRODUÇÃO, COM SANDBOX ASAAS ═══
+    #
+    # Fork Bacco (spec "2026-09-17-asaas", Task 11). Prova em tela do módulo
+    # Asaas — ativar (chave, ambiente, cerca de reemissão), vincular empresa
+    # pelo CNPJ com pendência ao vivo, e desativar — na conta QA real. Exige
+    # `ASAAS_SANDBOX_KEY` (chave de sandbox Asaas, só existe na VPS) além das
+    # credenciais de `/root/.bacco_qa`; o runner do CI não tem nenhuma das
+    # duas. Não cobre cobrança vencida (o sandbox recusa `dueDate` no
+    # passado — medido em `docs/superpowers/specs/asaas-sandbox-medido-crm.md`)
+    # nem webhook (sandbox compartilhado com o Asaas ERP em produção).
+    #
     # ═══ `bacco-suspensao`: SUSPENDE UMA ORGANIZAÇÃO REAL, E SÓ A DE QA ═══
     #
     # Fork Bacco (Plano 3 "Enforcement da suspensão", Task 6). Ela SUSPENDE e
@@ -666,6 +677,7 @@ jobs:
         bacco-jornadas.spec.ts
         bacco-suspensao.spec.ts
         bacco-empresas.spec.ts
+        bacco-asaas.spec.ts
     steps:
       - uses: actions/checkout@v7
 
