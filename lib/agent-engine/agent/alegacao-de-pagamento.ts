@@ -10,11 +10,15 @@
  *
  * Como funciona: quando o cliente alega ter pago (ou mandado comprovante) e o agente
  * tem capacidade de cobrança, ESTE código consulta o Asaas pelo titular do contato,
- * cobrança por cobrança. Havendo qualquer cobrança em aberto (vencida ou pendente), ou
- * sem como verificar (sem vínculo, erro do Asaas), o turno NÃO chama o modelo: abre um
- * caso humano e manda uma linha fixa ("ainda não consta; uma pessoa do financeiro
- * confere"). O modelo só fala quando não resta cobrança em aberto — e aí o que ele
- * tem para dizer é o que a ferramenta diz.
+ * cobrança por cobrança. Havendo qualquer cobrança EXIGÍVEL em aberto (vencida, ou
+ * pendente com vencimento até hoje), ou sem como verificar (sem vínculo, erro do
+ * Asaas), o turno NÃO chama o modelo: abre um caso humano e manda uma linha fixa
+ * ("ainda não consta; uma pessoa do financeiro confere"). O modelo só fala quando não
+ * resta cobrança exigível — e aí o que ele tem para dizer é o que a ferramenta diz.
+ *
+ * Parcela FUTURA (pendente, vence depois de hoje) não conta: quem pagou a de setembro
+ * e tem a de outubro emitida está em dia, e mandá-lo para humano seria punir o
+ * adimplente (revisão adversarial, 3ª passada).
  *
  * Aditivo: agente sem capacidade de cobrança, organização sem Asaas ativo, ou cliente
  * que não alegou nada ⇒ `modelo_fala`, comportamento idêntico ao de antes.
@@ -28,7 +32,7 @@ export type SituacaoDasCobrancas =
   | { kind: 'asaas_inativo' }
   | { kind: 'sem_vinculo' }
   | { kind: 'erro'; detalhe: string }
-  | { kind: 'ok'; emAberto: number; vencidas: number };
+  | { kind: 'ok'; emAberto: number; vencidas: number; futuras: number };
 
 export type DecisaoDaAlegacao =
   | { acao: 'modelo_fala' }
@@ -57,11 +61,16 @@ export function decidirAlegacaoDePagamento(situacao: SituacaoDasCobrancas): Deci
   }
 }
 
-/** Consulta o Asaas pelo titular do contato (empresa ou o próprio). Nunca lança. */
+/**
+ * Consulta o Asaas pelo titular do contato (empresa ou o próprio). Nunca lança.
+ * `hojeISO` é o dia local da organização (YYYY-MM-DD): pendente com `dueDate <= hoje`
+ * é exigível; depois de hoje é parcela futura.
+ */
 export async function situacaoDasCobrancasDoContato(
   admin: SupabaseClient,
   orgId: string,
   contactId: string,
+  hojeISO: string,
 ): Promise<SituacaoDasCobrancas> {
   try {
     const integ = await carregarIntegracaoAsaas(admin, orgId);
@@ -72,7 +81,9 @@ export async function situacaoDasCobrancasDoContato(
       integ.cliente.payments(titular.customerId, 'PENDING'),
       integ.cliente.payments(titular.customerId, 'OVERDUE'),
     ]);
-    return { kind: 'ok', emAberto: pend.data.length + venc.data.length, vencidas: venc.data.length };
+    const exigiveis = pend.data.filter((p) => p.dueDate <= hojeISO).length;
+    const futuras = pend.data.length - exigiveis;
+    return { kind: 'ok', emAberto: venc.data.length + exigiveis, vencidas: venc.data.length, futuras };
   } catch (err) {
     return { kind: 'erro', detalhe: (err instanceof Error ? err.message : String(err)).slice(0, 160) };
   }

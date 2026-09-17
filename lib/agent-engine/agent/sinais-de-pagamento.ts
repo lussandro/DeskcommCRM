@@ -57,9 +57,48 @@ export function resultadoMostraCobrancaPaga(resultado: unknown, profundidade = 4
  * lookbehind de negação é o que separa "paguei" de "ainda não paguei" — a segunda é a fala
  * de quem VAI pagar, e tratá-la como alegação abriria caso humano a cada cobrança normal.
  */
-const ALEGACAO_DE_PAGAMENTO =
-  /(?<!\b(?:nao|nunca|ainda nao)\s)\b(?:paguei|ja paguei|acabei de pagar|ta pago|esta pago|quitei|fiz o pix|ja fiz o pix|fiz a transferencia|transferi|depositei|(?:mandei|enviei) o comprovante|(?:mandei|enviei) comprovante)\b/i;
+const MEIO = '(?:pagamento|pix|transferencia|deposito|ted|boleto|mensalidade|fatura|parcela)';
+const ALEGACOES: readonly RegExp[] = [
+  // verbo de pagar em 1ª pessoa, passado
+  /\b(?:paguei|pagamos|quitei|quitamos|transferi|transferimos|depositei|depositamos|acab(?:ei|amos) de pagar)\b/,
+  // "fiz/efetuei/realizei/mandei/enviei/passei (o) pagamento|pix|…", "acabei de fazer o pix"
+  new RegExp(`\\b(?:fiz|fizemos|efetuei|efetuamos|realizei|realizamos|mandei|mandamos|enviei|enviamos|passei|passamos|acab(?:ei|amos) de fazer)\\s+(?:o |a |um |uma )?${MEIO}\\b`),
+  // "pagamento feito/realizado/ok", "pix enviado"
+  new RegExp(`\\b${MEIO}\\s+(?:feit[oa]|realizad[oa]|efetuad[oa]|enviad[oa]|conclu[ií]d[oa]|quitad[oa]|ok)\\b`),
+  // "ta pago", "esta tudo pago", "ja foi pago", "ta quitado", "o pagamento ja foi", "ja caiu"
+  /\b(?:ta|esta|estao|foi|ja foi|ficou|tudo)\s+(?:tudo\s+)?(?:pago|pagos|quitad[oa]s?)\b/,
+  /\b(?:o\s+)?pagamento\s+ja\s+foi\b|\bja\s+caiu\b/,
+  // comprovante mandado
+  /\b(?:segue|mandei|enviei|anexei|ta ai|aqui esta|aqui vai)\b[^\n]{0,25}\bcomprovante\b|\bcomprovante\b[^\n]{0,20}\b(?:em anexo|anexado|enviado|segue)\b/,
+];
+/** Antes da alegação, na mesma oração: negação, futuro, condição, pergunta ⇒ não é alegação. */
+const DESARMA_ANTES = /\b(?:nao|nunca|nem|ainda nao|se|se eu|caso|quando|quanto|como|porque|por que|vou|vamos|preciso|quero|posso|tenho que|tenho de|ir|antes de)\s+(?:eu\s+|ja\s+)?$/;
+/** Depois da alegação, colado: "paguei não", "paguei caro", "paguei da última vez", "paguei quanto". */
+const DESARMA_DEPOIS = /^\s*(?:nao|caro|barato|quanto|da ultima|no mes passado|ano passado|na epoca|errado)\b/;
 
+function semAcentoMinusculo(texto: string): string {
+  return texto.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
+}
+
+/**
+ * Oração por oração (vírgula, ponto, quebra de linha): a negação ou a condição só
+ * desarmam a alegação que está na MESMA oração — "não paguei ainda" não é alegação;
+ * "não consegui ontem, mas hoje paguei" é. Falso negativo aqui custa o modelo concordar
+ * com pagamento que não existe (caro e invisível); falso positivo custa um caso humano
+ * (caro, mas visível) — a lista erra para o lado do humano.
+ */
 export function clienteAlegaPagamento(texto: string): boolean {
-  return ALEGACAO_DE_PAGAMENTO.test(texto.normalize('NFD').replace(/[̀-ͯ]/g, ''));
+  const oracoes = semAcentoMinusculo(texto).split(/[.!?\n,;]+/);
+  for (const oracao of oracoes) {
+    for (const padrao of ALEGACOES) {
+      const m = padrao.exec(oracao);
+      if (m === null) continue;
+      const antes = oracao.slice(0, m.index);
+      const depois = oracao.slice(m.index + m[0].length);
+      if (DESARMA_ANTES.test(antes)) continue;
+      if (DESARMA_DEPOIS.test(depois)) continue;
+      return true;
+    }
+  }
+  return false;
 }

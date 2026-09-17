@@ -2,12 +2,13 @@ import { describe, expect, it } from 'vitest';
 import { agenteTemCobranca, decidirAlegacaoDePagamento } from './alegacao-de-pagamento';
 
 describe('decidirAlegacaoDePagamento — só a ferramenta diz "pago"; senão, humano', () => {
-  it('cobrança em aberto ⇒ humano (o modelo não fala)', () => {
-    expect(decidirAlegacaoDePagamento({ kind: 'ok', emAberto: 1, vencidas: 1 })).toEqual({ acao: 'humano', motivo: 'cobranca_em_aberto' });
-    expect(decidirAlegacaoDePagamento({ kind: 'ok', emAberto: 2, vencidas: 0 })).toEqual({ acao: 'humano', motivo: 'cobranca_em_aberto' });
+  it('cobrança exigível em aberto ⇒ humano (o modelo não fala)', () => {
+    expect(decidirAlegacaoDePagamento({ kind: 'ok', emAberto: 1, vencidas: 1, futuras: 0 })).toEqual({ acao: 'humano', motivo: 'cobranca_em_aberto' });
+    expect(decidirAlegacaoDePagamento({ kind: 'ok', emAberto: 2, vencidas: 0, futuras: 0 })).toEqual({ acao: 'humano', motivo: 'cobranca_em_aberto' });
   });
-  it('nenhuma cobrança em aberto ⇒ o modelo fala', () => {
-    expect(decidirAlegacaoDePagamento({ kind: 'ok', emAberto: 0, vencidas: 0 })).toEqual({ acao: 'modelo_fala' });
+  it('nenhuma exigível em aberto ⇒ o modelo fala — parcela futura não é dívida', () => {
+    expect(decidirAlegacaoDePagamento({ kind: 'ok', emAberto: 0, vencidas: 0, futuras: 0 })).toEqual({ acao: 'modelo_fala' });
+    expect(decidirAlegacaoDePagamento({ kind: 'ok', emAberto: 0, vencidas: 0, futuras: 1 })).toEqual({ acao: 'modelo_fala' });
   });
   it('sem vínculo no Asaas ⇒ humano (ninguém verificou)', () => {
     expect(decidirAlegacaoDePagamento({ kind: 'sem_vinculo' })).toEqual({ acao: 'humano', motivo: 'sem_vinculo' });

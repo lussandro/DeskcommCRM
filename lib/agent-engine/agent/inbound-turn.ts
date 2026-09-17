@@ -184,6 +184,7 @@ import {
 } from '../guardrails/jailbreak/classifier';
 import { camadaLigada, lerCamadasDaOrg } from '../guardrails/camadas-da-org';
 import { fusoDaOrganizacao } from './fuso-da-org';
+import { diaLocalISO } from '@/lib/agenda/fuso';
 import { renderAgora } from '@/lib/tempo/agora';
 import { decidirElegibilidadeDaConversa } from '@/lib/ai/elegibilidade/consulta-pg';
 
@@ -518,6 +519,8 @@ export async function lerSinaisDeAnexo(
       anexos: { inboundComMidiaDesdeUltimoOutbound: boolean; ultimaInboundMencionaAnexo: boolean };
       /** O cliente ALEGOU ter pago na última inbound — ver `sinais-de-pagamento.ts`. */
       clienteAlegouPagamento: boolean;
+      /** As inbounds sem resposta, juntas — vai no resumo do caso humano. */
+      inboundsPendentes: string;
     }
   | undefined
 > {
@@ -564,7 +567,10 @@ export async function lerSinaisDeAnexo(
       },
       // TODAS as inbounds sem resposta contam ("já paguei" e depois "você viu?" —
       // Codex review): a alegação não some porque o cliente mandou mais uma mensagem.
-      clienteAlegouPagamento: clienteAlegaPagamento(row.inbounds_pendentes ?? ultimaInbound),
+      // Sem inbound pendente (follow-up disparado por sistema) ⇒ '' e não a última de
+      // todos os tempos: um "paguei" de semanas atrás, já respondido, não é alegação.
+      clienteAlegouPagamento: clienteAlegaPagamento(row.inbounds_pendentes ?? ''),
+      inboundsPendentes: row.inbounds_pendentes ?? '',
     };
   } catch (err) {
     log.warn('sinais de anexo não lidos — gate de comprovante desarmado neste turno', {
@@ -2430,21 +2436,34 @@ async function executarTurnoDoAgente(
   // cobrança. Qualquer cobrança em aberto, ou sem como verificar ⇒ abre caso humano e
   // manda a linha fixa; o modelo NÃO roda neste turno — é a única forma de ele não
   // concordar com um pagamento que ninguém viu. Sem cobrança em aberto ⇒ segue.
-  if (!preview && clienteAlegouPagamento && agenteCobra) {
-    const situacao = await situacaoDasCobrancasDoContato(deps.crmCfg.supabase, tenantId, leadId);
+  // O código verificou a alegação e não achou cobrança exigível: para os gates do envio
+  // a alegação está RESPONDIDA (senão o gate de alegação vetaria toda candidata — a tool
+  // de cobranças nunca devolve "paga", só pendente/vencida — e o adimplente cairia no
+  // fallback humano; revisão adversarial, 3ª passada).
+  let alegacaoVerificadaPeloCodigo = false;
+  // Só o turno INBOUND intercepta: o `case_reply_turn` é a conclusão do humano voltando
+  // ao cliente — interceptá-lo abriria caso novo em cima do resolvido e a resposta do
+  // financeiro nunca chegaria; o follow-up disparado por sistema não tem inbound pendente.
+  if (!preview && clienteAlegouPagamento && agenteCobra && liveJob().kind === 'inbound_turn') {
+    const hoje = diaLocalISO(new Date(), await fusoDaOrganizacao(pool, tenantId, runLog));
+    const situacao = await situacaoDasCobrancasDoContato(deps.crmCfg.supabase, tenantId, leadId, hoje);
     const decisao = decidirAlegacaoDePagamento(situacao);
-    if (decisao.acao === 'humano') {
+    if (decisao.acao === 'modelo_fala') {
+      if (situacao.kind === 'ok') alegacaoVerificadaPeloCodigo = true;
+    } else {
+      const fraseDoCliente = (sinaisDoCliente?.inboundsPendentes ?? '').replace(/\s+/g, ' ').trim().slice(0, 300);
       const caso = await openCase(
         pool,
         { tenantId, conversationId: input.conversationId, agentId: agentConfig?.agentId ?? null },
         {
           title: 'Cliente diz que pagou — pagamento não consta',
           summary:
-            situacao.kind === 'ok'
-              ? `O cliente afirma ter pago, mas o Asaas ainda mostra ${situacao.emAberto} cobrança(s) em aberto (${situacao.vencidas} vencida(s)). Conferir o pagamento e responder por aqui.`
+            (situacao.kind === 'ok'
+              ? `O cliente afirma ter pago, mas o Asaas ainda mostra ${situacao.emAberto} cobrança(s) exigível(is) em aberto (${situacao.vencidas} vencida(s)). Conferir o pagamento e responder por aqui.`
               : situacao.kind === 'sem_vinculo'
                 ? 'O cliente afirma ter pago, mas o contato não está vinculado a um cliente do Asaas. Vincular pelo CPF/CNPJ e conferir.'
-                : `O cliente afirma ter pago e não foi possível consultar o Asaas (${situacao.kind === 'erro' ? situacao.detalhe : situacao.kind}). Conferir manualmente.`,
+                : `O cliente afirma ter pago e não foi possível consultar o Asaas (${situacao.kind === 'erro' ? situacao.detalhe : situacao.kind}). Conferir manualmente.`) +
+            (fraseDoCliente ? ` O cliente escreveu: "${fraseDoCliente}"` : ''),
           blocker: 'pagamento_nao_consta',
           source: 'guardrail_autofallback',
           // Sem `contextSnapshot`: `buildCaseContextSnapshot` é declarado mais abaixo
@@ -2457,21 +2476,23 @@ async function executarTurnoDoAgente(
         return { ok: false as const, error: { code: 'erro_ao_abrir', message: '' } };
       });
       if (caso.ok) moverParaHandoffBestEffort('pagamento_nao_consta');
-      // A linha sai pela cadeia de guardrails (STOP, janela, LGPD valem). Caso já aberto
-      // NÃO repete a frase: quem está com a conversa é uma pessoa, e o cliente já ouviu.
+      // A linha sai SEMPRE, pela cadeia de guardrails (STOP, janela, LGPD valem) — com
+      // caso novo, com caso já aberto por outro motivo, ou com a abertura falhando. Sem
+      // ela a alegação ficaria sem resposta, e sem outbound a janela de inbounds
+      // pendentes nunca limparia: toda mensagem seguinte seria interceptada de novo
+      // (revisão adversarial, 3ª passada; Codex review).
       const jaHaviaCaso = !caso.ok && caso.error.code === 'case_already_open';
-      const aviso = jaHaviaCaso
-        ? ({ avisado: false, porque: 'caso_ja_aberto' } as const)
-        : await avisarLeadDaEscalacao(pool, avisoDaEscalacao().ids, {
-            ...avisoDaEscalacao().base,
-            motivo: 'pagamento_nao_consta',
-          });
+      const aviso = await avisarLeadDaEscalacao(pool, avisoDaEscalacao().ids, {
+        ...avisoDaEscalacao().base,
+        motivo: 'pagamento_nao_consta',
+      });
       runLog.warn('cliente alegou pagamento sem cobrança paga — caso humano, modelo não roda', {
         abort_reason: 'pagamento_nao_consta',
         motivo: decisao.motivo,
         situacao: situacao.kind,
         caso_aberto: caso.ok,
         ja_havia_caso: jaHaviaCaso,
+        abertura_falhou: !caso.ok && !jaHaviaCaso,
         lead_avisado: aviso.avisado,
       });
       return;
@@ -2876,19 +2897,21 @@ async function executarTurnoDoAgente(
             // Mesmo padrão dos dois acima: só o `send_message` arma — é o único corpo
             // escrito pelo modelo. `anexos` ausente (leitura falhou/prévia) = gate no-op.
             ...(anexos !== undefined ? { anexos } : {}),
-            // A regra vale para TODO agente (o dono: o agente não confirma, não registra e
-            // não libera nada). O campo existe para o caller que não conhece o gate — o
-            // follow-up determinístico — não armar nada, onde veto é drop silencioso.
+            // Armado só em agente COM ferramenta de cobrança: a regra do dono ("não
+            // confirma, não registra, não libera") é de quem cobra; num agente de clínica
+            // ou loja, um veto sem fail-safe viraria caso humano por frase alheia ao caso.
             // Os três sinais são lidos NO MOMENTO do envio (as tools do modelo rodam em
             // passos anteriores do mesmo laço, então o valor já está certo quando ele
             // decide falar) — mesma disciplina do `agendaToolCalledThisTurn`.
             pagamentos: {
               active: agenteCobra,
-              cobrancaPagaPelaFerramentaNesteTurno,
+              // O código já conferiu no Asaas que não há cobrança exigível: vale como a
+              // ferramenta ter confirmado — o modelo pode dizer que está em dia.
+              cobrancaPagaPelaFerramentaNesteTurno: cobrancaPagaPelaFerramentaNesteTurno || alegacaoVerificadaPeloCodigo,
               // Caso já aberto ANTES do turno conta: senão o gate de alegação calaria o
               // agente para sempre a cada "já paguei" repetido (revisão adversarial, 2ª).
               casoHumanoAbertoNesteTurno: openedCaseThisTurn || hasOpenCase,
-              clienteAlegouPagamento,
+              clienteAlegouPagamento: clienteAlegouPagamento && !alegacaoVerificadaPeloCodigo,
             },
             ...(deps.knobs.disclosureMode !== undefined
               ? { disclosureMode: deps.knobs.disclosureMode }
