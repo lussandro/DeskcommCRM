@@ -2115,3 +2115,35 @@ conta QA (mesmo molde de `bacco-jornadas.spec.ts`; fora do CI, ver
 pendente** — este checkpoint (Task 10 da spec) cobre a spec e a declaração de
 CI; a corrida real, com evidência em `.superpowers/evidence/`, é um
 checkpoint separado do controlador.
+
+---
+
+## J24 — Cobrança vencida: retorno automático e pagamento `[P1]`
+
+Contexto do código: spec "2026-09-17-asaas" (Task 10). Módulo Asaas
+opcional, ligado pela tela Configurações › Integrações › Asaas (admin).
+Quando uma cobrança vence no Asaas, o webhook avisa o CRM (`POST
+/api/v1/webhooks/asaas/[token]`), que matricula o contato (ou o número
+principal da empresa, se for B2B) num fluxo de retorno escolhido pelo admin
+durante a ativação; o agente consulta pendências, manda link/Pix/boleto e
+pode reemitir dentro de limite declarado. Quando paga, o webhook cancela a
+matrícula. Telas: Configurações › Integrações › Asaas (ativar, testar
+conexão, gerar token, desativar), detalhe da empresa mostra pendências ao
+vivo (leitura), Central recebe avisos de cobrança sem contato ou outras
+falhas.
+
+| # | Caso | Expectativa |
+|---|------|-------------|
+| J24.1 | Ativar módulo Asaas (chave + ambiente + fluxo + cerca) | testa conexão, gera webhook URL + token, mostra uma vez para cadastrar no painel do Asaas |
+| J24.2 | Webhook do Asaas com cobrança vencida chega na VPS | evento processado, contato matriculado no fluxo de retorno, **sem mensagem duplicada** (idempotência) |
+| J24.3 | Agente consulta pendências do contato (ferramenta `crm_list_contact_charges`) | lista com valor, vencimento, dias vencido, links de pagamento |
+| J24.4 | Agente reemite cobrança vencida (ferramenta `crm_reissue_overdue_charge`) | novo vencimento gravado, atividade registrada, count de reemissões incrementado |
+| J24.5 | Cobrança vencida com empresa B2B → só número principal recebe retorno | webhook matricula `billing_contact_id` da empresa, não o outro contato; segundo contato pode consultar pendência quando escreve |
+| J24.6 | Webhook de pagamento recebido chega | matrícula cancelada, atividade `charge_paid` registrada, agente deixa de oferecer ferramentas se era a última vencida |
+| J24.7 | Desativar módulo Asaas com matrícula viva | ferramentas somem do turno, webhook fica inerte (200), matrículas são canceladas com `cancel_reason='asaas_disabled'` |
+
+Spec: `tests/e2e/bacco-asaas.spec.ts` — roda na VPS contra a produção com
+conta QA, banco fresco com sandbox Asaas e WAHA real. **Status: spec escrita;
+execução na VPS pendente** — este checkpoint (Task 10 da spec) cobre mapa,
+fragmento e declaração em journey map; a execução E2E com evidência é
+checkpoint separado.

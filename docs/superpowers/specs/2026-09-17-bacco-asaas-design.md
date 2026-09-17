@@ -1,6 +1,6 @@
 # Bacco — módulo Asaas (pendências financeiras no atendimento)
 
-**Data:** 2026-09-17 · **Estado:** revisão 2 (após refutador + Codex), aguardando aprovação · **Escopo:** fork Bacco (vertical aditiva)
+**Data:** 2026-09-17 · **Estado:** implementado na branch feat/asaas; medições em asaas-sandbox-medido-crm.md; execução E2E na VPS pendente · **Escopo:** fork Bacco (vertical aditiva)
 
 ## 1. O que é, em um parágrafo
 

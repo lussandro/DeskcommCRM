@@ -1,0 +1,216 @@
+{
+  "schema_version": 1,
+  "diagram_type": "architecture",
+  "meta": {
+    "title": "Asaas — integração de cobranças; agente consulta e prorroga, webhook retorna",
+    "subtitle": "Pendências do cliente surgem no retorno automático; admin configura chave, fluxo e cerca de prorrogação",
+    "output": "asaas.html",
+    "quality_profile": "standard"
+  },
+  "lanes": [
+    { "id": "tela", "label": "Tela" },
+    { "id": "agente", "label": "Agente IA" },
+    { "id": "eventos", "label": "Eventos" },
+    { "id": "dados", "label": "Dados" },
+    { "id": "asaas", "label": "Asaas" }
+  ],
+  "mainPath": ["rota-webhook", "event-log", "consumidor", "followup"],
+  "nodes": [
+    {
+      "id": "tela-integracao",
+      "lane": "tela",
+      "col": 0,
+      "type": "ui",
+      "label": "Tela Asaas (/app/integrations/asaas) — chave, ambiente, fluxo, cerca"
+    },
+    {
+      "id": "tela-empresa",
+      "lane": "tela",
+      "col": 1,
+      "type": "ui",
+      "label": "Detalhe da empresa (/app/companies/[id]) — bloco Asaas, pendências ao vivo"
+    },
+    {
+      "id": "tools-cobranca",
+      "lane": "agente",
+      "col": 0,
+      "type": "service",
+      "label": "Ferramentas do agente (lib/mcp/tools/cobranca.ts) — consultar, vincular, reemitir"
+    },
+    {
+      "id": "pickTools-filtro",
+      "lane": "agente",
+      "col": 1,
+      "type": "service",
+      "label": "pickToolsFromMcp — filtra por capacidades de integração (Asaas ativo/inativo)"
+    },
+    {
+      "id": "rota-webhook",
+      "lane": "eventos",
+      "col": 0,
+      "type": "service",
+      "label": "POST /api/v1/webhooks/asaas/[token] — recebe e valida evento do Asaas"
+    },
+    {
+      "id": "event-log",
+      "lane": "eventos",
+      "col": 1,
+      "type": "database",
+      "label": "event_log — emite asaas.payment_overdue|received|deleted|updated"
+    },
+    {
+      "id": "consumidor",
+      "lane": "eventos",
+      "col": 2,
+      "type": "service",
+      "label": "lib/asaas/consumidor.handler.ts — matricula no fluxo ou abre Central"
+    },
+    {
+      "id": "cron-reconcile",
+      "lane": "eventos",
+      "col": 3,
+      "type": "service",
+      "label": "app/api/v1/cron/asaas-reconcile — diário, reemite o que o webhook perdeu"
+    },
+    {
+      "id": "followup",
+      "lane": "eventos",
+      "col": 4,
+      "type": "service",
+      "label": "enrollFollowupFlow — matricula contato no fluxo de retorno"
+    },
+    {
+      "id": "central",
+      "lane": "tela",
+      "col": 2,
+      "type": "ui",
+      "label": "Central de notificações — charge_unmatched, charge_reissue_failed, etc"
+    },
+    {
+      "id": "tenant-integrations",
+      "lane": "dados",
+      "col": 0,
+      "type": "database",
+      "label": "tenant_integrations (provider='asaas') — chave cifrada, ambiente, config webhook"
+    },
+    {
+      "id": "asaas-charges",
+      "lane": "dados",
+      "col": 1,
+      "type": "database",
+      "label": "asaas_charges — estado por pagamento, reemissões, enrollment_id"
+    },
+    {
+      "id": "crm-companies",
+      "lane": "dados",
+      "col": 2,
+      "type": "database",
+      "label": "crm_companies — asaas_customer_id, billing_contact_id (número principal)"
+    },
+    {
+      "id": "api-asaas",
+      "lane": "asaas",
+      "col": 0,
+      "type": "service",
+      "label": "Asaas API (lib/asaas/cliente.ts) — GET /customers, /payments, PUT dueDate"
+    }
+  ],
+  "edges": [
+    {
+      "id": "tela-integracao-salva-config",
+      "from": "tela-integracao",
+      "to": "tenant-integrations",
+      "label": "salva chave, ambiente, pointer do fluxo, cerca de prorrogação"
+    },
+    {
+      "id": "tela-empresa-le-charges",
+      "from": "tela-empresa",
+      "to": "api-asaas",
+      "label": "GET /payments?customer= — lista pendências ao vivo"
+    },
+    {
+      "id": "tools-chama-cliente",
+      "from": "tools-cobranca",
+      "to": "api-asaas",
+      "label": "consultar, vincular CPF/CNPJ, prorrogar vencimento"
+    },
+    {
+      "id": "tools-usa-charges",
+      "from": "tools-cobranca",
+      "to": "asaas-charges",
+      "label": "ler reissue_count, gravar reemissão e atividade"
+    },
+    {
+      "id": "picktools-filtra-por-config",
+      "from": "pickTools-filtro",
+      "to": "tenant-integrations",
+      "label": "consulta status='healthy' para injetar ferramentas no turno"
+    },
+    {
+      "id": "webhook-recebe-do-asaas",
+      "from": "api-asaas",
+      "to": "rota-webhook",
+      "label": "POST /webhooks/asaas/[token] — PAYMENT_OVERDUE, RECEIVED, etc"
+    },
+    {
+      "id": "webhook-valida-token",
+      "from": "rota-webhook",
+      "to": "tenant-integrations",
+      "label": "busca token, valida HMAC do segredo"
+    },
+    {
+      "id": "webhook-emite-evento",
+      "from": "rota-webhook",
+      "to": "event-log",
+      "label": "INSERT com sanitização (sem CPF), idempotência por external_id"
+    },
+    {
+      "id": "consumidor-consome",
+      "from": "event-log",
+      "to": "consumidor",
+      "label": "listener de asaas.payment_*; handler idempotente"
+    },
+    {
+      "id": "consumidor-upsert",
+      "from": "consumidor",
+      "to": "asaas-charges",
+      "label": "upsert por (org, payment_id); grava status, enrollment_id"
+    },
+    {
+      "id": "consumidor-encontra-titular",
+      "from": "consumidor",
+      "to": "crm-companies",
+      "label": "busca customer_id em empresa ou contato; resolve número principal"
+    },
+    {
+      "id": "consumidor-matricula",
+      "from": "consumidor",
+      "to": "followup",
+      "label": "matricula no fluxo de retorno (payment_overdue); cancela (payment_received)"
+    },
+    {
+      "id": "consumidor-abre-central",
+      "from": "consumidor",
+      "to": "central",
+      "label": "charge_unmatched, charge_overdue_no_flow, charge_reissue_failed"
+    },
+    {
+      "id": "cron-reconcilia",
+      "from": "cron-reconcile",
+      "to": "api-asaas",
+      "label": "GET /payments?status=OVERDUE|RECEIVED; GET /webhooks"
+    },
+    {
+      "id": "cron-emite-eventos",
+      "from": "cron-reconcile",
+      "to": "event-log",
+      "label": "emite asaas.payment_overdue para o que faltou + avisa de webhook pausado"
+    },
+    {
+      "id": "cron-usa-config",
+      "from": "cron-reconcile",
+      "to": "tenant-integrations",
+      "label": "lê chave, ambiente, status para iterar orgs ativas"
+    }
+  ]
+}
