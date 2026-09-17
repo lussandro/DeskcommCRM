@@ -4,6 +4,8 @@
  * send do agente quando split_messages está on; o pacing anti-ban espaça cada
  * bolha. Nunca devolve bolha vazia nem (salvo palavra atômica gigante) > maxChars.
  */
+import { separarCodigosDePagamento, temCodigoDePagamento } from "./codigos-de-pagamento";
+
 export function splitIntoBubbles(text: string, maxChars: number): string[] {
   const trimmed = (text ?? "").trim();
   if (trimmed === "") return [];
@@ -153,7 +155,19 @@ export async function sendInBubbles<T extends BubbleOutcome>(
   body: string,
   opts: SendInBubblesOpts<T>,
 ): Promise<T> {
-  const bubbles = opts.enabled ? splitIntoBubbles(body, opts.maxChars) : [body];
+  // Código de pagamento (Pix copia-e-cola, linha digitável) SEMPRE sai numa bolha só
+  // dele, com ou sem `enabled`: no WhatsApp se copia a mensagem inteira, então um código
+  // no meio do parágrafo não é copiável — ver `codigos-de-pagamento.ts`. Os pedaços de
+  // TEXTO ao redor ainda respeitam o knob; o código nunca é quebrado por tamanho.
+  const pedacos = separarCodigosDePagamento(body);
+  const bubbles =
+    pedacos.length > 1
+      ? pedacos.flatMap((p) =>
+          temCodigoDePagamento(`x ${p}`) || !opts.enabled ? [p] : splitIntoBubbles(p, opts.maxChars),
+        )
+      : opts.enabled
+        ? splitIntoBubbles(body, opts.maxChars)
+        : [body];
   if (bubbles.length === 0) return opts.send(body); // corpo vazio: deixa o canal decidir
   let last: T | undefined;
   for (let i = 0; i < bubbles.length; i++) {
