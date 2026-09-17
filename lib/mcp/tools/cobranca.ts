@@ -225,17 +225,11 @@ export const crmReissueOverdueCharge: McpToolDefinition<typeof reissueShape> = {
         if (STATUS_PAGO.has(p.status)) return { refused: "ja_paga", status: p.status };
         return { refused: `status_${p.status}`, status: p.status };
       }
-      const { data: estado } = await ctx.supabase
-        .from("asaas_charges")
-        .select("reissue_count")
-        .eq("organization_id", ctx.organizationId)
-        .eq("payment_id", p.id)
-        .maybeSingle();
-      const vezes = estado?.reissue_count ?? 0;
-      if (vezes >= integ.config.reemissao.max_por_cobranca) return { refused: "limite", vezes, maximo: integ.config.reemissao.max_por_cobranca };
-      const hoje = await hojeDaOrg(ctx.organizationId);
-      const nova = new Date(Date.parse(hoje) + integ.config.reemissao.dias * 86_400_000).toISOString().slice(0, 10);
-      const atualizado = await integ.cliente.alterarVencimento(p.id, nova);
+      const maximo = integ.config.reemissao.max_por_cobranca;
+
+      // Garante a linha ANTES de tentar o Asaas, sem tocar reissue_count se ela já
+      // existir (ignoreDuplicates) — senão o upsert reiniciaria a contagem de quem
+      // já tinha prorrogado.
       await ctx.supabase.from("asaas_charges").upsert(
         {
           organization_id: ctx.organizationId,
@@ -243,14 +237,69 @@ export const crmReissueOverdueCharge: McpToolDefinition<typeof reissueShape> = {
           customer_id: p.customer,
           holder_kind: titular.kind,
           holder_id: titular.id,
-          status: atualizado.status,
-          due_date: nova,
+          status: p.status,
+          due_date: p.dueDate,
           value_cents: centavos(p.value),
-          reissue_count: vezes + 1,
-          last_event_at: new Date().toISOString(),
         },
-        { onConflict: "organization_id,payment_id" },
+        { onConflict: "organization_id,payment_id", ignoreDuplicates: true },
       );
+
+      // O TETO É ATÔMICO NO BANCO. Ler `reissue_count` e comparar em JS (como a
+      // versão anterior fazia) tem uma janela: dois turnos concorrentes para o
+      // MESMO payment_id podem ler o mesmo valor, os dois passarem no `<` e os
+      // dois prorrogarem — o limite vira sugestão, não trava. `update ... where
+      // reissue_count < $max` faz o Postgres decidir sob o lock da própria linha:
+      // só uma das duas corridas incrementa; a outra recebe `rowCount === 0`.
+      const pool = getRequestPool();
+      const { rows: incrementadas, rowCount } = await pool.query<{ reissue_count: number }>(
+        `update public.asaas_charges
+            set reissue_count = reissue_count + 1, updated_at = now()
+          where organization_id = $1 and payment_id = $2 and reissue_count < $3
+          returning reissue_count`,
+        [ctx.organizationId, p.id, maximo],
+      );
+      if (!rowCount) {
+        const { data: estado } = await ctx.supabase
+          .from("asaas_charges")
+          .select("reissue_count")
+          .eq("organization_id", ctx.organizationId)
+          .eq("payment_id", p.id)
+          .maybeSingle();
+        return { refused: "limite", vezes: estado?.reissue_count ?? maximo, maximo };
+      }
+      const vezes = incrementadas[0]!.reissue_count;
+
+      const hoje = await hojeDaOrg(ctx.organizationId);
+      const nova = new Date(Date.parse(hoje) + integ.config.reemissao.dias * 86_400_000).toISOString().slice(0, 10);
+      let atualizado: AsaasPayment;
+      try {
+        atualizado = await integ.cliente.alterarVencimento(p.id, nova);
+      } catch (err) {
+        // Compensação: a contagem já subiu, o Asaas recusou — devolve a vaga.
+        // Best effort: se a compensação falhar, a contagem fica alta demais por
+        // uma vez (falso negativo depois), nunca baixa demais (que deixaria
+        // passar do limite) — o lado seguro do erro.
+        try {
+          await pool.query(
+            `update public.asaas_charges
+                set reissue_count = reissue_count - 1, updated_at = now()
+              where organization_id = $1 and payment_id = $2 and reissue_count > 0`,
+            [ctx.organizationId, p.id],
+          );
+        } catch (compErr) {
+          logger.warn("[asaas] não consegui compensar reissue_count após falha no Asaas", {
+            err: compErr instanceof Error ? compErr.message : String(compErr),
+          });
+        }
+        throw err;
+      }
+
+      await ctx.supabase
+        .from("asaas_charges")
+        .update({ status: atualizado.status, due_date: nova, value_cents: centavos(p.value), last_event_at: new Date().toISOString() })
+        .eq("organization_id", ctx.organizationId)
+        .eq("payment_id", p.id);
+
       const agentId = agentIdDoAtor(ctx);
       await ctx.supabase.from("asaas_charge_actions").insert({
         organization_id: ctx.organizationId,
@@ -268,7 +317,7 @@ export const crmReissueOverdueCharge: McpToolDefinition<typeof reissueShape> = {
         resourceType: "contact",
         resourceId: input.contact_id,
         requestId: ctx.requestId,
-        metadata: { payment_id: p.id, old_due_date: p.dueDate, new_due_date: nova, vezes: vezes + 1 },
+        metadata: { payment_id: p.id, old_due_date: p.dueDate, new_due_date: nova, vezes },
       });
       await atividade(
         ctx,
