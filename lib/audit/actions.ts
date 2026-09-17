@@ -61,6 +61,12 @@ export const AUDIT_ACTIONS = [
   "contact.merge_pending",
   "contact.merged",
   "contact.aniversario_emitido",
+  // Empresas (spec 2026-09-17-bacco-asaas-design §5.2a)
+  "company.created",
+  "company.updated",
+  "company.deleted",
+  "company.contact_linked",
+  "company.contact_unlinked",
   "lgpd.anonymize_executed",
   // A cascata retomando o que uma execução interrompida não terminou (#310).
   "lgpd.anonymize_catchup",

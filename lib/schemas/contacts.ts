@@ -59,6 +59,7 @@ export const contactCreateSchema = z.object({
     .regex(/^\d{4}-\d{2}-\d{2}$/)
     .optional(),
   tags: z.array(z.string()).optional(),
+  company_id: z.string().uuid().nullable().optional(),
   source: z.string().min(1).default("manual"),
   source_metadata: z.record(z.string(), z.unknown()).optional(),
   consent: z.record(z.string(), z.unknown()).optional(),
