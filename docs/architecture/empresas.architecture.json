@@ -47,14 +47,14 @@
       "lane": "api",
       "col": 1,
       "type": "service",
-      "label": "POST/DELETE /api/v1/contacts/.../company (vincular)"
+      "label": "POST/DELETE /api/v1/companies/[id]/contacts (vincular)"
     },
     {
       "id": "crm-companies",
       "lane": "dados",
       "col": 0,
       "type": "database",
-      "label": "crm_companies — id, org, name, phone, email, active_at"
+      "label": "crm_companies — id, org, name, trade_name, cnpj, asaas_customer_id, billing_contact_id"
     },
     {
       "id": "contacts-company-id",

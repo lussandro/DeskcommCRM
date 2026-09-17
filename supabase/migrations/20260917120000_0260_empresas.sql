@@ -7,8 +7,11 @@
 -- só consultam quando eles mesmos escrevem.
 --
 -- ADITIVA: nada aqui é obrigatório. `contacts.company_id` é nullable, sem default
--- e sem trigger; quem não cadastra empresa não vê diferença. O único ponto
--- existente tocado é a anonimização LGPD, que passa a zerar o vínculo.
+-- e sem trigger; quem não cadastra empresa não vê diferença. Os únicos pontos
+-- existentes tocados são a anonimização LGPD (zera o vínculo) e a troca de
+-- empresa de um contato (solta o principal de cobrança da empresa que ele
+-- deixou) — dois triggers-irmãos em `contacts`, nenhum HTTP, nenhum novo
+-- caminho de escrita.
 
 create table if not exists public.crm_companies (
   id uuid primary key default gen_random_uuid(),
@@ -106,17 +109,28 @@ create unique index if not exists uq_crm_companies_org_id
 -- `crm_companies`. Medido: `delete from crm_companies` derrubou com "null value
 -- in column organization_id violates not-null constraint" antes deste comentário
 -- existir. O PG15 (piso do baseline) aceita a forma com lista de colunas.
+-- Fix round 2 (I1): o `add constraint` rodava a cada update.sh sem guarda —
+-- `drop`+`add` de FK em `contacts` (a tabela mais quente) com validação
+-- integral toda vez que um clone atualiza, mesmo quando a constraint já
+-- existe. Guardado no padrão do apêndice (`pg_constraint`, ver 11108 do
+-- baseline nesta data); os `drop constraint if exists <nome_antigo>` ficam
+-- FORA da guarda (cobrem quem já rodou a FK de coluna única inline).
 alter table public.contacts drop constraint if exists contacts_company_id_fkey;
-alter table public.contacts drop constraint if exists contacts_company_org_fk;
-alter table public.contacts add constraint contacts_company_org_fk
-  foreign key (organization_id, company_id)
-  references public.crm_companies (organization_id, id) on delete set null (company_id);
-
 alter table public.crm_companies drop constraint if exists crm_companies_billing_contact_id_fkey;
-alter table public.crm_companies drop constraint if exists crm_companies_billing_contact_org_fk;
-alter table public.crm_companies add constraint crm_companies_billing_contact_org_fk
-  foreign key (organization_id, billing_contact_id)
-  references public.contacts (organization_id, id) on delete set null (billing_contact_id);
+
+do $$
+begin
+  if not exists (select 1 from pg_constraint where conname = 'contacts_company_org_fk') then
+    alter table public.contacts add constraint contacts_company_org_fk
+      foreign key (organization_id, company_id)
+      references public.crm_companies (organization_id, id) on delete set null (company_id);
+  end if;
+  if not exists (select 1 from pg_constraint where conname = 'crm_companies_billing_contact_org_fk') then
+    alter table public.crm_companies add constraint crm_companies_billing_contact_org_fk
+      foreign key (organization_id, billing_contact_id)
+      references public.contacts (organization_id, id) on delete set null (billing_contact_id);
+  end if;
+end $$;
 
 -- A oportunidade pode apontar a empresa pelo vínculo polimórfico (DIRC: Referenciar).
 -- ⚠️ CHECK recriado inteiro (mesmo formato da 0242): `add constraint` não é idempotente.
@@ -153,6 +167,35 @@ create trigger trg_crm_companies_principal_anonimizado
   for each row
   when (new.is_anonymized is true and old.is_anonymized is distinct from true)
   execute function public.fn_empresa_solta_principal_anonimizado();
+
+-- Mudar a empresa de um contato (ou tirá-lo dela) solta o principal de cobrança da
+-- empresa que ele deixou. É o único lugar por onde TODOS os caminhos passam (PATCH do
+-- contato, vincular/desvincular, merge). Dispara só quando company_id entra no SET —
+-- org sem empresa nunca o vê.
+create or replace function public.fn_empresa_solta_principal_que_saiu()
+returns trigger
+language plpgsql
+security definer
+set search_path = public, pg_temp
+as $$
+begin
+  update public.crm_companies
+     set billing_contact_id = null, updated_at = now()
+   where organization_id = new.organization_id
+     and billing_contact_id = new.id
+     and id is distinct from new.company_id;
+  return new;
+end;
+$$;
+revoke execute on function public.fn_empresa_solta_principal_que_saiu() from public, anon, authenticated;
+grant execute on function public.fn_empresa_solta_principal_que_saiu() to service_role;
+
+drop trigger if exists trg_crm_companies_principal_que_saiu on public.contacts;
+create trigger trg_crm_companies_principal_que_saiu
+  after update of company_id on public.contacts
+  for each row
+  when (new.company_id is distinct from old.company_id)
+  execute function public.fn_empresa_solta_principal_que_saiu();
 
 -- O PostgREST cacheia o schema; sem isto a rota que roda logo depois não vê a tabela.
 notify pgrst, 'reload schema';

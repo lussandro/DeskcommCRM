@@ -143,6 +143,82 @@ describe("createContactHandler e patchContactHandler gravam company_id", () => {
     expect(updates[0]).toMatchObject({ company_id: "c1" });
   });
 
+  it("company_id ausente no input → patch sem company_id (C1: PATCH não mexe no vínculo por acidente)", async () => {
+    const { patchContactHandler } = await import("./_handler");
+    const updates: Record<string, unknown>[] = [];
+    const estadoAtual = {
+      id: "ct1",
+      organization_id: ORG,
+      is_anonymized: false,
+      tags: [],
+      email: null,
+      phone_number: null,
+      name: "Fulano",
+      display_name: null,
+      consent: {},
+      custom_fields: {},
+      company_id: "c1",
+    };
+    const supabase = {
+      from: () => ({
+        select: () => {
+          const c: Record<string, unknown> = { eq: () => c, maybeSingle: async () => ({ data: estadoAtual, error: null }) };
+          return c;
+        },
+        update: (patch: Record<string, unknown>) => {
+          updates.push(patch);
+          const c: Record<string, unknown> = {
+            eq: () => c,
+            select: () => c,
+            maybeSingle: async () => ({ data: { ...estadoAtual, ...patch }, error: null }),
+          };
+          return c;
+        },
+      }),
+      rpc: () => ({ then: (r: (v: unknown) => unknown) => r({ error: null }) }),
+    };
+    await patchContactHandler(supabase as never, ctx, "ct1", { name: "Outro" } as never);
+    expect(updates[0]).not.toHaveProperty("company_id");
+  });
+
+  it("company_id: null → patch com company_id: null (C1: tirar o contato da empresa pelo PATCH)", async () => {
+    const { patchContactHandler } = await import("./_handler");
+    const updates: Record<string, unknown>[] = [];
+    const estadoAtual = {
+      id: "ct1",
+      organization_id: ORG,
+      is_anonymized: false,
+      tags: [],
+      email: null,
+      phone_number: null,
+      name: null,
+      display_name: null,
+      consent: {},
+      custom_fields: {},
+      company_id: "c1",
+    };
+    const supabase = {
+      from: () => ({
+        select: () => {
+          const c: Record<string, unknown> = { eq: () => c, maybeSingle: async () => ({ data: estadoAtual, error: null }) };
+          return c;
+        },
+        update: (patch: Record<string, unknown>) => {
+          updates.push(patch);
+          const c: Record<string, unknown> = {
+            eq: () => c,
+            select: () => c,
+            maybeSingle: async () => ({ data: { ...estadoAtual, ...patch }, error: null }),
+          };
+          return c;
+        },
+      }),
+      rpc: () => ({ then: (r: (v: unknown) => unknown) => r({ error: null }) }),
+    };
+    await patchContactHandler(supabase as never, ctx, "ct1", { company_id: null } as never);
+    expect(updates[0]).toMatchObject({ company_id: null });
+  });
+
   it("23503 de company_id vira validation_failed no PATCH (não internal_error)", async () => {
     const { patchContactHandler } = await import("./_handler");
     const estadoAtual = {

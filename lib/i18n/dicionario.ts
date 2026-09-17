@@ -6847,6 +6847,7 @@ export const DICIONARIO: Traducoes = {
   "Conexão sem identificador utilizável.": { es: "Conexión sin identificador utilizable." },
   "Conflito de versionamento — tente novamente.": { es: "Conflicto de versionado — intenta de nuevo." },
   "Contato não encontrado.": { es: "Contacto no encontrado." },
+  "Contato não pertence a esta empresa.": { es: "El contacto no pertenece a esta empresa." },
   "content é obrigatório.": { es: "content es obligatorio." },
   "Conversa do caso sem contato associado.": { es: "La conversación del caso no tiene contacto asociado." },
   "Conversa não encontrada.": { es: "Conversación no encontrada." },

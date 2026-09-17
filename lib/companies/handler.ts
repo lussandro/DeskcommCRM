@@ -225,17 +225,22 @@ async function mudarVinculo(
   novo: string | null,
   action: "company.contact_linked" | "company.contact_unlinked",
 ): Promise<void> {
-  const { data, error } = await supabase
+  let q = supabase
     .from("contacts")
     .update({ company_id: novo })
     .eq("organization_id", ctx.organization_id)
-    .eq("id", input.contactId)
-    .select("id, company_id")
-    .maybeSingle();
+    .eq("id", input.contactId);
+  // Desvincular exige que o contato ESTEJA nesta empresa (senão desvincula um
+  // contato de outra empresa sem avisar). Vincular troca de empresa é permitido
+  // — não cerca.
+  if (novo === null) q = q.eq("company_id", input.companyId);
+  const { data, error } = await q.select("id, company_id").maybeSingle();
   if (error) erroBanco(ctx, error);
   if (!data) {
     throw new ApiError(404, "not_found", undefined, ctx.requestId,
-      traduzir("Contato não encontrado.", ctx.idioma ?? "pt-BR"));
+      novo === null
+        ? traduzir("Contato não pertence a esta empresa.", ctx.idioma ?? "pt-BR")
+        : traduzir("Contato não encontrado.", ctx.idioma ?? "pt-BR"));
   }
   const a = atorAudit(ctx);
   await audit({

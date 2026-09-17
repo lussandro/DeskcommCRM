@@ -2090,7 +2090,7 @@ Validação integral do mesmo produto: 733 arquivos unitários / 7.911 casos apr
 ## J23 — Empresas: cadastrar, vincular contatos, número principal para cobrança `[P1]`
 
 Contexto do código: spec "2026-09-17-empresas" (Task 10). `crm_companies` agrupa
-contatos pessoa jurídica; `crm_contacts.company_id` referencia a empresa e
+contatos pessoa jurídica; `contacts.company_id` referencia a empresa e
 `crm_companies.billing_contact_id` marca qual contato vinculado é o número
 principal para cobrança. Telas: `/app/companies` (lista + "Nova empresa"),
 `/app/companies/[id]` (dados, "Contatos da empresa" com "Vincular contato",

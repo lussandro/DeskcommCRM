@@ -111,6 +111,40 @@ describe("empresas (migration 0260)", () => {
     expect(sql(`select company_id::text from public.contacts where id='${CT_A2}';`).trim()).toBe(EMP_A);
   });
 
+  // C1: o trigger-irmão de company_id (trg_crm_companies_principal_que_saiu) — não
+  // só a anonimização — solta o principal quando o contato SAI da empresa por
+  // QUALQUER caminho que grave contacts.company_id (PATCH, vincular/desvincular).
+  // Uuids frescos: EMP_A/CT_A1/CT_A2 seguem intactos para os casos seguintes.
+  it("C1: soltar o contato principal da empresa (company_id = null) zera o principal de cobrança", () => {
+    const EMP_C1 = "aaaaaaaa-0000-0000-0000-00000000c0d1";
+    const CT_C1 = "aaaaaaaa-0000-0000-0000-00000000c0d2";
+    sql(`
+      insert into public.crm_companies (id, organization_id, name) values ('${EMP_C1}', '${ORG_A}', 'Empresa C1');
+      insert into public.contacts (id, organization_id, name, phone_number, company_id) values
+        ('${CT_C1}', '${ORG_A}', 'Principal C1', '+5551999992001', '${EMP_C1}');
+      update public.crm_companies set billing_contact_id = '${CT_C1}' where id = '${EMP_C1}';
+      update public.contacts set company_id = null where id = '${CT_C1}';
+    `);
+    expect(sql(`select coalesce(billing_contact_id::text,'null') from public.crm_companies where id='${EMP_C1}';`).trim()).toBe("null");
+  });
+
+  it("C1: mudar o contato principal para OUTRA empresa também solta o principal da que ele deixou", () => {
+    const EMP_C2 = "aaaaaaaa-0000-0000-0000-00000000c0d3";
+    const EMP_C3 = "aaaaaaaa-0000-0000-0000-00000000c0d4";
+    const CT_C2 = "aaaaaaaa-0000-0000-0000-00000000c0d5";
+    sql(`
+      insert into public.crm_companies (id, organization_id, name) values
+        ('${EMP_C2}', '${ORG_A}', 'Empresa C2'),
+        ('${EMP_C3}', '${ORG_A}', 'Empresa C3');
+      insert into public.contacts (id, organization_id, name, phone_number, company_id) values
+        ('${CT_C2}', '${ORG_A}', 'Principal C2', '+5551999992002', '${EMP_C2}');
+      update public.crm_companies set billing_contact_id = '${CT_C2}' where id = '${EMP_C2}';
+      update public.contacts set company_id = '${EMP_C3}' where id = '${CT_C2}';
+    `);
+    expect(sql(`select coalesce(billing_contact_id::text,'null') from public.crm_companies where id='${EMP_C2}';`).trim()).toBe("null");
+    expect(sql(`select company_id::text from public.contacts where id='${CT_C2}';`).trim()).toBe(EMP_C3);
+  });
+
   it("apagar a empresa não apaga contatos", () => {
     sql(`delete from public.crm_companies where id='${EMP_A}';`);
     expect(sql(`select count(*) from public.contacts where id in ('${CT_A1}','${CT_A2}');`).trim()).toBe("2");

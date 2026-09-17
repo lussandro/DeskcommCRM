@@ -115,6 +115,28 @@ describe("linkContactHandler", () => {
 });
 
 describe("unlinkContactHandler", () => {
+  it("filtra company_id no update de contacts (I2: não desvincula contato de outra empresa)", async () => {
+    const { unlinkContactHandler } = await import("./handler");
+    const { sb, calls } = fakeSb([
+      { data: { id: "ct1", company_id: null }, error: null },
+      { data: null, error: null },
+    ]);
+    await unlinkContactHandler(sb, ctx, { companyId: "c1", contactId: "ct1" });
+    expect(calls.eq!.flat()).toEqual(
+      expect.arrayContaining(["organization_id", ORG, "id", "ct1", "company_id", "c1"]),
+    );
+  });
+
+  it("contato que não pertence a esta empresa vira 404 not_found com mensagem específica", async () => {
+    const { unlinkContactHandler } = await import("./handler");
+    const { sb } = fakeSb({ data: null, error: null });
+    await expect(unlinkContactHandler(sb, ctx, { companyId: "c1", contactId: "ct1" })).rejects.toMatchObject({
+      status: 404,
+      code: "not_found",
+      message: "Contato não pertence a esta empresa.",
+    });
+  });
+
   it("erro na segunda atualização (zerar billing_contact_id) não é engolido", async () => {
     const { unlinkContactHandler } = await import("./handler");
     const { sb } = fakeSb([
