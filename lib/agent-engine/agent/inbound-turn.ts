@@ -149,7 +149,8 @@ import {
 } from './skills';
 import { readSkillReference, skillHasReferences } from './skill-references';
 import { READ_ONLY_TOOLS, wrapToolsWithBreaker, type ToolBreakerThresholds } from './tool-breaker';
-import { loadChannelProvider, runBeforeSend } from '../guardrails/before-send';
+import { loadChannelProvider, mencionaAnexo, runBeforeSend } from '../guardrails/before-send';
+import { decidirFallbackHumano, type VetoDoTurno } from './fallback-humano';
 import { isStatusSendable } from '../../channels/meta/template-binding';
 import { capabilitiesOf } from '@/lib/channels/capabilities';
 import { renderTemplateBody } from '@/lib/channels/meta/render-template';
@@ -483,6 +484,60 @@ export async function loadInboundBodyForJob(
   );
   const row = result.rows[0];
   return row === undefined ? null : corpoDaMensagem(row);
+}
+
+/**
+ * Insumo do `comprovanteSemAnexoGate`: chegou mídia do cliente nesta conversa DEPOIS da
+ * última mensagem nossa, e a última inbound fala de comprovante/foto/arquivo?
+ *
+ * "Depois da última outbound" e não "neste turno" de propósito: o cliente pode ter mandado
+ * a foto numa mensagem e perguntado "recebeu?" na seguinte, e as duas chegam antes de o
+ * agente falar. A régua é o que o agente ainda não respondeu.
+ *
+ * NUNCA lança: falha de leitura devolve `undefined`, o gate fica desarmado e o turno segue
+ * como antes deste recurso. Vetar por não ter conseguido ler seria punir o cliente por um
+ * problema nosso.
+ */
+export async function lerSinaisDeAnexo(
+  db: Queryable,
+  tenantId: string,
+  conversationId: string,
+  log: Logger,
+): Promise<{ inboundComMidiaDesdeUltimoOutbound: boolean; ultimaInboundMencionaAnexo: boolean } | undefined> {
+  try {
+    const { rows } = await db.query<{ com_midia: boolean; ultima_inbound: string | null }>(
+      `select
+         exists (
+           select 1
+             from messages m
+            where m.organization_id = $1 and m.conversation_id = $2
+              and m.direction = 'inbound' and m.media_url is not null
+              and coalesce(m.sent_at, m.created_at) > coalesce(
+                    (select max(coalesce(o.sent_at, o.created_at))
+                       from messages o
+                      where o.organization_id = $1 and o.conversation_id = $2
+                        and o.direction = 'outbound'),
+                    '-infinity'::timestamptz)
+         ) as com_midia,
+         (select m.body
+            from messages m
+           where m.organization_id = $1 and m.conversation_id = $2 and m.direction = 'inbound'
+           order by m.sent_at desc nulls last, m.created_at desc, m.id desc
+           limit 1) as ultima_inbound`,
+      [tenantId, conversationId],
+    );
+    const row = rows[0];
+    if (row === undefined) return undefined;
+    return {
+      inboundComMidiaDesdeUltimoOutbound: row.com_midia === true,
+      ultimaInboundMencionaAnexo: mencionaAnexo(row.ultima_inbound ?? ''),
+    };
+  } catch (err) {
+    log.warn('sinais de anexo não lidos — gate de comprovante desarmado neste turno', {
+      error: err instanceof Error ? err.message.slice(0, 120) : 'erro desconhecido',
+    });
+    return undefined;
+  }
 }
 
 /** Conteúdo do checkpoint — o modelo devolve, o Zod valida, o Postgres guarda. */
@@ -2318,6 +2373,14 @@ async function executarTurnoDoAgente(
   // as tools do modelo rodam em passos anteriores do mesmo loop, o valor já está certo
   // quando o modelo decide mandar a resposta.
   let agendaToolCalledThisTurn = false;
+  // Arma o `comprovanteSemAnexoGate`: chegou mídia do cliente desde a última outbound, e a
+  // última inbound fala de anexo? Uma consulta por turno, best-effort — se falhar, o campo
+  // fica ausente e o gate é no-op (nunca um veto por não termos conseguido ler).
+  const anexos = preview ? undefined : await lerSinaisDeAnexo(pool, tenantId, input.conversationId, runLog);
+  // Vetos DE ENSINO deste turno, para o fallback humano do fechamento (ver
+  // `fallback-humano.ts`). `stop`/`lgpd`/`pacing`/`messaging_window` entram na lista e a
+  // regra os descarta lá — filtrar aqui espalharia a regra por dois lugares.
+  const vetosDoTurno: VetoDoTurno[] = [];
   const outcomes: ChannelSendResult[] = [];
   // Citações acumuladas por buscas de conhecimento DESTE turno — anexadas à
   // próxima outbound enviada (shape de lib/ai/citations/types, que a UI já lê).
@@ -2706,6 +2769,13 @@ async function executarTurnoDoAgente(
               podeMarcar: agentConfig !== null && agentConfig.toolIds.includes('crm_book_appointment'),
               toolCalledThisTurn: agendaToolCalledThisTurn,
             },
+            // Mesmo padrão dos dois acima: só o `send_message` arma — é o único corpo
+            // escrito pelo modelo. `anexos` ausente (leitura falhou/prévia) = gate no-op.
+            ...(anexos !== undefined ? { anexos } : {}),
+            // A regra vale para TODO agente (o dono: o agente não confirma, não registra e
+            // não libera nada). O campo existe para o caller que não conhece o gate — o
+            // follow-up determinístico — não armar nada, onde veto é drop silencioso.
+            pagamentos: { active: true },
             ...(deps.knobs.disclosureMode !== undefined
               ? { disclosureMode: deps.knobs.disclosureMode }
               : {}),
@@ -2843,6 +2913,10 @@ async function executarTurnoDoAgente(
             });
           }
           if (chain.status === 'vetoed') {
+            // Registro do veto para o fallback humano do fechamento (`fallback-humano.ts`):
+            // se NENHUMA mensagem sair deste turno, um gate de ensino tendo vetado, o turno
+            // chama uma pessoa em vez de deixar o cliente no vazio.
+            vetosDoTurno.push({ gate: chain.gate, code: chain.code });
             // Cap de warm-up/diário: reescrever o texto não resolve (é rate limit, não
             // conteúdo) — ensinar o modelo a "tentar de novo" só gasta passo. Guardamos
             // pra reagendar o JOB inteiro depois que o turno terminar (mesmo padrão de
@@ -4020,6 +4094,45 @@ async function executarTurnoDoAgente(
       throw new JobSettledError(
         'cap de envio atingido — job reagendado para a próxima abertura, sem mensagem enviada',
       );
+    }
+
+    // Os guardrails vetaram TUDO e nada saiu: o cliente não pode ficar no vazio porque o
+    // sistema se recusou (com razão) a deixar o modelo falar. Chama uma pessoa — ver
+    // `fallback-humano.ts` para a regra e para por que quatro gates ficam de fora.
+    const fallback = preview ? { fallback: false as const } : decidirFallbackHumano({
+      vetos: vetosDoTurno,
+      mensagensEnviadas: outcomes.length,
+    });
+    if (fallback.fallback) {
+      const caso = await openCase(
+        pool,
+        { tenantId, conversationId: input.conversationId, agentId: agentConfig?.agentId ?? null },
+        {
+          title: 'Atendimento sem resposta automática',
+          summary: `O agente não conseguiu responder: toda tentativa foi vetada pelos guardrails (último: ${fallback.code}).`,
+          blocker: 'vetos_esgotados',
+          source: 'guardrail_autofallback',
+          contextSnapshot: buildCaseContextSnapshot(),
+        },
+      ).catch((err) => {
+        runLog.error('fallback humano: abertura de caso falhou (segue avisando o lead)', {
+          error: err instanceof Error ? err.message.slice(0, 200) : 'erro desconhecido',
+        });
+        return { ok: false } as const;
+      });
+      if (caso.ok) moverParaHandoffBestEffort('vetos_esgotados');
+      // A linha ao lead sai pela MESMA cadeia (nada sai por baixo dela). Se ela também for
+      // vetada — janela fechada, STOP —, termina aqui: o caso aberto é a porta na tela.
+      const aviso = await avisarLeadDaEscalacao(pool, avisoDaEscalacao().ids, {
+        ...avisoDaEscalacao().base,
+        motivo: 'outro',
+      });
+      runLog.warn('turno sem envio por veto — caso humano aberto', {
+        abort_reason: 'vetos_esgotados',
+        code: fallback.code,
+        caso_aberto: caso.ok,
+        lead_avisado: aviso.avisado,
+      });
     }
 
     runLog.info('turno do agente concluído', {
