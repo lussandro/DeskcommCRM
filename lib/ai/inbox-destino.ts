@@ -70,6 +70,12 @@ export const POLITICAS_DE_AVISO = {
   // cai em "sem destino" com a orientação abaixo: o telefone está no corpo do
   // aviso, escrito pelo worker.
   voice_call_missed: { refs: ["contact"], orientacao: "Retorne a ligação quando puder — quem ligou não foi atendido." },
+  // Módulo Asaas (migration 0261). Nenhum tem tela própria ainda — a integração
+  // Asaas é o destino de todos, e o que muda é a orientação e o papel.
+  charge_unmatched: { refs: [], orientacao: "Abra a integração Asaas, encontre a cobrança pelo nome do cliente e vincule-a a uma empresa ou a um contato.", geral: { papel: "agent", href: "/app/integrations/asaas", rotulo: "Abrir integração Asaas" } },
+  charge_overdue_no_flow: { refs: ["contact"], orientacao: "Escolha o fluxo de retorno para cobrança vencida na integração Asaas, ou marque o número principal da empresa.", geral: { papel: "admin", href: "/app/integrations/asaas", rotulo: "Configurar avisos de cobrança" } },
+  charge_reissue_failed: { refs: ["contact"], orientacao: "Leia o motivo do Asaas e resolva no painel dele; o cliente já recebeu a resposta do assistente.", geral: { papel: "agent", href: "/app/integrations/asaas", rotulo: "Abrir integração Asaas" } },
+  charge_webhook_paused: { refs: [], orientacao: "O Asaas pausa os avisos depois de falhas seguidas. O sistema religou; confira se a URL do webhook continua cadastrada.", geral: { papel: "admin", href: "/app/integrations/asaas", rotulo: "Conferir webhook" } },
   other: { refs: ["lead", "channel_session", "appointment", "ai_agent"], orientacao: "Confira a situação descrita neste aviso com a pessoa responsável." },
 } satisfies Record<InboxKind, Politica>;
 

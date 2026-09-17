@@ -72,6 +72,13 @@ export type InboxKind =
   // não distingue "tocou e ninguém pegou" de "o operador recusou", e para quem
   // lê a Central os dois pedem a mesma coisa: alguém precisa ligar de volta.
   | 'voice_call_missed'
+  // (migration 0261) Módulo Asaas: cobrança sem cliente casado no CRM,
+  // cobrança vencida sem fluxo de retorno configurado, prorrogação que o
+  // Asaas recusou, e o webhook que o Asaas pausou depois de falhas seguidas.
+  | 'charge_unmatched'
+  | 'charge_overdue_no_flow'
+  | 'charge_reissue_failed'
+  | 'charge_webhook_paused'
   | 'other';
 
 export interface InboxItemRow {

@@ -76,6 +76,8 @@ interface Excecao {
  */
 const PROVA_PROPRIA: readonly Excecao[] = [
   { tabela: "crm_companies", razao: "tests/invariants/empresas.test.ts — dois tenants, leitura negativa cruzada por JWT; billing_contact_id solto na anonimização" },
+  { tabela: "asaas_charges", razao: "tests/invariants/asaas.test.ts — leitura negativa cruzada por JWT (org B não lê cobrança de A); GRANT barra escrita de authenticated antes da RLS" },
+  { tabela: "asaas_charge_actions", razao: "tests/invariants/asaas.test.ts — mesma prova de RLS/GRANT de asaas_charges (par escrita-espelho, mesma policy e mesmo padrão)" },
   { tabela: "channel_routing_policies", razao: "tests/invariants/channel-routing.test.ts — dois tenants reais, leitura positiva local e negativa cruzada por JWT; FK composta rejeita canal de outra org" },
   { tabela: "channel_routing_responsibles", razao: "tests/invariants/channel-routing.test.ts — JWT do tenant B não lê responsáveis de A; revogação remove vínculo e claim revalida membro ativo" },
   { tabela: "channel_connection_requests", razao: "tests/invariants/channel-routing.test.ts — recibo privado sem SELECT authenticated; reserva admin com MFA e finalização service-only cercada por org e lease" },
