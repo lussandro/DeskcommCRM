@@ -2436,10 +2436,11 @@ async function executarTurnoDoAgente(
   // cobrança. Qualquer cobrança em aberto, ou sem como verificar ⇒ abre caso humano e
   // manda a linha fixa; o modelo NÃO roda neste turno — é a única forma de ele não
   // concordar com um pagamento que ninguém viu. Sem cobrança em aberto ⇒ segue.
-  // O código verificou a alegação e não achou cobrança exigível: para os gates do envio
-  // a alegação está RESPONDIDA (senão o gate de alegação vetaria toda candidata — a tool
-  // de cobranças nunca devolve "paga", só pendente/vencida — e o adimplente cairia no
-  // fallback humano; revisão adversarial, 3ª passada).
+  // O código verificou a alegação no Asaas e não achou cobrança exigível. Isso libera o
+  // gate de ALEGAÇÃO (senão ele vetaria toda candidata — a tool de cobranças nunca devolve
+  // "paga", só pendente/vencida — e o cliente adimplente cairia no fallback humano;
+  // revisão adversarial, 3ª passada). NÃO libera dizer "está pago": ausência de dívida não
+  // é prova de pagamento (Codex review, P1) — para isso, só a ferramenta.
   let alegacaoVerificadaPeloCodigo = false;
   // Só o turno INBOUND intercepta: o `case_reply_turn` é a conclusão do humano voltando
   // ao cliente — interceptá-lo abriria caso novo em cima do resolvido e a resposta do
@@ -2905,9 +2906,11 @@ async function executarTurnoDoAgente(
             // decide falar) — mesma disciplina do `agendaToolCalledThisTurn`.
             pagamentos: {
               active: agenteCobra,
-              // O código já conferiu no Asaas que não há cobrança exigível: vale como a
-              // ferramenta ter confirmado — o modelo pode dizer que está em dia.
-              cobrancaPagaPelaFerramentaNesteTurno: cobrancaPagaPelaFerramentaNesteTurno || alegacaoVerificadaPeloCodigo,
+              // NÃO entra aqui o "o código conferiu e não há dívida exigível": ausência de
+              // cobrança em aberto NÃO é prova de pagamento (Codex review, P1) — o cliente
+              // pode nunca ter tido cobrança, ou ter só parcela futura. Dizer "está pago"
+              // segue exigindo a ferramenta devolver a cobrança PAGA neste turno.
+              cobrancaPagaPelaFerramentaNesteTurno,
               // Caso já aberto ANTES do turno conta: senão o gate de alegação calaria o
               // agente para sempre a cada "já paguei" repetido (revisão adversarial, 2ª).
               casoHumanoAbertoNesteTurno: openedCaseThisTurn || hasOpenCase,
