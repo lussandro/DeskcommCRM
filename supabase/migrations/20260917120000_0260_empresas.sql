@@ -35,10 +35,41 @@ create index if not exists idx_crm_companies_org_name
 
 alter table public.crm_companies enable row level security;
 
+-- Fix round 1 (gate da 0150): a primeira versão desta migration nasceu com
+-- uma policy `for all` só-tenancy (`tenant_isolation_crm_companies_all`) — o
+-- mesmo furo que a 0150 fechou nas tabelas de config de IA/canais: o
+-- PostgREST é alcançável pelo browser com o JWT de QUALQUER papel do tenant,
+-- então um `viewer` podia criar, editar e apagar empresa alheia dentro da
+-- própria org. `tests/invariants/rbac-config-ia-canais.test.ts` ("nenhuma
+-- tabela NOVA entra com policy ALL só-tenancy") pegou isso na primeira rodada
+-- de `pnpm test:db` da suíte inteira. Padrão da 0210 (`crm_tasks`): SELECT
+-- aberto ao tenant (senão a tela quebra pro viewer) + escrita a partir de
+-- `agent` — o papel de quem cadastra empresa no dia a dia. A rota da API
+-- (task futura) aperta DELETE para `manager`; a policy não precisa duplicar
+-- essa régua porque a rota já é o portão para o fluxo comum, e o RLS aqui só
+-- precisa fechar o buraco do PostgREST direto.
+-- O `drop` da policy velha FICA para sempre: um clone que já rodou a
+-- primeira versão da 0260 precisa perdê-la no `update.sh`.
 drop policy if exists tenant_isolation_crm_companies_all on public.crm_companies;
-create policy tenant_isolation_crm_companies_all on public.crm_companies
-  using (organization_id in (select public.fn_user_org_ids()))
-  with check (organization_id in (select public.fn_user_org_ids()));
+
+drop policy if exists crm_companies_select on public.crm_companies;
+create policy crm_companies_select on public.crm_companies
+  for select using (
+    (organization_id in (select public.fn_user_org_ids())) or public.fn_is_platform_admin()
+  );
+
+drop policy if exists crm_companies_write on public.crm_companies;
+create policy crm_companies_write on public.crm_companies
+  using (
+    public.fn_is_platform_admin()
+    or ((organization_id in (select public.fn_user_org_ids()))
+        and public.fn_role_at_least(organization_id, 'agent'))
+  )
+  with check (
+    public.fn_is_platform_admin()
+    or ((organization_id in (select public.fn_user_org_ids()))
+        and public.fn_role_at_least(organization_id, 'agent'))
+  );
 
 revoke all on public.crm_companies from anon;
 grant select, insert, update, delete on public.crm_companies to authenticated;
