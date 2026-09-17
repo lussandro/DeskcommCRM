@@ -121,11 +121,14 @@ async function reconciliarWebhook(org: OrgAsaas, db: ReconcileDb, diaLocal: stri
   const resp = await org.cliente.webhooks();
   const nosso = resp.data.find((w) => w.url.endsWith(sufixo));
   const url = `${env.NEXT_PUBLIC_APP_URL.replace(/\/$/, "")}${sufixo}`;
+  // Semente sempre `${orgId}:${diaLocal}` — mesma forma de `marcarChaveRecusada`,
+  // para o dedup por (kind, refId) nunca depender de duas convenções.
+  const semente = `${org.organizationId}:${diaLocal}`;
 
   if (!nosso) {
     await db.abrirAviso(
       "charge_webhook_paused",
-      chaveDeAviso("charge_webhook_paused", diaLocal),
+      chaveDeAviso("charge_webhook_paused", semente),
       "O Asaas não tem o endereço de aviso desta instalação",
       `O webhook não está cadastrado no Asaas. Cadastre esta URL: ${url}`,
     );
@@ -137,7 +140,7 @@ async function reconciliarWebhook(org: OrgAsaas, db: ReconcileDb, diaLocal: stri
     await org.cliente.religarWebhook(nosso.id);
     await db.abrirAviso(
       "charge_webhook_paused",
-      chaveDeAviso("charge_webhook_paused", diaLocal),
+      chaveDeAviso("charge_webhook_paused", semente),
       "O Asaas pausou os avisos de cobrança",
       `O Asaas pausou os avisos após falhas seguidas; religado em ${diaLocal}.`,
     );
@@ -183,6 +186,7 @@ function createSupabaseReconcileDb(admin: SupabaseClient, orgId: string): Reconc
       const { data: enrollment } = await admin
         .from("followup_enrollments")
         .select("status")
+        .eq("organization_id", orgId)
         .eq("id", charge.enrollment_id)
         .maybeSingle();
       if (!enrollment) return true;
@@ -243,7 +247,11 @@ function createSupabaseReconcileDb(admin: SupabaseClient, orgId: string): Reconc
 }
 
 async function marcarChaveRecusada(admin: SupabaseClient, orgId: string, integrationId: string, db: ReconcileDb, motivo: string): Promise<void> {
-  const { error } = await admin.from("tenant_integrations").update({ status: "error", status_reason: motivo }).eq("id", integrationId);
+  const { error } = await admin
+    .from("tenant_integrations")
+    .update({ status: "error", status_reason: motivo })
+    .eq("organization_id", orgId)
+    .eq("id", integrationId);
   if (error) throw new Error(error.message);
   const diaLocal = await db.diaLocalDaOrg();
   await db.abrirAviso("other", chaveDeAviso("asaas_key_rejected", `${orgId}:${diaLocal}`), "A chave do Asaas foi recusada", motivo);

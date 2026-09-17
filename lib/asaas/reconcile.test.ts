@@ -173,9 +173,13 @@ describe("reconciliarTudo", () => {
   interface Capturado {
     updates: Array<{ tabela: string; patch: unknown; filtros: Record<string, unknown> }>;
     inserts: Array<{ tabela: string; row: Record<string, unknown> }>;
+    selects: Array<{ tabela: string; filtros: Record<string, unknown> }>;
   }
 
-  function fakeAdmin(listaOrgs: Array<{ organization_id: string }>, cap: Capturado) {
+  /** Resposta scriptada de `.maybeSingle()`, por tabela — default `{data: null}`. */
+  type Respostas = Record<string, (filtros: Record<string, unknown>) => { data: unknown }>;
+
+  function fakeAdmin(listaOrgs: Array<{ organization_id: string }>, cap: Capturado, respostas: Respostas = {}) {
     function chain(tabela: string) {
       const filtros: Record<string, unknown> = {};
       let modo: "select" | "update" | "insert" = "select";
@@ -186,7 +190,10 @@ describe("reconciliarTudo", () => {
         eq(k: string, v: unknown) { filtros[k] = v; return api; },
         update(p: unknown) { modo = "update"; patch = p; return api; },
         insert(row: Record<string, unknown>) { modo = "insert"; insertRow = row; return api; },
-        async maybeSingle() { return { data: null, error: null }; },
+        async maybeSingle() {
+          cap.selects.push({ tabela, filtros: { ...filtros } });
+          return { data: respostas[tabela]?.(filtros).data ?? null, error: null };
+        },
         then(resolve: (v: { data: unknown; error: null }) => void) {
           if (modo === "update") {
             cap.updates.push({ tabela, patch, filtros });
@@ -206,7 +213,7 @@ describe("reconciliarTudo", () => {
     return { from: chain, rpc: vi.fn(async () => ({ error: null })) };
   }
 
-  const vazio = (): Capturado => ({ updates: [], inserts: [] });
+  const vazio = (): Capturado => ({ updates: [], inserts: [], selects: [] });
 
   beforeEach(() => vi.clearAllMocks());
 
@@ -247,10 +254,38 @@ describe("reconciliarTudo", () => {
 
     expect(totais.avisos).toBe(1);
     expect(cap.updates).toEqual([
-      { tabela: "tenant_integrations", patch: { status: "error", status_reason: "Chave de API inválida." }, filtros: { id: "integ-1" } },
+      { tabela: "tenant_integrations", patch: { status: "error", status_reason: "Chave de API inválida." }, filtros: { organization_id: ORG, id: "integ-1" } },
     ]);
     expect(cap.inserts).toHaveLength(1);
     expect(cap.inserts[0]).toMatchObject({ tabela: "agent_inbox_items", row: expect.objectContaining({ kind: "other", organization_id: ORG }) });
+  });
+
+  it("consulta de enrollment viva filtra organization_id, não só o id (doutrina de tenancy sob service role)", async () => {
+    const cap = vazio();
+    const cliente = stubCliente({
+      paymentsPorStatus: vi.fn(async (status: string) => (status === "OVERDUE" ? { data: [payment("pay1")], hasMore: false, totalCount: 1 } : { data: [], hasMore: false, totalCount: 0 })),
+    });
+    const { reconciliarTudo } = await import("./reconcile");
+    const { carregarIntegracaoAsaas } = await import("./config");
+    vi.mocked(carregarIntegracaoAsaas).mockResolvedValue({
+      id: "integ-1",
+      status: "healthy",
+      config: { ambiente: "sandbox", followup_pointer_id: null, reemissao: null },
+      cliente: cliente as never,
+      webhookPathToken: "tok",
+    });
+
+    const totais = await reconciliarTudo(
+      fakeAdmin([{ organization_id: ORG }], cap, {
+        asaas_charges: () => ({ data: { enrollment_id: "enr-1" } }),
+        followup_enrollments: () => ({ data: { status: "active" } }),
+      }) as never,
+    );
+
+    // Enrollment viva ("active") → precisaOverdue devolve false, nada emitido.
+    expect(totais.overdue_emitidos).toBe(0);
+    const consultaEnrollment = cap.selects.find((s) => s.tabela === "followup_enrollments");
+    expect(consultaEnrollment?.filtros).toEqual({ organization_id: ORG, id: "enr-1" });
   });
 
   it("erro genérico numa org não aborta a passada (e não marca status=error)", async () => {
