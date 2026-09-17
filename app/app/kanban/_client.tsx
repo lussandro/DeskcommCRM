@@ -4,6 +4,7 @@ import Link from "next/link";
 
 import { useT } from "@/hooks/i18n/useT";
 import { channelLabel, useChannelSessions } from "@/hooks/channels/useChannelSessions";
+import { escolherFunilDeEntrada } from "@/lib/leads/nascimento-do-lead";
 
 import { ImportarLeads } from "./_components/ImportarLeads";
 import { EmptyPipeline } from "@/components/empty";
@@ -101,6 +102,16 @@ export function FunisClient({
   // muda a tela quando há mais de um; com um só, nada aparece.
   const { data: canaisDaOrg } = useChannelSessions();
   const canais = canaisDaOrg ?? [];
+
+  /**
+   * Canal → funil que recebe o card novo, pela MESMA função que o servidor usa
+   * (`escolherFunilDeEntrada`). Importar a regra em vez de reimplementá-la é o que
+   * impede a tela de dizer uma coisa e o nascimento fazer outra.
+   */
+  const entradaPorFunil = new Map<string, string | null>();
+  for (const chave of new Set(funis.map((f) => f.channel_session_id ?? ""))) {
+    entradaPorFunil.set(chave, escolherFunilDeEntrada(funis.map((f) => ({ ...f, channel_session_id: f.channel_session_id ?? null })), chave === "" ? null : chave));
+  }
 
   const [novo, setNovo] = useState<string | null>(null);
   const [renomeando, setRenomeando] = useState<{ id: string; nome: string } | null>(null);
@@ -302,6 +313,18 @@ export function FunisClient({
                         {funil.is_default && (
                           <Badge variant="secondary" className="text-[10px]">
                             {t("Padrão")}
+                          </Badge>
+                        )}
+                        {/* QUAL É A PORTA DE ENTRADA, dito na tela. Com funis amarrados a
+                            números, quem recebe o card novo daquele número é o marcado como
+                            padrão entre eles — ou, não havendo, o primeiro da ordem. Sem este
+                            selo isso dependia da ordem da lista e mudava em silêncio ao
+                            arrastar um funil (revisão adversarial). */}
+                        {funil.id === entradaPorFunil.get(funil.channel_session_id ?? "") && (
+                          <Badge variant="outline" className="text-[10px]">
+                            {funil.channel_session_id
+                              ? t("Entrada deste número")
+                              : t("Entrada dos demais números")}
                           </Badge>
                         )}
                       </span>

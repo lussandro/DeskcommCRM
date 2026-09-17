@@ -74,6 +74,7 @@ export const KIND_LABEL = {
   // conseguiu. O motivo cru do upstream (`user_ended`, `do_not_disturb`) nunca
   // chega à tela — vira frase de gente no corpo do aviso, escrito pelo worker.
   voice_call_missed: "Alguém ligou e ninguém atendeu",
+  lead_sem_funil: "Conversas de um número não estão virando card",
   charge_unmatched: "Uma cobrança venceu e o cliente não está no CRM",
   charge_overdue_no_flow: "Uma cobrança venceu e ninguém foi avisado",
   charge_reissue_failed: "O Asaas recusou a prorrogação de um boleto",

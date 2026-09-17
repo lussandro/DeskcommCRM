@@ -10123,6 +10123,12 @@ alter table public.agent_inbox_items
     'charge_overdue_no_flow',
     'charge_reissue_failed',
     'charge_webhook_paused',
+    -- (migration 0262) A mensagem chegou e NÃO virou card: a organização amarrou
+    -- seus funis a números (`crm_pipelines.channel_session_id`) e o número desta
+    -- conversa não tem funil, ou o funil dele não tem etapa aberta. Sem este
+    -- aviso o efeito só existe no `docker logs` da VPS — e o que some é o funil,
+    -- o Radar de Risco, o follow-up e as métricas, tudo calado.
+    'lead_sem_funil',
     'other'
   ));
 

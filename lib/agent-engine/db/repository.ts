@@ -79,6 +79,8 @@ export type InboxKind =
   | 'charge_overdue_no_flow'
   | 'charge_reissue_failed'
   | 'charge_webhook_paused'
+  /** (0262) A mensagem chegou e não virou card: o número não tem funil, ou o funil não tem etapa aberta. */
+  | 'lead_sem_funil'
   | 'other';
 
 export interface InboxItemRow {

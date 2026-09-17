@@ -40,6 +40,7 @@
  */
 import { audit } from "@/lib/audit";
 import { garantirLeadDaConversa } from "@/lib/leads/nascimento-do-lead";
+import { avisarFunilDeEntradaAusente } from "@/lib/leads/aviso-sem-funil";
 import { logger } from "@/lib/logger";
 import type { createAdminClient } from "@/lib/supabase/admin";
 import { ehPedidoDeOptOut } from "@/lib/opt-out/deteccao";
@@ -268,6 +269,24 @@ async function abrirDemanda(admin: Admin, entrada: EntradaDeMensagem): Promise<v
       origem: entrada.origem,
       ...(nascimento.criado ? { lead_id: nascimento.leadId } : { motivo: nascimento.motivo }),
     });
+
+    // ── O CARD QUE NÃO NASCEU PRECISA APARECER NA TELA ────────────────────────
+    //
+    // `sem_funil_de_entrada`/`sem_etapa` são FALHA DE CONFIGURAÇÃO, não rotina:
+    // a organização amarrou seus funis a números (0262) e o número desta conversa
+    // não tem funil, ou o funil dele não tem etapa aberta. A conversa continua no
+    // Inbox e o agente responde — o que some é o funil, o Radar de Risco, o
+    // follow-up e as métricas, tudo calado. Antes desta linha o único registro era
+    // `logger.info`, que numa VPS é `docker logs` (revisão adversarial, invariantes
+    // 3 e 4 do Sistema Vivo). `bloqueado`/`ja_existe` NÃO avisam: são rotina.
+    if (!nascimento.criado && (nascimento.motivo === "sem_funil_de_entrada" || nascimento.motivo === "sem_etapa")) {
+      await avisarFunilDeEntradaAusente(admin, {
+        organizationId: entrada.organizationId,
+        conversationId: entrada.conversationId,
+        channelSessionId: entrada.channelSessionId,
+        motivo: nascimento.motivo,
+      });
+    }
   } catch (err) {
     logger.error("pos-entrada: nascimento do lead falhou (a mensagem entra assim mesmo)", {
       organization_id: entrada.organizationId,

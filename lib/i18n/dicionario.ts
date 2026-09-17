@@ -6005,6 +6005,8 @@ export const DICIONARIO: Traducoes = {
   "Padrão": { es: "Predeterminado" },
   "Tornar padrão": { es: "Hacer predeterminado" },
   "Número deste funil": { es: "Número de este embudo" },
+  "Entrada deste número": { es: "Entrada de este número" },
+  "Entrada dos demais números": { es: "Entrada de los demás números" },
   "Ele sai desta lista e para de receber negócio novo. O histórico continua guardado, e nada é apagado.": {
     es: "Sale de esta lista y deja de recibir negocio nuevo. El historial se conserva, y nada se borra.",
   },
