@@ -130,6 +130,7 @@ import { loadChannelKnobs } from '../pacing/store';
 import { avisarJanelaFechada, resolverAvisoDeJanela } from '../pacing/aviso-de-janela';
 import { resolveConversationTurn, type TurnAgentResolution } from './resolve-turn-agent';
 import {
+  anotarNoCasoAbertoDaConversa,
   hasOpenCaseForContact,
   getCaseAwaitingLead,
   openCase,
@@ -2477,6 +2478,17 @@ async function executarTurnoDoAgente(
         return { ok: false as const, error: { code: 'erro_ao_abrir', message: '' } };
       });
       if (caso.ok) moverParaHandoffBestEffort('pagamento_nao_consta');
+      // Caso já aberto: a alegação NOVA vira evento na linha do tempo dele. Sem isto o
+      // humano via só a primeira frase do cliente e nunca as insistências seguintes
+      // (revisão adversarial, 4ª passada).
+      if (!caso.ok && caso.error.code === 'case_already_open' && fraseDoCliente) {
+        await anotarNoCasoAbertoDaConversa(
+          pool,
+          tenantId,
+          input.conversationId,
+          `O cliente insistiu na alegação de pagamento: "${fraseDoCliente}"`,
+        ).catch(() => false);
+      }
       // A linha sai SEMPRE, pela cadeia de guardrails (STOP, janela, LGPD valem) — com
       // caso novo, com caso já aberto por outro motivo, ou com a abertura falhando. Sem
       // ela a alegação ficaria sem resposta, e sem outbound a janela de inbounds
@@ -2901,11 +2913,16 @@ async function executarTurnoDoAgente(
             // Armado só em agente COM ferramenta de cobrança: a regra do dono ("não
             // confirma, não registra, não libera") é de quem cobra; num agente de clínica
             // ou loja, um veto sem fail-safe viraria caso humano por frase alheia ao caso.
+            //
+            // E NUNCA no `case_reply_turn`: ali o corpo repassa o que uma PESSOA do
+            // financeiro escreveu ("confirmei, o pix caiu" — baixa fora do Asaas é
+            // rotina). Vetar isso é calar a conclusão humana sobre a alegação que os
+            // gates existem para escalar (revisão adversarial, 4ª passada).
             // Os três sinais são lidos NO MOMENTO do envio (as tools do modelo rodam em
             // passos anteriores do mesmo laço, então o valor já está certo quando ele
             // decide falar) — mesma disciplina do `agendaToolCalledThisTurn`.
             pagamentos: {
-              active: agenteCobra,
+              active: agenteCobra && liveJob().kind !== 'case_reply_turn',
               // NÃO entra aqui o "o código conferiu e não há dívida exigível": ausência de
               // cobrança em aberto NÃO é prova de pagamento (Codex review, P1) — o cliente
               // pode nunca ter tido cobrança, ou ter só parcela futura. Dizer "está pago"
@@ -2914,7 +2931,14 @@ async function executarTurnoDoAgente(
               // Caso já aberto ANTES do turno conta: senão o gate de alegação calaria o
               // agente para sempre a cada "já paguei" repetido (revisão adversarial, 2ª).
               casoHumanoAbertoNesteTurno: openedCaseThisTurn || hasOpenCase,
-              clienteAlegouPagamento: clienteAlegouPagamento && !alegacaoVerificadaPeloCodigo,
+              // O gate de ALEGAÇÃO (o que exige caso humano) só vale onde existe a saída
+              // que ele pede: o turno inbound, que intercepta antes do modelo. No turno de
+              // fluxo (follow-up) não há interceptação, e vetar toda candidata mataria o
+              // passo do fluxo em fallback (revisão adversarial, 4ª passada).
+              clienteAlegouPagamento:
+                clienteAlegouPagamento &&
+                !alegacaoVerificadaPeloCodigo &&
+                liveJob().kind === 'inbound_turn',
             },
             ...(deps.knobs.disclosureMode !== undefined
               ? { disclosureMode: deps.knobs.disclosureMode }

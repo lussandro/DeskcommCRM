@@ -61,8 +61,16 @@ const MEIO = '(?:pagamento|pix|transferencia|deposito|ted|boleto|mensalidade|fat
 const ALEGACOES: readonly RegExp[] = [
   // verbo de pagar em 1ª pessoa, passado
   /\b(?:paguei|pagamos|quitei|quitamos|transferi|transferimos|depositei|depositamos|acab(?:ei|amos) de pagar)\b/,
-  // "fiz/efetuei/realizei/mandei/enviei/passei (o) pagamento|pix|…", "acabei de fazer o pix"
-  new RegExp(`\\b(?:fiz|fizemos|efetuei|efetuamos|realizei|realizamos|mandei|mandamos|enviei|enviamos|passei|passamos|acab(?:ei|amos) de fazer)\\s+(?:o |a |um |uma )?${MEIO}\\b`),
+  // "fiz/efetuei/realizei/mandei/enviei/passei (o) pagamento|pix|…", "acabei de fazer o pix",
+  // e a forma com preposição: "mandei por pix", "paguei via boleto".
+  new RegExp(`\\b(?:fiz|fizemos|efetuei|efetuamos|realizei|realizamos|mandei|mandamos|enviei|enviamos|passei|passamos|acab(?:ei|amos) de fazer)\\s+(?:o |a |um |uma |por |via |pelo |pela )?${MEIO}\\b`),
+  // "pagamento já realizado/feito" — o advérbio no meio.
+  new RegExp(`\\b${MEIO}\\s+ja\\s+(?:foi\\s+)?(?:feit[oa]|realizad[oa]|efetuad[oa]|pag[oa]|quitad[oa])\\b`),
+  // terceiro que pagou: "meu marido pagou", "o financeiro daqui pagou", "minha esposa fez o pix"
+  new RegExp(`\\b(?:meu|minha|o|a)\\s+\\w+\\s+(?:ja\\s+)?(?:pagou|quitou|transferiu|depositou|fez\\s+(?:o |a )?${MEIO})\\b`),
+  /\bfoi\s+pag[oa]\s+(?:pel[oa]|por)\b/,
+  // abreviação e erro de digitação comuns no WhatsApp
+  /\b(?:pguei|paguei ja|ja pg|pgto (?:feito|ok|realizado)|pagto (?:feito|ok|realizado))\b/,
   // "pagamento feito/realizado/ok", "pix enviado"
   new RegExp(`\\b${MEIO}\\s+(?:feit[oa]|realizad[oa]|efetuad[oa]|enviad[oa]|conclu[ií]d[oa]|quitad[oa]|ok)\\b`),
   // "ta pago", "esta tudo pago", "ja foi pago", "ta quitado", "o pagamento ja foi", "ja caiu"

@@ -111,6 +111,31 @@ export async function hasOpenCaseForContact(
   return rows[0]?.open === true;
 }
 
+/**
+ * Anota na linha do tempo do caso ABERTO desta conversa, sem precisar do id dele.
+ * Existe para a insistência do cliente na alegação de pagamento: a segunda, a terceira
+ * e a quarta vez que ele diz "eu paguei" não abrem caso novo (a dedupe é por conversa),
+ * e sem esta nota o humano via só a primeira frase (revisão adversarial, 4ª passada).
+ * Sem caso aberto ⇒ `false`, sem efeito.
+ */
+export async function anotarNoCasoAbertoDaConversa(
+  db: Queryable,
+  tenantId: string,
+  conversationId: string,
+  body: string,
+): Promise<boolean> {
+  const { rowCount } = await db.query(
+    `insert into agent_case_events (organization_id, case_id, kind, actor_kind, body)
+     select $1::uuid, c.id, 'agent_noted', 'agent', $3::text
+       from agent_cases c
+      where c.organization_id = $1 and c.conversation_id = $2 and c.status = any($4::text[])
+      order by c.created_at desc
+      limit 1`,
+    [tenantId, conversationId, body, OPEN_STATUSES],
+  );
+  return (rowCount ?? 0) > 0;
+}
+
 export interface CaseAwaitingLead {
   id: string;
   /** O que o HUMANO pediu ao lead (body do evento need_lead_info mais recente) —

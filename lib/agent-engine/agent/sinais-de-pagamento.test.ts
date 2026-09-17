@@ -38,6 +38,17 @@ const ALEGA = [
   'o pagamento já foi',
   'já foi pago',
   'não consegui ontem, mas hoje paguei',
+  // 4ª revisão adversarial: famílias que a versão anterior perdia
+  'mandei por pix',
+  'paguei via boleto',
+  'pagamento já realizado',
+  'meu marido pagou',
+  'minha esposa fez o pix',
+  'o boleto foi pago pela minha esposa',
+  'pguei',
+  'já pg',
+  'pgto feito',
+  'pagto ok',
 ];
 const NAO_ALEGA = [
   'paguei não',

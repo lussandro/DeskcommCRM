@@ -7,6 +7,11 @@ node_modules
 .env.*
 test-results
 tests
+# Dumps do banco que o kit grava ao lado do código (update.sh/backup.sh). Sem esta
+# linha o `COPY . .` os leva para DENTRO da imagem: medido em 2026-09-17 numa VPS com
+# 2,9 GB de dumps — a imagem do worker foi de 2 GB para 8,5 GB e o build encheu o disco.
+backups
+.superpowers
 playwright.config.ts
 *.png
 *.log
