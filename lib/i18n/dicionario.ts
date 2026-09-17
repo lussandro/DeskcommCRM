@@ -8775,6 +8775,60 @@ export const DICIONARIO: Traducoes = {
   Empresa: { es: "Empresa" },
   Nenhuma: { es: "Ninguna" },
   "Nova empresa…": { es: "Nueva empresa…" },
+
+  // Asaas (0261)
+  Asaas: { es: "Asaas" },
+  "Consulte cobranças, envie boleto e Pix, e deixe o assistente prorrogar vencido dentro do limite que você definir.": {
+    es: "Consulta cobros, envía boleto y Pix, y deja que el asistente prorrogue vencidos dentro del límite que definas.",
+  },
+  "A conexão com o Asaas está com erro": { es: "La conexión con Asaas está con error" },
+  "Motivo não registrado.": { es: "Motivo no registrado." },
+  "Endereço do aviso do Asaas": { es: "Dirección del aviso de Asaas" },
+  "Cole este endereço em Configurações → Webhooks no painel do Asaas (Webhook no painel do Asaas).": {
+    es: "Pega esta dirección en Configuraciones → Webhooks en el panel de Asaas (Webhook en el panel de Asaas).",
+  },
+  "Informe a chave de API do Asaas para começar.": { es: "Ingresa la clave de API de Asaas para empezar." },
+  "Troque a chave, o ambiente ou o fluxo de retorno.": { es: "Cambia la clave, el entorno o el flujo de retorno." },
+  "Chave de API do Asaas": { es: "Clave de API de Asaas" },
+  "Deixe em branco para manter a chave atual": { es: "Deja en blanco para mantener la clave actual" },
+  Ambiente: { es: "Entorno" },
+  "Sandbox (teste)": { es: "Sandbox (prueba)" },
+  Produção: { es: "Producción" },
+  "Fluxo de retorno para cobrança vencida": { es: "Flujo de retorno para cobro vencido" },
+  "Este fluxo tem mensagem fixa; recomendamos mensagem do assistente.": {
+    es: "Este flujo tiene mensaje fijo; recomendamos mensaje del asistente.",
+  },
+  "O agente que arma este fluxo tem as capacidades de cobrança.": {
+    es: "El agente que activa este flujo tiene las capacidades de cobro.",
+  },
+  "Prorrogar por até (dias)": { es: "Prorrogar hasta (días)" },
+  "Vezes por cobrança": { es: "Veces por cobro" },
+  "Configuração da Asaas salva.": { es: "Configuración de Asaas guardada." },
+  "Não foi possível copiar — selecione o texto acima.": { es: "No se pudo copiar — selecciona el texto de arriba." },
+  "Copie e guarde agora — o segredo não será mostrado de novo.": {
+    es: "Copia y guarda ahora — el secreto no se mostrará de nuevo.",
+  },
+  "Endereço do aviso (Webhook no painel do Asaas)": { es: "Dirección del aviso (Webhook en el panel de Asaas)" },
+  "Copiar endereço": { es: "Copiar dirección" },
+  "Segredo do aviso": { es: "Secreto del aviso" },
+  "Copiar segredo": { es: "Copiar secreto" },
+  "Já copiei": { es: "Ya copié" },
+  "Segredo copiado.": { es: "Secreto copiado." },
+  "Desativar a integração Asaas?": { es: "¿Desactivar la integración Asaas?" },
+  "Testar conexão": { es: "Probar conexión" },
+  "Esquecer chave": { es: "Olvidar clave" },
+  "Nenhuma cobrança está em acompanhamento agora. A integração para de consultar e prorrogar boletos.": {
+    es: "Ningún cobro está en seguimiento ahora. La integración deja de consultar y prorrogar boletos.",
+  },
+  "Isso vai cancelar 1 cobrança em acompanhamento pelo assistente. A cobrança em si continua no Asaas — só o acompanhamento automático para.": {
+    es: "Esto va a cancelar 1 cobro en seguimiento por el asistente. El cobro en sí continúa en Asaas — solo el seguimiento automático se detiene.",
+  },
+  "Isso vai cancelar {n} cobranças em acompanhamento pelo assistente. A cobrança em si continua no Asaas — só o acompanhamento automático para.": {
+    es: "Esto va a cancelar {n} cobros en seguimiento por el asistente. El cobro en sí continúa en Asaas — solo el seguimiento automático se detiene.",
+  },
+  "Integração Asaas ativada.": { es: "Integración Asaas activada." },
+  "Integração Asaas desativada.": { es: "Integración Asaas desactivada." },
+  "Chave esquecida — a integração foi removida.": { es: "Clave olvidada — la integración fue eliminada." },
 };
 
 /**

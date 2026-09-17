@@ -680,6 +680,23 @@ export const NAV_CATALOG = [
     // 900px, medido pelo e2e `navegacao.spec.ts`.
   },
   {
+    // Não é canal de conversa (por isso não vive em "canais", como o
+    // Nuvemshop) — é configuração da organização: chave, ambiente e o fluxo
+    // de retorno que o agente usa para cobrança vencida.
+    href: "/app/integrations/asaas",
+    label: "Asaas",
+    description: "Consultar cobranças, enviar boleto e Pix, e prorrogar vencido dentro do limite que você definir.",
+    icon: "Receipt",
+    group: "organizacao",
+    section: "Sua empresa",
+    // A spec exige admin na PRÓPRIA página (`notFound()` pra quem não é) —
+    // diferente do Nuvemshop, que só esconde botão. `minRole` aqui evita
+    // mostrar o link pra quem a página vai recusar.
+    minRole: "admin",
+    // SEM `sidebar`, como as outras entradas de "organizacao": o grupo tem
+    // hub, e se chega às telas dele por "Configurações".
+  },
+  {
     href: "/app/settings/billing",
     label: "Billing",
     description: "Plano e cobrança.",
