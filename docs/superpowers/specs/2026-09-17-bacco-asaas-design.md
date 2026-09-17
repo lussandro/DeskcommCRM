@@ -372,7 +372,9 @@ Então o módulo casa por **`asaas_customer_id`**, coluna própria (§5.2), e o 
    lê os boletos do outro.
 3. Webhook: `payment.customer` → titular (empresa, depois contato — §5.2a). Não achou →
    `charge_unmatched` na Central com nome do customer, valor e vencimento; o operador escolhe a
-   empresa ou o contato e o sistema grava o vínculo. Sem busca por telefone automática (decisão do
+   empresa ou o contato e o sistema grava o vínculo por rota própria
+   (`POST /api/v1/contacts/[id]/asaas-link` ou `POST /api/v1/companies/[id]/asaas`), com audit —
+   nunca pelo PATCH genérico de contato. Sem busca por telefone automática (decisão do
    dono: telefone não é chave).
 
 O parâmetro `document` é adicionado às listas de redação de `lib/mcp/audit.ts` e
@@ -386,22 +388,26 @@ Texto para o dono sem jargão do gate `catalogo-tools-leigo-friendly` (proíbe, 
 `reter` — e o teste `tests/unit/mcp-retencao-tools.test.ts` ("as seis capacidades") é atualizado
 para as nove.
 
-| name | category | risco | entra por pacote? |
-|---|---|---|---|
-| `crm_list_contact_charges` | read | `seguro` | **não** |
-| `crm_get_charge_payment_info` | read | `seguro` | **não** |
-| `crm_reissue_overdue_charge` | write | `atencao` | **não** |
+| name | category | risco | entra por pacote? | exige |
+|---|---|---|---|---|
+| `crm_list_contact_charges` | read | `seguro` | **não** | `asaas` |
+| `crm_get_charge_payment_info` | read | `seguro` | **não** | `asaas` |
+| `crm_link_contact_to_billing` | write | `atencao` | **não** | `asaas` |
+| `crm_reissue_overdue_charge` | write | `atencao` | **não** | `asaas:reemitir` (só com a cerca preenchida) |
+
+**Quatro, não três** (revisão do plano): o vínculo por CPF na conversa **grava** (`asaas_customer_id` + audit) e por isso é ferramenta `write` própria, não um ramo da consulta — tool `read` que muta viola a doutrina mesmo quando o gate `tool-read-nao-muta` não enxerga a mutação delegada. E a reemissão só é montada quando a org tem a cerca: o filtro do turno lê um **set de capacidades** (`asaas`, `asaas:reemitir`), não só "provider healthy".
 
 **Nenhuma entra por pacote nem pelo onboarding.** Campo novo na entrada do catálogo
 (`McpToolCatalogEntry`, `lib/mcp/tools/catalogo/tipos.ts` — não em `McpToolDefinition`):
-`requerIntegracao: 'asaas'`. `entraPorPacote` devolve `false` para entradas com `requerIntegracao`,
+`requerIntegracao: 'asaas' | 'asaas:reemitir'`. `entraPorPacote` devolve `false` para entradas com `requerIntegracao`,
 como já faz para `critico`. O admin liga as três no agente **depois** de ativar o módulo, e a tela de
 capacidades mostra a etiqueta "requer Asaas ativo" (só etiqueta — `TOOL_CATALOG` continua estático,
 sem tocar seus 10 consumidores).
 
 **Visibilidade no turno** (é o que faz "desligado = inerte"): `pickToolsFromMcp` é síncrona e não vê
-banco; ganha em `PickToolsInput` o campo `integracoesAtivas: ReadonlySet<string>`, e entradas com
-`requerIntegracao` fora do set são puladas como as `apenasHumano`. Os dois chamadores
+banco; ganha em `PickToolsInput` o campo opcional `capacidadesDeIntegracao?: ReadonlySet<string>`
+(ausente = vazio = fechado), e entradas com `requerIntegracao` fora do set são puladas como as
+`apenasHumano`. Os dois chamadores
 (`lib/ai/runtime/agent.ts` e `lib/agent-engine/edge/crm/mcp-tools.ts`) carregam o set de
 `tenant_integrations where status='healthy'` junto com o resto do contexto do turno. Teste que vale:
 no `pickToolsFromMcp`, agente com os ids gravados e set vazio → nenhuma das três chega ao modelo.
@@ -411,11 +417,12 @@ contato do turno (`lib/ai/runtime/tools.ts:104-115`), e o handler confere que `p
 `asaas_customer_id` desse contato antes de devolver ou alterar qualquer coisa. O Asaas não isola
 por contato; nós isolamos.
 
-`crm_list_contact_charges({ contact_id, document? })` → `PENDING` + `OVERDUE` do customer, uma
-página de 100 por status (limite do Asaas), mais recente primeiro:
+`crm_list_contact_charges({ contact_id })` → `PENDING` + `OVERDUE` do customer, uma página de 100
+por status (limite do Asaas), mais recente primeiro:
 `[{ payment_id, status, billing_type, value_cents, due_date, days_overdue, invoice_url }]` e
-`has_more` se o Asaas indicar. Sem customer e sem `document`: `{ needs_document: true }`; a
-`description` instrui a pedir o documento e chamar de novo. A `description` também instrui: **se a
+`has_more` se o Asaas indicar. Sem customer: `{ needs_document: true }`; a `description` instrui a
+pedir o CPF e chamar `crm_link_contact_to_billing({ contact_id, document })`, que faz a conferência
+de telefone de §5.3 e grava o vínculo (ou recusa como resposta). A `description` também instrui: **se a
 lista vier vazia, não fale de pendência** — é o freio contra cobrar quem já pagou.
 
 `crm_get_charge_payment_info({ contact_id, payment_id })` → `{ invoice_url, bank_slip_url,
