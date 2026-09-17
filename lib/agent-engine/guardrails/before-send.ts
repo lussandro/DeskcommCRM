@@ -277,7 +277,22 @@ export interface GateContext {
    * arme nada por acidente, como o follow-up determinístico, onde veto é drop
    * silencioso.
    */
-  pagamentos?: { active: boolean };
+  pagamentos?: {
+    active: boolean;
+    /**
+     * A ferramenta de cobranças (`crm_list_contact_charges` /
+     * `crm_get_charge_payment_info`) devolveu ALGUMA cobrança com status pago NESTE turno?
+     *
+     * É o ÚNICO insumo que autoriza o agente a concordar com um pagamento. Regra do dono,
+     * inegociável: não vale a palavra do cliente, não vale comprovante, não vale
+     * plausibilidade — só a ferramenta valida.
+     */
+    cobrancaPagaPelaFerramentaNesteTurno: boolean;
+    /** `open_human_case` (ou o fail-safe do `case_promise`) abriu caso NESTE turno. */
+    casoHumanoAbertoNesteTurno: boolean;
+    /** A última inbound do cliente afirma ter pago (ver `sinais-de-pagamento.ts`). */
+    clienteAlegouPagamento: boolean;
+  };
 }
 
 /**
@@ -559,11 +574,62 @@ export const agendaStallGate: Gate = {
 };
 
 /**
- * Afirmação de RECEBIMENTO em primeira pessoa. O lookbehind mata a negação imediata —
- * "não chegou nenhuma imagem aqui" é exatamente a frase CERTA, e vetá-la faria o gate
- * proibir a única saída honesta que ele manda o modelo usar.
+ * ═══ POR QUE ESTES GATES LEEM ORAÇÕES, E NÃO O CORPO INTEIRO ═══
+ *
+ * Porque a negação, a condição e o agente da frase valem para a ORAÇÃO, não para a palavra
+ * anterior. A primeira versão destes gates usava lookbehind de UMA palavra
+ * (`(?<!\bnao\s)`), e uma revisão adversarial mediu o estrago: **"Nenhuma imagem chegou
+ * aqui até agora."** era VETADA — a frase que o próprio veto MANDA o modelo dizer. Junto com
+ * ela caíam "Nada chegou aqui, pode mandar a foto de novo?", "Seu pagamento ainda não foi
+ * confirmado.", "Após o pagamento ser confirmado, o acesso volta." e "O pagamento foi
+ * confirmado pelo sistema, não por mim.". Como estes gates NÃO têm fail-safe, cada falso
+ * positivo desses é o laço veto→reescrita→veto que termina em agente mudo.
+ *
+ * Então o corpo é quebrado em orações e três famílias inteiras de oração são descartadas
+ * ANTES de qualquer padrão rodar. O que sobra é o que o agente afirma, no passado, sobre
+ * uma ação dele — que é exatamente o que os gates existem para julgar.
  */
-const RECEBIMENTO = '(?<!\\b(?:nao|nunca|nem)\\s)\\b(?:recebi|recebemos|recebid[oa]s?|chegou|chegaram|consegui (?:ver|abrir|visualizar))\\b';
+const NEGACAO_NA_ORACAO = /\b(?:nao|nunca|nem|nenhum|nenhuma|nada|jamais|sem)\b/i;
+/** Fala do que VAI acontecer ou do que aconteceria — não do que aconteceu. */
+const CONDICAO_OU_FUTURO =
+  /\b(?:assim que|quando|apos|depois que|antes de|caso|se o|se a|sera|serao|for|forem|ser|seja|sejam|estiver|fosse|enquanto)\b/i;
+/** O sujeito da ação é o sistema, não o agente — dizer isso é a fala CERTA. */
+const AGENTE_AUTOMATICO =
+  /\b(?:automatic\w*|pelo sistema|pela plataforma|o sistema|a plataforma|sozinh[oa])\b/i;
+
+/**
+ * As orações que AFIRMAM algo consumado pelo agente. Divide também em "mas/porém", porque
+ * a oração adversativa é outra afirmação ("recebi o comprovante, mas não abri").
+ */
+function oracoesAfirmativas(corpo: string): string[] {
+  return semAcento(corpo)
+    .split(/[.!?;\n]+|\bmas\b|\bporem\b|\bcontudo\b/i)
+    .filter(
+      (o) =>
+        o.trim() !== '' &&
+        !NEGACAO_NA_ORACAO.test(o) &&
+        !CONDICAO_OU_FUTURO.test(o) &&
+        !AGENTE_AUTOMATICO.test(o),
+    );
+}
+
+/** Algum padrão casa em alguma oração afirmativa? É a forma de todos os gates abaixo. */
+function afirmaEmAlgumaOracao(corpo: string, padroes: readonly RegExp[]): boolean {
+  return oracoesAfirmativas(corpo).some((o) => padroes.some((p) => p.test(o)));
+}
+
+/**
+ * Afirmação de ter o anexo em mãos. Vai além de "recebi": a revisão mediu que as formas
+ * mais naturais no WhatsApp — "Tá aqui comigo o comprovante", "Vi o comprovante", "Já tenho
+ * o comprovante aqui", "O comprovante está em mãos" — passavam inteiras pela primeira
+ * versão, que só conhecia verbos de recebimento.
+ *
+ * `ja tenho` e `ja vi` (e não `tenho`/`vi` soltos) de propósito: "tenho uma foto do produto
+ * para te mandar" é frase legítima de adega, e o `ja` é o que separa posse afirmada de
+ * oferta.
+ */
+const RECEBIMENTO =
+  '(?:ja\\s+)?(?:recebi|recebemos|recebid[oa]s?|chegou|chegaram|consegui\\s+(?:ver|abrir|visualizar)|ja\\s+vi|vi|ja\\s+tenho|peguei|abri|localizei|(?:ta|esta|estao)\\s+aqui(?:\\s+comigo)?|em\\s+maos)';
 const SUBSTANTIVO_DE_ANEXO =
   '\\b(?:comprovantes?|fotos?|imagens?|imagem|prints?|arquivos?|anexos?|documentos?|pdfs?|recibos?)\\b';
 
@@ -573,16 +639,24 @@ const SUBSTANTIVO_DE_ANEXO =
  * (17/09/2026, agente financeiro "Paulo", `gpt-5.4`), não uma gramática geral.
  */
 const COMPROVANTE_RECEBIDO_PATTERN = new RegExp(
-  `${RECEBIMENTO}[^\\n]{0,60}?${SUBSTANTIVO_DE_ANEXO}|${SUBSTANTIVO_DE_ANEXO}[^\\n]{0,60}?${RECEBIMENTO}`,
+  `\\b${RECEBIMENTO}[^\\n]{0,60}?${SUBSTANTIVO_DE_ANEXO}|${SUBSTANTIVO_DE_ANEXO}[^\\n]{0,60}?\\b${RECEBIMENTO}`,
   'i',
 );
 
 /**
- * A metade sem substantivo: "Recebi sim por aqui." Só vale quando a ÚLTIMA inbound do
- * cliente FALA de anexo — sem esse contexto, "recebi seu pedido" é frase legítima e o
- * gate não tem o que dizer sobre ela.
+ * A metade sem substantivo: "Recebi sim por aqui." — e ela é ANCORADA na oração inteira, de
+ * propósito.
+ *
+ * A primeira versão vetava qualquer "recebi/chegou" quando a última inbound falava de anexo,
+ * e a revisão mediu o custo disso num tenant que não tem o problema: "Chegou essa semana o
+ * Malbec novo", "Recebemos sua solicitação e vamos verificar", "Seu pedido chegou ontem na
+ * transportadora" — todas vetadas, porque o cliente pediu uma foto do rótulo três mensagens
+ * antes. O que resta aqui é a confirmação CURTA e sem outro objeto, que só pode se referir
+ * ao que o cliente acabou de dizer que mandou. O vocativo final ("querida") entra porque a
+ * frase medida em produção o tinha.
  */
-const RECEBIMENTO_ISOLADO_PATTERN = new RegExp(`${RECEBIMENTO}`, 'i');
+const RECEBIMENTO_ISOLADO_PATTERN =
+  /^\s*(?:ja\s+)?(?:recebi|recebemos|chegou|chegaram)(?:\s+sim)?(?:\s+certinho)?(?:\s+(?:por\s+)?aqui)?(?:\s*,[^,]{0,15})?\s*$/i;
 
 const ANEXO_PATTERN = new RegExp(SUBSTANTIVO_DE_ANEXO, 'i');
 
@@ -616,10 +690,11 @@ export const comprovanteSemAnexoGate: Gate = {
   evaluate: (ctx) => {
     if (ctx.anexos === undefined) return { pass: true };
     if (ctx.anexos.inboundComMidiaDesdeUltimoOutbound) return { pass: true };
-    const corpo = semAcento(ctx.body);
+    const oracoes = oracoesAfirmativas(ctx.body);
     const afirmou =
-      COMPROVANTE_RECEBIDO_PATTERN.test(corpo) ||
-      (ctx.anexos.ultimaInboundMencionaAnexo && RECEBIMENTO_ISOLADO_PATTERN.test(corpo));
+      oracoes.some((o) => COMPROVANTE_RECEBIDO_PATTERN.test(o)) ||
+      (ctx.anexos.ultimaInboundMencionaAnexo &&
+        oracoes.some((o) => RECEBIMENTO_ISOLADO_PATTERN.test(o)));
     if (!afirmou) return { pass: true };
     return {
       pass: false,
@@ -632,24 +707,64 @@ export const comprovanteSemAnexoGate: Gate = {
   },
 };
 
+/** Objeto financeiro — o que transforma "deixo anotado" em ação de pagamento. */
+const OBJETO_FINANCEIRO =
+  '(?:pagamentos?|comprovantes?|financeiro|pix|recibos?|boletos?|transferencias?|depositos?)';
+/** Objeto de acesso — o que transforma "liberei" em liberação de produto. */
+const OBJETO_DE_ACESSO =
+  '(?:acessos?|contas?|plataforma|cursos?|area de membros|sistema|login|matricula)';
+
 /**
- * Ação de pagamento afirmada em PRIMEIRA PESSOA. Quatro famílias, cada uma exigindo o
- * OBJETO financeiro/de acesso por perto — sem isso, "deixo anotado seu horário" (frase
- * legítima de um agente de clínica) cairia no mesmo veto.
+ * "Deixo anotado seu RECADO para o financeiro te chamar" é ação real e legítima de loja e
+ * de clínica — encaminhar recado não é dar baixa em pagamento. A revisão mediu essa frase
+ * sendo vetada porque "financeiro" bastava como objeto.
+ */
+const RECADO = /\b(?:recados?|mensagens?)\b/i;
+
+/**
+ * Ação de pagamento afirmada pelo agente. As famílias com objeto exigem o OBJETO por perto
+ * — sem isso, "deixo anotado seu horário" (frase legítima de clínica) cairia no mesmo veto.
+ * A voz passiva é o que a revisão adversarial acrescentou: o WhatsApp real anuncia o feito
+ * em PARTICÍPIO ("Já está liberado.", "Seu acesso foi reativado.", "Pronto, liberado!"), e a
+ * primeira versão vetava só a forma em 1ª pessoa e deixava passar o anúncio consumado. As
+ * exceções de oração (negação, condição, "pelo sistema") cuidam de "é liberado
+ * automaticamente" e "o sistema libera sozinho".
  */
 const ACAO_DE_PAGAMENTO_PATTERNS: readonly RegExp[] = [
   // registrar/anotar pagamento ou comprovante
-  /\b(?:deixo|deixei|deixarei|vou deixar|registrei|anotei|vou registrar|vou anotar|(?:pra|para) eu (?:registrar|anotar))\b[^\n]{0,60}?\b(?:pagamentos?|comprovantes?|financeiro|pix|recibos?|boletos?|transferencias?|depositos?)\b/i,
+  new RegExp(
+    `\\b(?:deixo|deixei|deixarei|vou deixar|registrei|anotei|vou registrar|vou anotar|(?:pra|para) eu (?:registrar|anotar))\\b[^\\n]{0,60}?\\b${OBJETO_FINANCEIRO}\\b`,
+    'i',
+  ),
   // A mesma ação com o objeto ANTES: "pode me mandar o comprovante para eu registrar".
-  /\b(?:pagamentos?|comprovantes?|pix|recibos?|boletos?)\b[^\n]{0,60}?\b(?:(?:pra|para) eu (?:registrar|anotar)|vou registrar|vou anotar|deixo registrad[oa]|deixo anotad[oa])\b/i,
-  // liberar/desbloquear/reativar acesso
-  /\b(?:ja )?(?:liberei|liberamos|libero|desbloqueei|reativei|vou liberar|vou desbloquear|vou reativar|irei liberar)\b[^\n]{0,40}?\b(?:acessos?|contas?|plataforma|cursos?|area de membros|sistema|login|matricula)\b/i,
-  // confirmar pagamento — "for/seja/estiver confirmado" é condição futura, não afirmação
+  new RegExp(
+    `\\b${OBJETO_FINANCEIRO}\\b[^\\n]{0,60}?\\b(?:(?:pra|para) eu (?:registrar|anotar)|vou registrar|vou anotar|deixo registrad[oa]|deixo anotad[oa])\\b`,
+    'i',
+  ),
+  // liberar/desbloquear/reativar acesso — voz ativa
+  new RegExp(
+    `\\b(?:ja )?(?:liberei|liberamos|libero|desbloqueei|reativei|vou liberar|vou desbloquear|vou reativar|irei liberar)\\b[^\\n]{0,40}?\\b${OBJETO_DE_ACESSO}\\b`,
+    'i',
+  ),
+  // …e voz passiva/impessoal, com o objeto perto
+  new RegExp(
+    `\\b${OBJETO_DE_ACESSO}\\b[^\\n]{0,40}?\\b(?:liberad|desbloquead|reativad|ativad)[oa]s?\\b|\\b(?:liberad|desbloquead|reativad)[oa]s?\\b[^\\n]{0,40}?\\b${OBJETO_DE_ACESSO}\\b`,
+    'i',
+  ),
+  // confirmar pagamento
   /\b(?:confirmei|confirmo|ja confirmei|vou confirmar)\b[^\n]{0,30}?\b(?:pagamentos?|pix|transferencias?|depositos?)\b/i,
-  /\bpagamentos?\b[^\n]{0,20}?(?<!\b(?:for|seja|estiver|fosse|forem)\s)\bconfirmad[oa]s?\b/i,
+  /\bpagamentos?\b[^\n]{0,20}?\bconfirmad[oa]s?\b/i,
   // dar baixa
   /\b(?:dei|dou|vou dar|darei)\s+baixa\b/i,
 ];
+
+/**
+ * O anúncio consumado SEM objeto — "Pronto, liberado!", "Já está liberado.". Só vale em
+ * oração CURTA: numa frase longa o particípio quase sempre tem outro dono ("seu horário
+ * foi liberado na agenda"), e o padrão com objeto acima já cobre o caso que importa.
+ */
+const ORACAO_CURTA = /^[^\n]{0,28}$/;
+const LIBERACAO_PARTICIPIO = /\b(?:liberad|desbloquead|reativad)[oa]s?\b/i;
 
 /**
  * Gate de AÇÃO DE PAGAMENTO QUE NÃO É DO AGENTE — regra do dono do produto: o agente não
@@ -670,14 +785,99 @@ export const acaoDePagamentoGate: Gate = {
   name: 'acao_de_pagamento',
   evaluate: (ctx) => {
     if (ctx.pagamentos?.active !== true) return { pass: true };
-    const corpo = semAcento(ctx.body);
-    if (!ACAO_DE_PAGAMENTO_PATTERNS.some((p) => p.test(corpo))) return { pass: true };
+    const afirmou = oracoesAfirmativas(ctx.body).some((o) => {
+      if (RECADO.test(o)) return false;
+      if (ACAO_DE_PAGAMENTO_PATTERNS.some((p) => p.test(o))) return true;
+      return ORACAO_CURTA.test(o.trim()) && LIBERACAO_PARTICIPIO.test(o);
+    });
+    if (!afirmou) return { pass: true };
     return {
       pass: false,
       code: 'acao_de_pagamento_nao_e_do_agente',
       reason:
         'Você não confirma, não registra e não libera nada: a baixa e a liberação são ' +
         'automáticas pelo sistema de pagamentos. Reescreva sem afirmar ação sua.',
+    };
+  },
+};
+
+/**
+ * Afirmação de que um pagamento ESTÁ resolvido. Cinco famílias, todas com o objeto
+ * financeiro por perto. A negação, a condição futura ("assim que o pagamento FOR
+ * confirmado") e o agente automático ("foi confirmado pelo sistema") são a fala CERTA e
+ * saem antes, na quebra em orações — ver o bloco no topo desta seção.
+ */
+const PAGAMENTO_AFIRMADO_PATTERNS: readonly RegExp[] = [
+  // "pagamento confirmado/recebido/identificado", "mensalidade está em dia"
+  /\b(?:pagamentos?|mensalidades?|cobrancas?|parcelas?|faturas?|boletos?|pix)\b[^\n]{0,25}?\b(?:confirmad[oa]s?|recebid[oa]s?|identificad[oa]s?|quitad[oa]s?|compensad[oa]s?|em dia)\b/i,
+  // "recebi seu pagamento", "identificamos o pix"
+  /\b(?:recebi|recebemos|identifiquei|identificamos|confirmei|confirmamos|localizei)\b[^\n]{0,25}?\b(?:pagamentos?|pix|transferencias?|depositos?|mensalidades?|boletos?)\b/i,
+  // "está pago", "já consta pago", "está quitado"
+  /\b(?:esta|ja esta|consta|ja consta|ficou|segue)\b[^\n]{0,15}?\b(?:pag[oa]|quitad[oa]s?|em dia|compensad[oa])\b/i,
+  // "já caiu"
+  /\bja\s+(?:caiu|entrou|compensou)\b/i,
+  // "tudo certo com o pagamento", "obrigado pelo pagamento"
+  /\b(?:tudo certo|tudo ok|obrigad[oa])\b[^\n]{0,20}?\b(?:pagamentos?|pix|transferencias?|depositos?|mensalidades?)\b/i,
+];
+
+/**
+ * Gate de PAGAMENTO SÓ PELA FERRAMENTA — a regra do dono, inegociável: **o agente só
+ * concorda com cobrança que REALMENTE está paga, e quem valida é a ferramenta.**
+ *
+ * Nada mais autoriza a frase: nem o cliente dizer que pagou, nem o comprovante (que o gate
+ * irmão `comprovante_sem_anexo` já mostrou que o modelo alucina receber), nem o
+ * "provavelmente já caiu". Se `crm_list_contact_charges`/`crm_get_charge_payment_info` não
+ * devolveu a cobrança como paga NESTE turno, a afirmação não sai.
+ *
+ * Sem fail-safe, pela mesma razão do `agenda_stall`: não existe redação aceitável de
+ * "está pago" sobre o que ninguém verificou — existe a alternativa de verificar.
+ */
+export const pagamentoSoPelaFerramentaGate: Gate = {
+  name: 'pagamento_so_pela_ferramenta',
+  evaluate: (ctx) => {
+    if (ctx.pagamentos?.active !== true) return { pass: true };
+    if (ctx.pagamentos.cobrancaPagaPelaFerramentaNesteTurno) return { pass: true };
+    if (!afirmaEmAlgumaOracao(ctx.body, PAGAMENTO_AFIRMADO_PATTERNS)) return { pass: true };
+    return {
+      pass: false,
+      code: 'pagamento_so_pela_ferramenta',
+      reason:
+        'Você só pode dizer que está pago se a ferramenta de cobranças ' +
+        '(crm_list_contact_charges / crm_get_charge_payment_info) devolveu a cobrança como ' +
+        'paga NESTE turno. Consulte; se não constar pago, diga que não consta e abra um caso ' +
+        'humano (open_human_case) para uma pessoa do financeiro conferir.',
+    };
+  },
+};
+
+/**
+ * Gate de ALEGAÇÃO DE PAGAMENTO EXIGE HUMANO — a outra metade da mesma regra.
+ *
+ * O gate acima cuida do que o agente NÃO pode afirmar. Este cuida do que o turno não pode
+ * TERMINAR sem fazer: se o cliente diz que pagou e a ferramenta não mostra a cobrança paga,
+ * nenhuma resposta sai antes de um caso humano existir — porque a resposta "certa" sem caso
+ * é o cliente ouvir "não consta" e ficar sozinho com um pagamento que ele acredita ter
+ * feito. É dinheiro: quem decide é uma pessoa do financeiro, não o agente nem o cliente.
+ *
+ * Veta QUALQUER candidata (não é um padrão de texto — é uma pré-condição do turno). Se o
+ * agente não tem `open_human_case` (a organização não habilitou casos), o veto vale igual e
+ * o desfecho é o fallback humano do fechamento do turno (`fallback-humano.ts`), que abre o
+ * caso e avisa o lead. Em nenhum caminho o cliente fica sem ninguém.
+ */
+export const alegacaoDePagamentoExigeHumanoGate: Gate = {
+  name: 'alegacao_de_pagamento_exige_humano',
+  evaluate: (ctx) => {
+    if (ctx.pagamentos?.active !== true) return { pass: true };
+    if (!ctx.pagamentos.clienteAlegouPagamento) return { pass: true };
+    if (ctx.pagamentos.cobrancaPagaPelaFerramentaNesteTurno) return { pass: true };
+    if (ctx.pagamentos.casoHumanoAbertoNesteTurno) return { pass: true };
+    return {
+      pass: false,
+      code: 'alegacao_de_pagamento_exige_humano',
+      reason:
+        'O cliente diz que pagou, mas a ferramenta não mostra a cobrança paga. Não aceite a ' +
+        'palavra dele: abra um caso humano (open_human_case) com o que ele disse e responda ' +
+        'que ainda não consta e que uma pessoa do financeiro confere por aqui.',
     };
   },
 };
@@ -842,8 +1042,13 @@ const spinningGate: Gate = {
  * que o sistema de pagamentos faz sozinho). Os dois nascem DESARMADOS (ver
  * `GateContext.anexos` e `GateContext.pagamentos`): só o caminho do agente os arma, então
  * a v8, como a v6 e a v7, não muda o destino de nenhum envio que já existia fora desse caso.
+ * v9 = insere `pagamento_so_pela_ferramenta` e `alegacao_de_pagamento_exige_humano` logo
+ * depois do `acao_de_pagamento` — a regra do dono de 17/09/2026: o agente só concorda com
+ * cobrança que REALMENTE está paga, e quem valida é a ferramenta; se o cliente alega
+ * pagamento que a ferramenta não confirma, nenhuma resposta sai antes de existir caso
+ * humano. Os dois seguem o default dos irmãos (`pagamentos` ausente = no-op).
  */
-export const BEFORE_SEND_CHAIN_VERSION = 8;
+export const BEFORE_SEND_CHAIN_VERSION = 9;
 
 /**
  * Ordem FINAL da cadeia (F4-08/F4-09; edge-contract §before_send / blueprint órgão 5) — DADO
@@ -862,6 +1067,10 @@ export const BEFORE_SEND_CHAIN_VERSION = 8;
  *         agenda neste turno; antes do disclosure pelo mesmo motivo do internal_vocabulary;
  *   (7.1) comprovante_sem_anexo — "recebi o comprovante" sem nenhuma mídia ter chegado;
  *   (7.2) acao_de_pagamento — o agente afirmando confirmar/registrar/liberar pagamento;
+ *   (7.3) pagamento_so_pela_ferramenta — "está pago" sem a ferramenta de cobranças ter
+ *         devolvido a cobrança como paga NESTE turno;
+ *   (7.4) alegacao_de_pagamento_exige_humano — o cliente alegou pagamento, a ferramenta não
+ *         confirmou e nenhum caso humano foi aberto: nada sai até haver caso;
  *   (8) disclosure — 1ª mensagem se apresenta como assistente virtual (F4-05).
  * (O anti-jailbreak F4-04 é INBOUND advisório, não gate de before_send — não entra aqui.)
  */
@@ -878,6 +1087,8 @@ export const BEFORE_SEND_GATES: readonly Gate[] = [
   agendaStallGate,
   comprovanteSemAnexoGate,
   acaoDePagamentoGate,
+  pagamentoSoPelaFerramentaGate,
+  alegacaoDePagamentoExigeHumanoGate,
   disclosureGate,
 ];
 

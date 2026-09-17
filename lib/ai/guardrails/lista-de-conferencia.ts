@@ -191,6 +191,30 @@ export const CONFERENCIAS_DE_SAIDA: readonly ConferenciaDeSaida[] = [
     camada: null,
   },
   {
+    nome: "pagamento_so_pela_ferramenta",
+    rotulo: "Só dizer que está pago quando a cobrança realmente está paga",
+    oQueProtege:
+      "O assistente só concorda com um pagamento depois de consultar as cobranças e a " +
+      "cobrança voltar como paga. Palavra do cliente e comprovante não valem.",
+    escolha: null,
+    porQueNaoSeDesliga:
+      "Concordar com um pagamento que não entrou é dinheiro que ninguém vai cobrar de novo, " +
+      "porque o cliente já ouviu que estava tudo certo. Regra fixa, sem custo.",
+    camada: null,
+  },
+  {
+    nome: "alegacao_de_pagamento_exige_humano",
+    rotulo: "Cliente que diz ter pago vai para uma pessoa",
+    oQueProtege:
+      "Quando o cliente afirma que pagou e a cobrança não consta paga, nenhuma resposta sai " +
+      "antes de abrir um chamado para alguém do financeiro conferir.",
+    escolha: null,
+    porQueNaoSeDesliga:
+      "É a diferença entre o cliente ouvir \u201Cnão consta\u201D e ficar sozinho com o " +
+      "problema, ou ter uma pessoa olhando o caso dele. Regra fixa, sem custo.",
+    camada: null,
+  },
+  {
     nome: "disclosure",
     rotulo: "Dizer que é um assistente quando perguntam",
     oQueProtege: "Se o cliente pergunta se está falando com um robô, a resposta não pode enganar.",

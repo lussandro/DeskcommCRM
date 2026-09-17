@@ -36,6 +36,8 @@ const ORDEM_ESPERADA = [
   "agenda_stall",
   "comprovante_sem_anexo",
   "acao_de_pagamento",
+  "pagamento_so_pela_ferramenta",
+  "alegacao_de_pagamento_exige_humano",
   "disclosure",
 ] as const;
 
@@ -67,8 +69,8 @@ describe("forma da cadeia before_send", () => {
     // O par (tamanho, versão) é o que amarra os dois. Acrescentar um gate sem
     // bumpar deixa o trace de auditoria mentindo sobre qual cadeia rodou — e o
     // trace é justamente a prova que as Fases 0–2 usam para dizer "não regrediu".
-    expect(BEFORE_SEND_GATES).toHaveLength(13);
-    expect(BEFORE_SEND_CHAIN_VERSION).toBe(8);
+    expect(BEFORE_SEND_GATES).toHaveLength(15);
+    expect(BEFORE_SEND_CHAIN_VERSION).toBe(9);
   });
 
   it("internal_vocabulary roda ANTES do disclosure — inspeciona o texto do modelo, não o emendado", () => {
@@ -91,6 +93,14 @@ describe("forma da cadeia before_send", () => {
     expect(nomes.indexOf("comprovante_sem_anexo")).toBe(nomes.indexOf("agenda_stall") + 1);
     expect(nomes.indexOf("acao_de_pagamento")).toBe(nomes.indexOf("comprovante_sem_anexo") + 1);
     expect(nomes.indexOf("acao_de_pagamento")).toBeLessThan(nomes.indexOf("disclosure"));
+    // A regra do dono: só a ferramenta valida o pagamento, e a alegação do cliente sem
+    // ferramenta exige caso humano. As duas ficam juntas, depois da ação de pagamento.
+    expect(nomes.indexOf("pagamento_so_pela_ferramenta")).toBe(
+      nomes.indexOf("acao_de_pagamento") + 1,
+    );
+    expect(nomes.indexOf("alegacao_de_pagamento_exige_humano")).toBe(
+      nomes.indexOf("pagamento_so_pela_ferramenta") + 1,
+    );
   });
 
   it("nenhum gate repetido — nome duplicado quebraria a leitura do trace", () => {

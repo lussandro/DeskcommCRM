@@ -8463,6 +8463,24 @@ export const DICIONARIO: Traducoes = {
   "É promessa que ninguém vai cumprir, sobre dinheiro. O cliente para de cobrar e a pendência fica invisível. Regra fixa, sem custo.": {
     es: "Es una promesa que nadie va a cumplir, sobre dinero. El cliente deja de reclamar y la pendencia queda invisible. Regla fija, sin costo.",
   },
+  "Só dizer que está pago quando a cobrança realmente está paga": {
+    es: "Solo decir que está pagado cuando el cobro realmente está pagado",
+  },
+  "O assistente só concorda com um pagamento depois de consultar as cobranças e a cobrança voltar como paga. Palavra do cliente e comprovante não valem.": {
+    es: "El asistente solo acepta un pago después de consultar los cobros y que el cobro vuelva como pagado. La palabra del cliente y el comprobante no valen.",
+  },
+  "Concordar com um pagamento que não entrou é dinheiro que ninguém vai cobrar de novo, porque o cliente já ouviu que estava tudo certo. Regra fixa, sem custo.": {
+    es: "Aceptar un pago que no entró es dinero que nadie va a volver a cobrar, porque el cliente ya escuchó que estaba todo bien. Regla fija, sin costo.",
+  },
+  "Cliente que diz ter pago vai para uma pessoa": {
+    es: "El cliente que dice haber pagado pasa a una persona",
+  },
+  "Quando o cliente afirma que pagou e a cobrança não consta paga, nenhuma resposta sai antes de abrir um chamado para alguém do financeiro conferir.": {
+    es: "Cuando el cliente afirma que pagó y el cobro no consta como pagado, ninguna respuesta sale antes de abrir un caso para que alguien de finanzas lo verifique.",
+  },
+  "É a diferença entre o cliente ouvir \u201Cnão consta\u201D e ficar sozinho com o problema, ou ter uma pessoa olhando o caso dele. Regra fixa, sem custo.": {
+    es: "Es la diferencia entre que el cliente escuche \u201Cno consta\u201D y se quede solo con el problema, o que haya una persona mirando su caso. Regla fija, sin costo.",
+  },
   "Se o cliente pergunta se está falando com um robô, a resposta não pode enganar.": {
     es: "Si el cliente pregunta si está hablando con un robot, la respuesta no puede engañar.",
   },

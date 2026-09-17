@@ -83,6 +83,14 @@ const NAO_AVALIAVEIS_SEM_TURNO: ReadonlyArray<{ gate: string; porque: string }> 
     gate: "acao_de_pagamento",
     porque: "ainda não é checado pelo botão Testar — só no envio real",
   },
+  {
+    gate: "pagamento_so_pela_ferramenta",
+    porque: "depende de a ferramenta de cobranças ter devolvido a cobrança como paga no atendimento real",
+  },
+  {
+    gate: "alegacao_de_pagamento_exige_humano",
+    porque: "depende do que o cliente escreveu e de haver um chamado aberto no atendimento real",
+  },
   { gate: "disclosure", porque: "depende de esta ser a primeira mensagem ao contato" },
 ];
 

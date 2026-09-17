@@ -151,6 +151,11 @@ import { readSkillReference, skillHasReferences } from './skill-references';
 import { READ_ONLY_TOOLS, wrapToolsWithBreaker, type ToolBreakerThresholds } from './tool-breaker';
 import { loadChannelProvider, mencionaAnexo, runBeforeSend } from '../guardrails/before-send';
 import { decidirFallbackHumano, type VetoDoTurno } from './fallback-humano';
+import {
+  clienteAlegaPagamento,
+  COBRANCA_TOOL_NAMES,
+  resultadoMostraCobrancaPaga,
+} from './sinais-de-pagamento';
 import { isStatusSendable } from '../../channels/meta/template-binding';
 import { capabilitiesOf } from '@/lib/channels/capabilities';
 import { renderTemplateBody } from '@/lib/channels/meta/render-template';
@@ -503,7 +508,14 @@ export async function lerSinaisDeAnexo(
   tenantId: string,
   conversationId: string,
   log: Logger,
-): Promise<{ inboundComMidiaDesdeUltimoOutbound: boolean; ultimaInboundMencionaAnexo: boolean } | undefined> {
+): Promise<
+  | {
+      anexos: { inboundComMidiaDesdeUltimoOutbound: boolean; ultimaInboundMencionaAnexo: boolean };
+      /** O cliente ALEGOU ter pago na última inbound — ver `sinais-de-pagamento.ts`. */
+      clienteAlegouPagamento: boolean;
+    }
+  | undefined
+> {
   try {
     const { rows } = await db.query<{ com_midia: boolean; ultima_inbound: string | null }>(
       `select
@@ -528,9 +540,13 @@ export async function lerSinaisDeAnexo(
     );
     const row = rows[0];
     if (row === undefined) return undefined;
+    const ultimaInbound = row.ultima_inbound ?? '';
     return {
-      inboundComMidiaDesdeUltimoOutbound: row.com_midia === true,
-      ultimaInboundMencionaAnexo: mencionaAnexo(row.ultima_inbound ?? ''),
+      anexos: {
+        inboundComMidiaDesdeUltimoOutbound: row.com_midia === true,
+        ultimaInboundMencionaAnexo: mencionaAnexo(ultimaInbound),
+      },
+      clienteAlegouPagamento: clienteAlegaPagamento(ultimaInbound),
     };
   } catch (err) {
     log.warn('sinais de anexo não lidos — gate de comprovante desarmado neste turno', {
@@ -2376,7 +2392,19 @@ async function executarTurnoDoAgente(
   // Arma o `comprovanteSemAnexoGate`: chegou mídia do cliente desde a última outbound, e a
   // última inbound fala de anexo? Uma consulta por turno, best-effort — se falhar, o campo
   // fica ausente e o gate é no-op (nunca um veto por não termos conseguido ler).
-  const anexos = preview ? undefined : await lerSinaisDeAnexo(pool, tenantId, input.conversationId, runLog);
+  const sinaisDoCliente = preview
+    ? undefined
+    : await lerSinaisDeAnexo(pool, tenantId, input.conversationId, runLog);
+  const anexos = sinaisDoCliente?.anexos;
+  // Arma o `alegacaoDePagamentoExigeHumanoGate`: o cliente disse que pagou. Leitura que
+  // falhou = `false`, e aqui o default é o lado PERMISSIVO de propósito — vetar toda
+  // resposta do turno por causa de uma consulta que não respondeu calaria o atendimento
+  // inteiro, que é pior do que o defeito que este sinal persegue.
+  const clienteAlegouPagamento = sinaisDoCliente?.clienteAlegouPagamento ?? false;
+  // Arma o `pagamentoSoPelaFerramentaGate`: vira true quando uma tool de cobrança devolve
+  // ALGUMA cobrança paga NESTE turno (marcado no wrapper das tools MCP, mais abaixo — o
+  // mesmo lugar e o mesmo motivo do `agendaToolCalledThisTurn`).
+  let cobrancaPagaPelaFerramentaNesteTurno = false;
   // Vetos DE ENSINO deste turno, para o fallback humano do fechamento (ver
   // `fallback-humano.ts`). `stop`/`lgpd`/`pacing`/`messaging_window` entram na lista e a
   // regra os descarta lá — filtrar aqui espalharia a regra por dois lugares.
@@ -2775,7 +2803,15 @@ async function executarTurnoDoAgente(
             // A regra vale para TODO agente (o dono: o agente não confirma, não registra e
             // não libera nada). O campo existe para o caller que não conhece o gate — o
             // follow-up determinístico — não armar nada, onde veto é drop silencioso.
-            pagamentos: { active: true },
+            // Os três sinais são lidos NO MOMENTO do envio (as tools do modelo rodam em
+            // passos anteriores do mesmo laço, então o valor já está certo quando ele
+            // decide falar) — mesma disciplina do `agendaToolCalledThisTurn`.
+            pagamentos: {
+              active: true,
+              cobrancaPagaPelaFerramentaNesteTurno,
+              casoHumanoAbertoNesteTurno: openedCaseThisTurn,
+              clienteAlegouPagamento,
+            },
             ...(deps.knobs.disclosureMode !== undefined
               ? { disclosureMode: deps.knobs.disclosureMode }
               : {}),
@@ -2877,6 +2913,10 @@ async function executarTurnoDoAgente(
               ...beforeSendArgs,
               hasOpenCase: true,
               openedCaseThisTurn: true,
+              // O caso ACABOU de abrir — o objeto capturado ainda diz que não há, e o gate
+              // de alegação de pagamento re-vetaria a mesma candidata por uma condição que
+              // já deixou de valer.
+              pagamentos: { ...beforeSendArgs.pagamentos, casoHumanoAbertoNesteTurno: true },
             });
           }
           if (chain.status === 'vetoed' && chain.code === 'internal_vocabulary_leak') {
@@ -2910,6 +2950,11 @@ async function executarTurnoDoAgente(
               openedCaseThisTurn,
               hasOpenCase: hasOpenCase || openedCaseThisTurn,
               enforceInternalVocabulary: false,
+              // Pelo valor VIVO, mesma razão do `openedCaseThisTurn` logo acima.
+              pagamentos: {
+                ...beforeSendArgs.pagamentos,
+                casoHumanoAbertoNesteTurno: openedCaseThisTurn,
+              },
             });
           }
           if (chain.status === 'vetoed') {
@@ -3460,6 +3505,20 @@ async function executarTurnoDoAgente(
                   return executeOriginal(...args);
                 }) as typeof mcpTool.execute,
               };
+            } else if (COBRANCA_TOOL_NAMES.has(name) && typeof mcpTool.execute === 'function') {
+              // Irmão do marcador de agenda, com uma diferença que é a regra inteira: lá
+              // basta a ferramenta ter RODADO; aqui o que vale é o que ela RESPONDEU. Uma
+              // consulta que voltou "vencida" não autoriza o agente a concordar com nada.
+              const executeOriginal = mcpTool.execute.bind(mcpTool);
+              rawTools[name] = {
+                ...mcpTool,
+                execute: (async (...args: Parameters<typeof executeOriginal>) => {
+                  const resultado = await executeOriginal(...args);
+                  if (resultadoMostraCobrancaPaga(resultado))
+                    cobrancaPagaPelaFerramentaNesteTurno = true;
+                  return resultado;
+                }) as typeof mcpTool.execute,
+              };
             } else {
               rawTools[name] = mcpTool;
             }
@@ -3743,6 +3802,63 @@ async function executarTurnoDoAgente(
             jailbreak_level: jailbreakLevel,
           },
         );
+      }
+    }
+
+    // ── FALLBACK HUMANO — AQUI, E NÃO NO FIM DO TURNO ──────────────────────────
+    //
+    // Esta decisão vem ANTES do `throw runError`, do throw de envio `failed`, da
+    // chamada de fechamento (que é outra ida ao modelo) e do `insertCheckpoint`.
+    // Uma revisão adversarial apontou o defeito da versão anterior, que vivia lá
+    // embaixo: qualquer erro de provider ou de banco nesses passos pulava o
+    // fallback e devolvia o silêncio — justamente no turno já degradado, que é o
+    // único em que este código roda. O `try/catch` fecha a outra metade: falha
+    // AQUI também não pode engolir o caso humano nem derrubar o turno.
+    const fallback = preview
+      ? { fallback: false as const }
+      : decidirFallbackHumano({ vetos: vetosDoTurno, mensagensEnviadas: outcomes.length });
+    if (fallback.fallback) {
+      try {
+        const caso = await openCase(
+          pool,
+          { tenantId, conversationId: input.conversationId, agentId: agentConfig?.agentId ?? null },
+          {
+            title: 'Atendimento sem resposta automática',
+            summary: `O agente não conseguiu responder: toda tentativa foi vetada pelos guardrails (último: ${fallback.code}).`,
+            blocker: 'vetos_esgotados',
+            source: 'guardrail_autofallback',
+            contextSnapshot: buildCaseContextSnapshot(),
+          },
+        ).catch((err) => {
+          runLog.error('fallback humano: abertura de caso falhou', {
+            error: err instanceof Error ? err.message.slice(0, 200) : 'erro desconhecido',
+          });
+          return { ok: false as const, error: { code: 'erro_ao_abrir', message: '' } };
+        });
+        // Caso JÁ aberto não é caso novo: alguém do time já está com esta conversa na
+        // mão. Repetir "vou pedir para uma pessoa…" a cada mensagem do cliente é ruído
+        // sobre uma espera que não mudou — e `seq: 0` só deduplica dentro do MESMO job.
+        const jaHaviaCaso = !caso.ok && caso.error.code === 'case_already_open';
+        if (caso.ok) moverParaHandoffBestEffort('vetos_esgotados');
+        // A linha ao lead sai pela MESMA cadeia (nada sai por baixo dela). Se ela também
+        // for vetada — janela fechada, STOP —, termina aqui: o caso é a porta na tela.
+        const aviso = jaHaviaCaso
+          ? ({ avisado: false, porque: 'caso_ja_aberto' } as const)
+          : await avisarLeadDaEscalacao(pool, avisoDaEscalacao().ids, {
+              ...avisoDaEscalacao().base,
+              motivo: 'outro',
+            });
+        runLog.warn('turno sem envio por veto — caso humano aberto', {
+          abort_reason: 'vetos_esgotados',
+          code: fallback.code,
+          caso_aberto: caso.ok,
+          ja_havia_caso: jaHaviaCaso,
+          lead_avisado: aviso.avisado,
+        });
+      } catch (err) {
+        runLog.error('fallback humano falhou — o turno segue e o erro não se propaga', {
+          error: err instanceof Error ? err.message.slice(0, 200) : 'erro desconhecido',
+        });
       }
     }
 
@@ -4094,45 +4210,6 @@ async function executarTurnoDoAgente(
       throw new JobSettledError(
         'cap de envio atingido — job reagendado para a próxima abertura, sem mensagem enviada',
       );
-    }
-
-    // Os guardrails vetaram TUDO e nada saiu: o cliente não pode ficar no vazio porque o
-    // sistema se recusou (com razão) a deixar o modelo falar. Chama uma pessoa — ver
-    // `fallback-humano.ts` para a regra e para por que quatro gates ficam de fora.
-    const fallback = preview ? { fallback: false as const } : decidirFallbackHumano({
-      vetos: vetosDoTurno,
-      mensagensEnviadas: outcomes.length,
-    });
-    if (fallback.fallback) {
-      const caso = await openCase(
-        pool,
-        { tenantId, conversationId: input.conversationId, agentId: agentConfig?.agentId ?? null },
-        {
-          title: 'Atendimento sem resposta automática',
-          summary: `O agente não conseguiu responder: toda tentativa foi vetada pelos guardrails (último: ${fallback.code}).`,
-          blocker: 'vetos_esgotados',
-          source: 'guardrail_autofallback',
-          contextSnapshot: buildCaseContextSnapshot(),
-        },
-      ).catch((err) => {
-        runLog.error('fallback humano: abertura de caso falhou (segue avisando o lead)', {
-          error: err instanceof Error ? err.message.slice(0, 200) : 'erro desconhecido',
-        });
-        return { ok: false } as const;
-      });
-      if (caso.ok) moverParaHandoffBestEffort('vetos_esgotados');
-      // A linha ao lead sai pela MESMA cadeia (nada sai por baixo dela). Se ela também for
-      // vetada — janela fechada, STOP —, termina aqui: o caso aberto é a porta na tela.
-      const aviso = await avisarLeadDaEscalacao(pool, avisoDaEscalacao().ids, {
-        ...avisoDaEscalacao().base,
-        motivo: 'outro',
-      });
-      runLog.warn('turno sem envio por veto — caso humano aberto', {
-        abort_reason: 'vetos_esgotados',
-        code: fallback.code,
-        caso_aberto: caso.ok,
-        lead_avisado: aviso.avisado,
-      });
     }
 
     runLog.info('turno do agente concluído', {
