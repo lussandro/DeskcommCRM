@@ -26,6 +26,11 @@ export interface Contact {
   created_at: string;
   updated_at: string;
   last_activity_at: string | null;
+  company_id: string | null;
+  /**
+   * Derivado no GET de detalhe (não é coluna). Ausente quando o contato não tem empresa.
+   */
+  company?: { id: string; name: string; is_billing_contact: boolean } | null;
   /**
    * Derivado (não é coluna): a conversa mais recente deste contato — atalho para o inbox.
    * Ausente é normal: contato criado à mão pode nunca ter conversado.

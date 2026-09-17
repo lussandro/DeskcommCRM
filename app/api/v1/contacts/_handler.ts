@@ -32,7 +32,7 @@ import { contactListQuerySchema } from "@/lib/schemas";
 type SB = SupabaseClient;
 
 const SELECT_COLS =
-  "id, organization_id, name, display_name, email, email_normalized, phone_number, cpf_hash, birthdate, is_blocked, blocked_reason, is_anonymized, anonymized_at, is_merged_into, merged_at, consent, tags, source, source_metadata, custom_fields, created_at, updated_at, last_activity_at";
+  "id, organization_id, name, display_name, email, email_normalized, phone_number, cpf_hash, birthdate, is_blocked, blocked_reason, is_anonymized, anonymized_at, is_merged_into, merged_at, consent, tags, source, source_metadata, custom_fields, created_at, updated_at, last_activity_at, company_id";
 
 interface CursorPayload {
   sort: string | null;
@@ -301,6 +301,18 @@ export async function getContactHandler(
   }
   const contact = data as Contact;
 
+  if (contact.company_id) {
+    const { data: emp } = await supabase
+      .from("crm_companies")
+      .select("id, name, billing_contact_id")
+      .eq("organization_id", ctx.organization_id)
+      .eq("id", contact.company_id)
+      .maybeSingle();
+    contact.company = emp
+      ? { id: emp.id, name: emp.name, is_billing_contact: emp.billing_contact_id === contact.id }
+      : null;
+  }
+
   let cpfDecrypted: string | null = null;
   let cpfDecryptDenied = false;
 
@@ -387,6 +399,7 @@ export async function createContactHandler(
     custom_fields: input.custom_fields ?? {},
     consent: input.consent ?? {},
   };
+  if (input.company_id !== undefined) insertRow.company_id = input.company_id;
 
   if (input.cpf) {
     insertRow.cpf_hash = hashCpf(input.cpf);
@@ -424,6 +437,15 @@ export async function createContactHandler(
           traduzir("Já existe um contato com este telefone.", ctx.idioma ?? "pt-BR"),
         );
       }
+    }
+    if (insErr.code === "23503" && insErr.message.includes("company")) {
+      throw new ApiError(
+        422,
+        "validation_failed",
+        { company_id: ["Empresa não encontrada."] },
+        ctx.requestId,
+        traduzir("Empresa não encontrada.", ctx.idioma ?? "pt-BR"),
+      );
     }
     throw new ApiError(500, "internal_error", undefined, ctx.requestId, insErr.message);
   }
@@ -491,7 +513,7 @@ export async function patchContactHandler(
     // patch dele passou a ser MERGE (ver abaixo), e merge precisa do estado
     // anterior.
     .select(
-      "id, organization_id, is_anonymized, tags, email, phone_number, name, display_name, consent, custom_fields",
+      "id, organization_id, is_anonymized, tags, email, phone_number, name, display_name, consent, custom_fields, company_id",
     )
     .eq("organization_id", ctx.organization_id)
     .eq("id", contactId)
@@ -564,6 +586,7 @@ export async function patchContactHandler(
     const enc = await encryptCpfSql(supabase, input.cpf);
     if (enc) patch.cpf_encrypted = enc;
   }
+  if (input.company_id !== undefined) patch.company_id = input.company_id;
 
   if (Object.keys(patch).length === 0) {
     throw new ApiError(
@@ -589,6 +612,15 @@ export async function patchContactHandler(
     .maybeSingle();
 
   if (updErr) {
+    if (updErr.code === "23503" && updErr.message.includes("company")) {
+      throw new ApiError(
+        422,
+        "validation_failed",
+        { company_id: ["Empresa não encontrada."] },
+        ctx.requestId,
+        traduzir("Empresa não encontrada.", ctx.idioma ?? "pt-BR"),
+      );
+    }
     throw new ApiError(500, "internal_error", undefined, ctx.requestId, updErr.message);
   }
   if (!updated) {
@@ -620,7 +652,7 @@ export async function patchContactHandler(
    */
   const antes = existing as Record<string, unknown>;
   const sensiveis: Record<string, unknown> = {};
-  for (const campo of ["email", "phone_number", "name", "display_name"]) {
+  for (const campo of ["email", "phone_number", "name", "display_name", "company_id"]) {
     if (patch[campo] !== undefined && patch[campo] !== antes[campo]) {
       sensiveis[`old_${campo}`] = antes[campo] ?? null;
       sensiveis[`new_${campo}`] = patch[campo] ?? null;

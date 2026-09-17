@@ -57,6 +57,7 @@ const CONTATO = {
   created_at: "2026-09-14T10:00:00.000Z",
   updated_at: "2026-09-14T10:00:00.000Z",
   last_activity_at: null,
+  company_id: null,
 } satisfies Contact;
 
 /** O corpo que a rota devolve, tipado pelo retorno dela. */
