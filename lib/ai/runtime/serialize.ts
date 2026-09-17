@@ -11,6 +11,11 @@ const REDACT_KEYS = new Set([
   "token",
   "password",
   "cpf",
+  "document",
+  "cnpj",
+  "cpfcnpj",
+  "access_token",
+  "asaas_api_key",
 ]);
 
 function redactValue(value: unknown): unknown {

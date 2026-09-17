@@ -26,9 +26,14 @@ const ARGS_REDACT_KEYS = new Set([
   "token",
   "password",
   "cpf",
+  "document",
+  "cnpj",
+  "cpfcnpj",
+  "access_token",
+  "asaas_api_key",
 ]);
 
-function redactArgs(args: Record<string, unknown>): Record<string, unknown> {
+export function redactArgs(args: Record<string, unknown>): Record<string, unknown> {
   const out: Record<string, unknown> = {};
   for (const [k, v] of Object.entries(args)) {
     if (ARGS_REDACT_KEYS.has(k.toLowerCase())) {
