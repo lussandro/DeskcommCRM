@@ -36,6 +36,14 @@ describe("AsaasCliente", () => {
     expect(String(err)).not.toContain("segredo-xyz");
   });
 
+  it("webhooks() manda limit=100 (T-barato: sem isso o Asaas pagina no default dele)", async () => {
+    fetchMock.mockReturnValueOnce(resp(200, { data: [], hasMore: false, totalCount: 0 }));
+    const c = new AsaasCliente("k-123", "sandbox");
+    await c.webhooks();
+    const [url] = fetchMock.mock.calls[0]!;
+    expect(String(url)).toBe("https://api-sandbox.asaas.com/v3/webhooks?limit=100");
+  });
+
   it("timeout de 10s vira AsaasErro status 0", async () => {
     fetchMock.mockImplementationOnce((_u, init) => new Promise((_, rej) => (init as RequestInit).signal!.addEventListener("abort", () => rej(new DOMException("x", "AbortError")))));
     const c = new AsaasCliente("k", "sandbox", { timeoutMs: 5 });

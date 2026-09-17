@@ -52,21 +52,28 @@ function fakeDb(opts: {
   reg: Registro;
   titular?: Titular | null;
   chargeExistente?: { enrollmentId: string | null; dueDate: string } | null;
+  /** Chaveado por `paymentId` — sobrepõe `chargeExistente` quando presente para o payment. */
+  chargesPorPayment?: Record<string, { enrollmentId: string | null; dueDate: string } | null>;
   enrollmentViva?: boolean;
+  enrollmentVivoDoCustomerResultado?: { paymentId: string; enrollmentId: string; contactId: string } | null;
   pointerId?: string | null;
   validarFluxo?: ResultadoValidacaoFluxo;
   enrollResultado?: EnrollFollowupResult;
   enrollLanca?: Error;
   vencidasAoVivo?: number | "falhou";
+  /** Consumida em ordem, uma resposta por chamada — sobrepõe `vencidasAoVivo` quando presente. */
+  vencidasAoVivoSequencia?: Array<number | "falhou">;
   existeAcao?: boolean;
   cancelaOk?: boolean;
   nomeDoCustomer?: string | null;
 }): ConsumidorDb {
+  const sequencia = [...(opts.vencidasAoVivoSequencia ?? [])];
   return {
     async upsertCharge(input) {
       opts.reg.charges.push(input as unknown as Record<string, unknown>);
     },
-    async carregarCharge() {
+    async carregarCharge(_org, paymentId) {
+      if (opts.chargesPorPayment && paymentId in opts.chargesPorPayment) return opts.chargesPorPayment[paymentId] ?? null;
       return opts.chargeExistente === undefined ? null : opts.chargeExistente;
     },
     async titularPorCustomer() {
@@ -80,6 +87,9 @@ function fakeDb(opts: {
     },
     async enrollmentViva() {
       return opts.enrollmentViva ?? true;
+    },
+    async enrollmentVivoDoCustomer() {
+      return opts.enrollmentVivoDoCustomerResultado ?? null;
     },
     async enroll(pointerId, contactId) {
       opts.reg.enrolls.push({ pointerId, contactId });
@@ -100,6 +110,7 @@ function fakeDb(opts: {
       opts.reg.atividades.push({ contactId, type, reason, payload });
     },
     async vencidasAoVivo() {
+      if (sequencia.length > 0) return sequencia.shift()!;
       return opts.vencidasAoVivo ?? 0;
     },
     async validarFluxo() {
@@ -185,14 +196,14 @@ describe("processarEvento — asaas.payment_overdue", () => {
     expect(reg.avisos[0]!.body).toBe("Faltam ferramentas.");
   });
 
-  it("enroll devolve 409 → atividade charge_waiting_slot, enrollment_id null, sem aviso", async () => {
+  it("enroll devolve 409 → atividade charge_waiting_slot, zera enrollment_id da charge (T7), sem aviso", async () => {
     const reg = registro();
     const titular: Titular = { kind: "contact", id: CONTATO, customerId: CUSTOMER };
     const db = fakeDb({ reg, titular, enrollResultado: { ok: false, code: "conflict", message: "Este contato já está em um follow-up ativo.", status: 409 } });
     const r = await processarEvento(deps(db), evento(EVENTO_OVERDUE, {}));
     expect(r.status).toBe("ok");
     expect(reg.avisos).toEqual([]);
-    expect(reg.gravacoes).toEqual([]);
+    expect(reg.gravacoes).toEqual([{ paymentId: "pay_1", enrollmentId: null }]);
     expect(reg.atividades).toEqual([{ contactId: CONTATO, type: "charge_waiting_slot", reason: "Cobrança vencida aguardando outro retorno terminar", payload: { payment_id: "pay_1" } }]);
   });
 
@@ -253,6 +264,45 @@ describe("processarEvento — asaas.payment_received / payment_deleted", () => {
     const r = await processarEvento(deps(db), evento(EVENTO_RECEIVED, { status: "RECEIVED" }));
     expect(r.status).toBe("ok");
     expect(reg.cancelamentos).toEqual([]);
+  });
+
+  // I1: duas vencidas do mesmo customer — a 1ª matricula (E), a 2ª cai em
+  // 409 (enrollment_id null nela). Pagar a 1ª mantém E vivo (ainda resta a
+  // 2ª). Pagar a 2ª tem de encerrar E mesmo a charge da 2ª não carregando
+  // enrollment nenhum — é o customer que resolve, não o payment.
+  it("paga a cobrança sem matrícula própria, mesmo customer de outra que matriculou → encerra o retorno (I1)", async () => {
+    const reg = registro();
+    const titular: Titular = { kind: "contact", id: CONTATO, customerId: CUSTOMER };
+    const db = fakeDb({
+      reg,
+      titular,
+      chargesPorPayment: { pay_2: { enrollmentId: null, dueDate: "2026-09-15" } },
+      enrollmentVivoDoCustomerResultado: { paymentId: "pay_1", enrollmentId: ENROLLMENT, contactId: CONTATO },
+      vencidasAoVivoSequencia: [0],
+    });
+    const r = await processarEvento(deps(db), evento(EVENTO_RECEIVED, { id: "pay_2", status: "RECEIVED" }));
+    expect(r.status).toBe("ok");
+    expect(reg.cancelamentos).toEqual([{ id: ENROLLMENT, reason: "charge_settled", outcome: "converted" }]);
+  });
+
+  it("sem matrícula própria e nenhuma outra viva no customer → sem_enrollment, nada cancela", async () => {
+    const reg = registro();
+    const db = fakeDb({ reg, chargesPorPayment: { pay_1: { enrollmentId: null, dueDate: "2026-09-15" } }, enrollmentVivoDoCustomerResultado: null });
+    const r = await processarEvento(deps(db), evento(EVENTO_RECEIVED, { status: "RECEIVED" }));
+    expect(r.status).toBe("ok");
+    expect(r.detail).toBe("sem_enrollment");
+    expect(reg.cancelamentos).toEqual([]);
+  });
+
+  // I2: estorno/exclusão não é conversão — outcome-stats.ts conta "converted"
+  // como venda, e cobrança apagada/estornada não vendeu.
+  it("payment_deleted cancela com outcome exhausted e cancel_reason charge_deleted (I2)", async () => {
+    const reg = registro();
+    const titular: Titular = { kind: "contact", id: CONTATO, customerId: CUSTOMER };
+    const db = fakeDb({ reg, titular, chargeExistente: { enrollmentId: ENROLLMENT, dueDate: "2026-09-10" }, enrollmentViva: true, vencidasAoVivo: 0 });
+    const r = await processarEvento(deps(db), evento(EVENTO_DELETED, { status: "DELETED" }));
+    expect(r.status).toBe("ok");
+    expect(reg.cancelamentos).toEqual([{ id: ENROLLMENT, reason: "charge_deleted", outcome: "exhausted" }]);
   });
 });
 

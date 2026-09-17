@@ -1,7 +1,7 @@
 /**
  * POST /api/v1/webhooks/asaas/[token] — recebe eventos de cobrança do Asaas.
  *
- * Mesmo padrão dos webhooks per-tenant (WAHA/in): `path_token` resolve o
+ * Mesmo padrão dos webhooks per-tenant (como o webhook de captação por token): `path_token` resolve o
  * tenant a partir do banco — NUNCA do body. Loga em `webhook_events_log`
  * (idempotente por `organization_id + external_id`, provider `asaas`) e
  * emite `emit_event` só para os tipos de interesse; o resto fica só no log.

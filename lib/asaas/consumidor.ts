@@ -57,6 +57,13 @@ export interface ConsumidorDb {
   /** `null` quando a consulta ao Asaas falhar ou o nome não vier — nunca lança. */
   nomeDoCustomer(customerId: string): Promise<string | null>;
   enrollmentViva(enrollmentId: string): Promise<boolean>;
+  /**
+   * Cobrança do evento não carrega `enrollment_id` (ex.: 2ª cobrança vencida do
+   * mesmo customer, que caiu em `409 conflict` ao matricular) — procura QUALQUER
+   * matrícula viva das outras cobranças deste customer, para pagar/apagar uma
+   * cobrança "órfã" ainda encerrar o retorno certo. `null` quando não há nenhuma.
+   */
+  enrollmentVivoDoCustomer(customerId: string): Promise<{ paymentId: string; enrollmentId: string; contactId: string } | null>;
   enroll(pointerId: string, contactId: string): Promise<EnrollFollowupResult>;
   cancelaEnrollment(id: string, reason: string, outcome: "converted" | "exhausted"): Promise<boolean>;
   gravaEnrollmentNaCharge(organizationId: string, paymentId: string, enrollmentId: string | null): Promise<void>;
@@ -147,6 +154,10 @@ async function tratarOverdue(deps: ConsumidorDeps, row: EventRow, p: z.infer<typ
     const resultado = await db.enroll(pointerId, contactId);
     if (!resultado.ok) {
       if (resultado.code === "conflict") {
+        // Zera o enrollment_id da charge: sem isto o estado aponta para uma
+        // matrícula que nunca foi desta cobrança (T7) — próximo evento desta
+        // cobrança leria um enrollment de outra, possivelmente já encerrada.
+        await db.gravaEnrollmentNaCharge(orgId, p.id, null);
         await db.atividade(contactId, "charge_waiting_slot", "Cobrança vencida aguardando outro retorno terminar", { payment_id: p.id });
         return { status: "ok", detail: "aguardando_outro_fluxo" };
       }
@@ -171,8 +182,18 @@ async function tratarPagaOuApagada(deps: ConsumidorDeps, row: EventRow, p: z.inf
   await db.upsertCharge({ organizationId: orgId, paymentId: p.id, customerId: p.customer, status: p.status, dueDate: p.dueDate, valueCents: centavos(p.value) });
 
   const charge = await db.carregarCharge(orgId, p.id);
-  if (!charge?.enrollmentId) return { status: "ok", detail: "sem_enrollment" };
-  if (!(await db.enrollmentViva(charge.enrollmentId))) return { status: "ok", detail: "enrollment_ja_encerrada" };
+  let enrollmentId = charge?.enrollmentId ?? null;
+  if (enrollmentId) {
+    if (!(await db.enrollmentViva(enrollmentId))) return { status: "ok", detail: "enrollment_ja_encerrada" };
+  } else {
+    // A cobrança do evento não carrega matrícula (ex.: caiu em 409 ao matricular,
+    // T7). Antes de desistir, procura qualquer matrícula viva de OUTRA cobrança
+    // do mesmo customer — sem isto, pagar/apagar essa cobrança nunca encerra o
+    // retorno que outra cobrança do mesmo cliente abriu (I1).
+    const achado = await db.enrollmentVivoDoCustomer(p.customer);
+    if (!achado) return { status: "ok", detail: "sem_enrollment" };
+    enrollmentId = achado.enrollmentId;
+  }
 
   const restantes = await db.vencidasAoVivo(p.customer);
   const falhouConsulta = restantes === "falhou";
@@ -180,7 +201,11 @@ async function tratarPagaOuApagada(deps: ConsumidorDeps, row: EventRow, p: z.inf
     return { status: "ok", detail: `mantido_restam_${restantes}` };
   }
 
-  const cancelou = await db.cancelaEnrollment(charge.enrollmentId, "charge_settled", "converted");
+  // Estorno/exclusão não é conversão (I2): `outcome-stats.ts` conta "converted"
+  // como venda, e uma cobrança apagada/estornada não vendeu nada.
+  const outcome = tipo === "paid" ? "converted" : "exhausted";
+  const cancelReason = tipo === "paid" ? "charge_settled" : "charge_deleted";
+  const cancelou = await db.cancelaEnrollment(enrollmentId, cancelReason, outcome);
   const titular = await db.titularPorCustomer(orgId, p.customer);
   const contactId = titular ? (titular.kind === "company" ? titular.billingContactId : titular.id) : null;
   if (contactId) {

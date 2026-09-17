@@ -17,6 +17,9 @@ import type { ActivityType } from "@/lib/leads/activity-vocabulary";
 import type { ConsumidorDb } from "./consumidor";
 import { logger } from "@/lib/logger";
 
+/** Mesmo vocabulário de `followup_enrollments.status` — `desativarAsaas` guarda a cópia dela. */
+const STATUS_VIVOS = ["active", "waiting_reply", "paused_handoff", "paused_manual"] as const;
+
 export function createSupabaseConsumidorDb(admin: SupabaseClient, orgId: string, integ: IntegracaoAsaas): ConsumidorDb {
   return {
     async upsertCharge(input) {
@@ -67,10 +70,40 @@ export function createSupabaseConsumidorDb(admin: SupabaseClient, orgId: string,
     },
 
     async enrollmentViva(enrollmentId) {
-      const { data, error } = await admin.from("followup_enrollments").select("status").eq("id", enrollmentId).maybeSingle();
+      // I4: tenancy sob service role — `followup_enrollments` não isola por si só.
+      const { data, error } = await admin
+        .from("followup_enrollments")
+        .select("status")
+        .eq("organization_id", orgId)
+        .eq("id", enrollmentId)
+        .maybeSingle();
       if (error) throw new Error(error.message);
       if (!data) return false;
-      return ["active", "waiting_reply", "paused_handoff", "paused_manual"].includes(data.status);
+      return (STATUS_VIVOS as readonly string[]).includes(data.status);
+    },
+
+    async enrollmentVivoDoCustomer(customerId) {
+      const { data: charges, error: chargesErr } = await admin
+        .from("asaas_charges")
+        .select("payment_id, enrollment_id")
+        .eq("organization_id", orgId)
+        .eq("customer_id", customerId)
+        .not("enrollment_id", "is", null);
+      if (chargesErr) throw new Error(chargesErr.message);
+      const enrollmentIds = [...new Set((charges ?? []).map((c) => c.enrollment_id as string))];
+      if (enrollmentIds.length === 0) return null;
+
+      const { data: vivos, error: vivosErr } = await admin
+        .from("followup_enrollments")
+        .select("id, contact_id")
+        .eq("organization_id", orgId)
+        .in("id", enrollmentIds)
+        .in("status", STATUS_VIVOS);
+      if (vivosErr) throw new Error(vivosErr.message);
+      const vivo = (vivos ?? [])[0];
+      if (!vivo) return null;
+      const charge = (charges ?? []).find((c) => c.enrollment_id === vivo.id);
+      return { paymentId: charge?.payment_id as string, enrollmentId: vivo.id as string, contactId: vivo.contact_id as string };
     },
 
     async enroll(pointerId, contactId) {

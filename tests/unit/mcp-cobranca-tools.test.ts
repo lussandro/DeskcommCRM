@@ -306,6 +306,19 @@ describe("crm_get_charge_payment_info", () => {
     expect(res.error).toBeTruthy();
     expect(res.pix_copy_paste).toBeUndefined();
   });
+
+  it("BOLETO cuja identificationField falha → não derruba a resposta, campo vem null (como o pix)", async () => {
+    const integ = integracaoStub();
+    (integ.cliente.payment as ReturnType<typeof vi.fn>).mockResolvedValue({ id: PAYMENT, customer: CUSTOMER, status: "PENDING", value: 100, dueDate: "2026-09-01", billingType: "BOLETO" });
+    (integ.cliente.identificationField as ReturnType<typeof vi.fn>).mockRejectedValue(new AsaasErro(400, "invalid_action", "Boleto ainda não tem linha digitável."));
+    (integ.cliente.pixQrCode as ReturnType<typeof vi.fn>).mockRejectedValue(new AsaasErro(400, "invalid_action", "Sem Pix."));
+    mockCarregarIntegracaoAsaas.mockResolvedValue(integ as never);
+    const cap = novasCapturas();
+
+    const res = (await crmGetChargePaymentInfo.handler({ contact_id: CONTATO, payment_id: PAYMENT }, ctxDe(contatoVinculado(CUSTOMER), cap))) as { identification_field: unknown; error?: string };
+    expect(res.error).toBeUndefined();
+    expect(res.identification_field).toBeNull();
+  });
 });
 
 describe("crm_reissue_overdue_charge", () => {
@@ -404,6 +417,20 @@ describe("crm_reissue_overdue_charge", () => {
     expect(poolQuery).toHaveBeenCalledWith(expect.stringContaining("reissue_count - 1"), [ORG, PAYMENT]);
     // Falha de negócio (invalid_action) — nada gravado além da compensação.
     expect(cap.inserts.find((i) => i.table === "asaas_charge_actions")).toBeUndefined();
+  });
+
+  it("timeout/rede no PUT (AsaasErro status 0, sem resposta) → NÃO compensa: o PUT pode ter sido aplicado", async () => {
+    const integ = integracaoStub();
+    (integ.cliente.payment as ReturnType<typeof vi.fn>).mockResolvedValue({ id: PAYMENT, customer: CUSTOMER, status: "OVERDUE", value: 100, dueDate: "2026-08-01", billingType: "BOLETO" });
+    (integ.cliente.alterarVencimento as ReturnType<typeof vi.fn>).mockRejectedValue(new AsaasErro(0, null, "O Asaas não respondeu em 10 segundos."));
+    mockCarregarIntegracaoAsaas.mockResolvedValue(integ as never);
+    poolPadrao({ incremento: { rowCount: 1, reissueCount: 1 } });
+    const cap = novasCapturas();
+
+    const res = (await crmReissueOverdueCharge.handler({ contact_id: CONTATO, payment_id: PAYMENT }, ctxDe(contatoVinculado(), cap))) as { error: string };
+
+    expect(res.error).toBe("O Asaas não respondeu em 10 segundos.");
+    expect(poolQuery).not.toHaveBeenCalledWith(expect.stringContaining("reissue_count - 1"), expect.anything());
   });
 
   it("AsaasErro invalid_action → { error: descricao } sem item na Central", async () => {

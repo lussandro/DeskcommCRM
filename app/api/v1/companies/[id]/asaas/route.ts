@@ -112,6 +112,10 @@ export async function POST(
     if (!customer) {
       return fail("customer_nao_encontrado", t("Nenhum cliente no Asaas com este CNPJ."), 404, { requestId });
     }
+    if (lista.data.length > 1) {
+      const msg = t("Há {n} clientes no Asaas com este CNPJ; vincule pela Central usando o id do cliente.").replace("{n}", String(lista.data.length));
+      return fail("customer_ambiguo", msg, 409, { requestId });
+    }
     await vincularPeloOperador(admin, authz.org.orgId, { kind: "company", id }, customer.id);
     await audit({
       action: "asaas.company_linked",

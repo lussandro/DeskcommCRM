@@ -182,7 +182,10 @@ export const crmGetChargePaymentInfo: McpToolDefinition<typeof infoShape> = {
         invoice_url: p.invoiceUrl ?? null,
         bank_slip_url: p.bankSlipUrl ?? null,
       };
-      if (p.billingType === "BOLETO") out.identification_field = (await integ.cliente.identificationField(p.id)).identificationField;
+      // Nem todo BOLETO tem linha digitável pronta na hora (ex.: acabou de ser
+      // gerado) — mesmo tratamento do pix logo abaixo: erro não derruba a
+      // resposta inteira, só falta este campo.
+      if (p.billingType === "BOLETO") out.identification_field = (await integ.cliente.identificationField(p.id).catch(() => null))?.identificationField ?? null;
       // pixQrCode funciona para BOLETO e PIX (medição da spec de sandbox); pedimos sempre e
       // ignoramos falha — nem toda cobrança tem Pix (ex.: CREDIT_CARD).
       const pix = await integ.cliente.pixQrCode(p.id).catch(() => null);
@@ -275,20 +278,32 @@ export const crmReissueOverdueCharge: McpToolDefinition<typeof reissueShape> = {
       try {
         atualizado = await integ.cliente.alterarVencimento(p.id, nova);
       } catch (err) {
-        // Compensação: a contagem já subiu, o Asaas recusou — devolve a vaga.
-        // Best effort: se a compensação falhar, a contagem fica alta demais por
-        // uma vez (falso negativo depois), nunca baixa demais (que deixaria
-        // passar do limite) — o lado seguro do erro.
-        try {
-          await pool.query(
-            `update public.asaas_charges
-                set reissue_count = reissue_count - 1, updated_at = now()
-              where organization_id = $1 and payment_id = $2 and reissue_count > 0`,
-            [ctx.organizationId, p.id],
-          );
-        } catch (compErr) {
-          logger.warn("[asaas] não consegui compensar reissue_count após falha no Asaas", {
-            err: compErr instanceof Error ? compErr.message : String(compErr),
+        // Compensação: a contagem já subiu, e o Asaas RECUSOU (4xx/5xx com
+        // resposta) — devolve a vaga. Best effort: se a compensação falhar, a
+        // contagem fica alta demais por uma vez (falso negativo depois), nunca
+        // baixa demais (que deixaria passar do limite) — o lado seguro do erro.
+        //
+        // Timeout/erro de rede (status 0, sem resposta do Asaas) é outra
+        // história: o PUT pode ter sido APLICADO do lado de lá mesmo sem a
+        // resposta chegar — compensar aqui deixaria a contagem baixa demais e
+        // furaria o teto. Nesse caso o contador fica como está e só loga.
+        if (err instanceof AsaasErro && err.status >= 400) {
+          try {
+            await pool.query(
+              `update public.asaas_charges
+                  set reissue_count = reissue_count - 1, updated_at = now()
+                where organization_id = $1 and payment_id = $2 and reissue_count > 0`,
+              [ctx.organizationId, p.id],
+            );
+          } catch (compErr) {
+            logger.warn("[asaas] não consegui compensar reissue_count após falha no Asaas", {
+              err: compErr instanceof Error ? compErr.message : String(compErr),
+            });
+          }
+        } else {
+          logger.warn("[asaas] PUT de prorrogação sem confirmação do Asaas (timeout/rede) — pode ter sido aplicado, contador mantido", {
+            payment_id: p.id,
+            err: err instanceof Error ? err.message : String(err),
           });
         }
         throw err;

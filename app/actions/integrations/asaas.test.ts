@@ -20,7 +20,7 @@ import { audit } from "@/lib/audit";
 import { encryptWebhookSecret } from "@/lib/webhooks/secrets";
 import { validarFluxoDeCobranca } from "@/lib/asaas/validacao-do-fluxo";
 
-import { salvarConfigAsaas, desativarAsaas } from "./asaas";
+import { salvarConfigAsaas, desativarAsaas, esquecerChaveAsaas, girarTokenAsaas } from "./asaas";
 
 const ORG = "11111111-1111-1111-1111-111111111111";
 const USER = "22222222-2222-2222-2222-222222222222";
@@ -33,7 +33,9 @@ function bancoFalso() {
   const asaas_charges: Linha[] = [];
   const followup_enrollments: Linha[] = [];
   const tabelas: Record<string, Linha[]> = { tenant_integrations, asaas_charges, followup_enrollments };
-  const db = { tenant_integrations, asaas_charges, followup_enrollments };
+  /** I4: toda `update`/`delete` que o teste exercitar, com as colunas do `eq()` — a asserção confere `organization_id` aqui, não no resultado. */
+  const operacoes: Array<{ tabela: string; op: string; colunasEq: string[] }> = [];
+  const db = { tenant_integrations, asaas_charges, followup_enrollments, operacoes };
 
   function builder(tabela: string) {
     const filtrosEq: Array<[string, unknown]> = [];
@@ -56,11 +58,13 @@ function bancoFalso() {
         return { data: nova, error: null };
       }
       if (op === "update") {
+        operacoes.push({ tabela, op, colunasEq: filtrosEq.map(([c]) => c) });
         const alvos = linhas.filter(casa);
         for (const r of alvos) Object.assign(r, payload);
         return { data: alvos, error: null };
       }
       if (op === "delete") {
+        operacoes.push({ tabela, op, colunasEq: filtrosEq.map(([c]) => c) });
         const alvos = linhas.filter(casa);
         for (const r of alvos) linhas.splice(linhas.indexOf(r), 1);
         return { data: alvos, error: null };
@@ -221,5 +225,43 @@ describe("desativarAsaas", () => {
         metadata: expect.objectContaining({ enrollments_canceled: 1 }),
       }),
     );
+  });
+});
+
+describe("esquecerChaveAsaas (I3)", () => {
+  it("integração healthy → recusa integracao_ativa, não apaga a linha", async () => {
+    const { admin, db } = bancoFalso();
+    db.tenant_integrations.push({ id: "ti-1", organization_id: ORG, provider: "asaas", status: "healthy" });
+    vi.mocked(createAdminClient).mockReturnValue(admin);
+    const r = await esquecerChaveAsaas();
+    expect(r).toEqual({ ok: false, error: "integracao_ativa" });
+    expect(db.tenant_integrations).toHaveLength(1);
+  });
+
+  it("integração disconnected → apaga a linha", async () => {
+    const { admin, db } = bancoFalso();
+    db.tenant_integrations.push({ id: "ti-1", organization_id: ORG, provider: "asaas", status: "disconnected" });
+    vi.mocked(createAdminClient).mockReturnValue(admin);
+    const r = await esquecerChaveAsaas();
+    expect(r).toEqual({ ok: true });
+    expect(db.tenant_integrations).toHaveLength(0);
+  });
+});
+
+describe("I4 — tenancy sob service role", () => {
+  it("todo update/delete em tenant_integrations filtra organization_id", async () => {
+    const { admin, db } = bancoFalso();
+    db.tenant_integrations.push({ id: "ti-1", organization_id: ORG, provider: "asaas", status: "connecting" });
+    vi.mocked(createAdminClient).mockReturnValue(admin);
+
+    await salvarConfigAsaas({ ambiente: "producao" }); // update (segunda gravação)
+    await girarTokenAsaas(); // update
+    await esquecerChaveAsaas(); // recusa (healthy=false aqui é "connecting" → segue e apaga)
+
+    expect(db.operacoes.length).toBeGreaterThan(0);
+    for (const o of db.operacoes) {
+      if (o.tabela !== "tenant_integrations") continue;
+      expect(o.colunasEq).toContain("organization_id");
+    }
   });
 });

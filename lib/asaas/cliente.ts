@@ -79,6 +79,7 @@ export class AsaasCliente {
   pixQrCode(id: string) { return this.request<{ payload: string; encodedImage?: string; expirationDate?: string }>("GET", `/payments/${encodeURIComponent(id)}/pixQrCode`); }
   alterarVencimento(id: string, dueDate: string) { return this.request<AsaasPayment>("PUT", `/payments/${encodeURIComponent(id)}`, { body: { dueDate } }); }
   balance() { return this.request<{ balance: number }>("GET", "/finance/balance"); }
-  webhooks() { return this.request<AsaasList<AsaasWebhook>>("GET", "/webhooks"); }
+  /** `limit=100` explícito: sem query, o Asaas pagina com o default dele — pouco demais para achar o webhook desta instalação numa conta com muitos cadastrados. */
+  webhooks(limit = 100) { return this.request<AsaasList<AsaasWebhook>>("GET", "/webhooks", { query: { limit } }); }
   religarWebhook(id: string) { return this.request<AsaasWebhook>("PUT", `/webhooks/${encodeURIComponent(id)}`, { body: { interrupted: false } }); }
 }

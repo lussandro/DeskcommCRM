@@ -27,6 +27,7 @@ const ERROS: Record<string, string> = {
   nao_configurado: "Configure a chave do Asaas primeiro.",
   cifra_indisponivel: "Não foi possível cifrar o segredo agora. Tente de novo em instantes.",
   conexao_falhou: "Não foi possível conectar ao Asaas.",
+  integracao_ativa: "Desative a integração antes de esquecer a chave.",
 };
 
 interface Props {
@@ -134,9 +135,11 @@ export function BotoesAsaas({ estado, enrollmentsVivos, webhookUrl }: Props) {
           </Button>
         </>
       )}
-      <Button variant="ghost" onClick={esquecerChave} disabled={pending}>
-        {t("Esquecer chave")}
-      </Button>
+      {estado !== "ativa" && (
+        <Button variant="ghost" onClick={esquecerChave} disabled={pending}>
+          {t("Esquecer chave")}
+        </Button>
+      )}
     </div>
   );
 }

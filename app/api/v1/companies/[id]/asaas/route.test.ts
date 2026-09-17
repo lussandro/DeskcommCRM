@@ -126,6 +126,19 @@ describe("POST /api/v1/companies/[id]/asaas", () => {
     expect((await res.json()).error.code).toBe("customer_nao_encontrado");
   });
 
+  it("N clientes no Asaas com o mesmo CNPJ → 409 customer_ambiguo, nada gravado (I5)", async () => {
+    sessao();
+    vi.mocked(carregarIntegracaoAsaas).mockResolvedValue({
+      cliente: { customerPorDocumento: vi.fn(async () => ({ data: [{ id: "cus_1" }, { id: "cus_2" }], hasMore: false })) },
+    } as never);
+    const { POST } = await import("./route");
+    const res = await POST(postReq({ cnpj: "11222333000181" }), ctxFor(COMPANY_ID));
+    expect(res.status).toBe(409);
+    expect((await res.json()).error.code).toBe("customer_ambiguo");
+    expect(vincularPeloOperador).not.toHaveBeenCalled();
+    expect(audit).not.toHaveBeenCalled();
+  });
+
   it("customer já vinculado a outro cadastro → 409 customer_ja_vinculado", async () => {
     sessao();
     vi.mocked(carregarIntegracaoAsaas).mockResolvedValue({

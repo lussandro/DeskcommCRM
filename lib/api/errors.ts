@@ -138,6 +138,9 @@ export const ApiErrorCodes = {
   asaas_inativo: "asaas_inativo", // integração desligada ou config inválida (409)
   customer_nao_encontrado: "customer_nao_encontrado", // CNPJ/CPF sem customer no Asaas (404)
   customer_ja_vinculado: "customer_ja_vinculado", // customer já vinculado a outro cadastro (409)
+  // I5: N > 1 clientes no Asaas com o mesmo CNPJ — vincular o primeiro da lista
+  // no chute é o exato defeito que a Regra nº 1 proíbe. Central resolve manual.
+  customer_ambiguo: "customer_ambiguo",
   asaas_error: "asaas_error", // erro reportado pelo Asaas ao consultar/vincular (502)
 
   // 500 / upstream

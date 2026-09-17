@@ -138,7 +138,7 @@ export async function salvarConfigAsaas(input: SalvarInput): Promise<SalvarResul
     metadata.last4 = input.apiKey.slice(-4);
   }
 
-  const { error: updErr } = await admin.from("tenant_integrations").update(patch).eq("id", existente.id);
+  const { error: updErr } = await admin.from("tenant_integrations").update(patch).eq("id", existente.id).eq("organization_id", orgId);
   if (updErr) return { ok: false, error: "db_error" };
 
   await audit({
@@ -168,14 +168,15 @@ export async function testarConexaoAsaas(): Promise<TestarResult> {
     await integ.cliente.balance();
   } catch (err) {
     const mensagem = err instanceof AsaasErro ? err.descricao : "Não foi possível falar com o Asaas.";
-    await admin.from("tenant_integrations").update({ status: "error", status_reason: mensagem }).eq("id", integ.id);
+    await admin.from("tenant_integrations").update({ status: "error", status_reason: mensagem }).eq("id", integ.id).eq("organization_id", orgId);
     return { ok: false, mensagem };
   }
 
   await admin
     .from("tenant_integrations")
     .update({ status: "healthy", status_reason: null, last_health_check_at: new Date().toISOString() })
-    .eq("id", integ.id);
+    .eq("id", integ.id)
+    .eq("organization_id", orgId);
   revalidatePath(ROTA);
   return { ok: true, mensagem: "Conexão com o Asaas funcionando." };
 }
@@ -195,14 +196,15 @@ export async function ativarAsaas(): Promise<AtivarResult> {
     await integ.cliente.balance();
   } catch (err) {
     const mensagem = err instanceof AsaasErro ? err.descricao : "Não foi possível falar com o Asaas.";
-    await admin.from("tenant_integrations").update({ status: "error", status_reason: mensagem }).eq("id", integ.id);
+    await admin.from("tenant_integrations").update({ status: "error", status_reason: mensagem }).eq("id", integ.id).eq("organization_id", orgId);
     return { ok: false, error: "conexao_falhou", mensagem };
   }
 
   await admin
     .from("tenant_integrations")
     .update({ status: "healthy", status_reason: null, last_health_check_at: new Date().toISOString() })
-    .eq("id", integ.id);
+    .eq("id", integ.id)
+    .eq("organization_id", orgId);
 
   await audit({
     action: "asaas.integration_enabled",
@@ -250,7 +252,8 @@ export async function girarTokenAsaas(): Promise<GirarTokenResult> {
   const { error: updErr } = await admin
     .from("tenant_integrations")
     .update({ webhook_secret_encrypted: webhookEnc })
-    .eq("id", existente.id);
+    .eq("id", existente.id)
+    .eq("organization_id", orgId);
   if (updErr) return { ok: false, error: "db_error" };
 
   await audit({
@@ -345,7 +348,8 @@ export async function desativarAsaas(): Promise<DesativarResult> {
   const { error: updErr } = await admin
     .from("tenant_integrations")
     .update({ status: "disconnected", status_reason: "user_disconnected" })
-    .eq("id", existente.id);
+    .eq("id", existente.id)
+    .eq("organization_id", orgId);
   if (updErr) return { ok: false, error: "db_error" };
 
   await audit({
@@ -360,7 +364,7 @@ export async function desativarAsaas(): Promise<DesativarResult> {
   return { ok: true, enrollmentsCanceled: canceladas };
 }
 
-export type EsquecerResult = { ok: true } | { ok: false; error: ErroComum | "nao_configurado" };
+export type EsquecerResult = { ok: true } | { ok: false; error: ErroComum | "nao_configurado" | "integracao_ativa" };
 
 export async function esquecerChaveAsaas(): Promise<EsquecerResult> {
   const guarda = await guardaAdmin();
@@ -370,14 +374,17 @@ export async function esquecerChaveAsaas(): Promise<EsquecerResult> {
 
   const { data: existente, error: lookupErr } = await admin
     .from("tenant_integrations")
-    .select("id")
+    .select("id, status")
     .eq("organization_id", orgId)
     .eq("provider", "asaas")
     .maybeSingle();
   if (lookupErr) return { ok: false, error: "db_error" };
   if (!existente) return { ok: false, error: "nao_configurado" };
+  // I3: apagar a linha com a integração ativa perde o vínculo com matrículas
+  // vivas em curso — desativar primeiro cancela e audita a contagem.
+  if (existente.status === "healthy") return { ok: false, error: "integracao_ativa" };
 
-  const { error: delErr } = await admin.from("tenant_integrations").delete().eq("id", existente.id);
+  const { error: delErr } = await admin.from("tenant_integrations").delete().eq("id", existente.id).eq("organization_id", orgId);
   if (delErr) return { ok: false, error: "db_error" };
 
   await audit({
