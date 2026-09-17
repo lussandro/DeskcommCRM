@@ -9,7 +9,8 @@ export function useDeleteCompany() {
     mutationFn: async (companyId: string) =>
       apiClient.delete<unknown>(`/api/v1/companies/${companyId}`),
     onError: showApiError,
-    onSuccess: () => {
+    onSuccess: (_data, deletedId) => {
+      qc.invalidateQueries({ queryKey: ["company", deletedId] });
       qc.invalidateQueries({ queryKey: ["companies"] });
     },
   });
