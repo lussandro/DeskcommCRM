@@ -1,0 +1,68 @@
+import { z } from "zod";
+import type { SupabaseClient } from "@supabase/supabase-js";
+import { decryptWebhookSecret } from "@/lib/webhooks/secrets";
+import { logger } from "@/lib/logger";
+import { AsaasCliente } from "./cliente";
+
+/** `store_metadata` da linha de tenant_integrations. Sem default para a cerca: os dois ou nenhum. */
+export const configSchema = z
+  .object({
+    ambiente: z.enum(["sandbox", "producao"]),
+    followup_pointer_id: z.string().uuid().nullable().optional().default(null),
+    reemissao: z.object({ dias: z.number().int().min(1).max(90).optional(), max_por_cobranca: z.number().int().min(1).max(10).optional() }).nullable().optional(),
+  })
+  .transform((v) => ({
+    ambiente: v.ambiente,
+    followup_pointer_id: v.followup_pointer_id ?? null,
+    reemissao:
+      v.reemissao && v.reemissao.dias !== undefined && v.reemissao.max_por_cobranca !== undefined
+        ? { dias: v.reemissao.dias, max_por_cobranca: v.reemissao.max_por_cobranca }
+        : null,
+  }));
+export type AsaasConfig = z.infer<typeof configSchema>;
+
+export interface IntegracaoAsaas {
+  id: string;
+  status: string;
+  config: AsaasConfig;
+  cliente: AsaasCliente;
+  webhookPathToken: string;
+}
+
+const COLS = "id, status, store_metadata, oauth_access_token_encrypted, webhook_path_token";
+
+/** null = módulo desligado/inexistente/quebrado. NUNCA lança: quem chama trata null como "sem módulo". */
+export async function carregarIntegracaoAsaas(admin: SupabaseClient, orgId: string, opts: { exigirHealthy?: boolean } = {}): Promise<IntegracaoAsaas | null> {
+  const { data, error } = await admin.from("tenant_integrations").select(COLS).eq("organization_id", orgId).eq("provider", "asaas").maybeSingle();
+  if (error || !data) return null;
+  if ((opts.exigirHealthy ?? true) && data.status !== "healthy") return null;
+  const parsed = configSchema.safeParse(data.store_metadata ?? {});
+  if (!parsed.success) {
+    logger.warn("[asaas] store_metadata inválido; módulo tratado como desligado", { org: orgId, issues: parsed.error.issues.map((i) => i.path.join(".")) });
+    return null;
+  }
+  const apiKey = data.oauth_access_token_encrypted ? await decryptWebhookSecret(admin, data.oauth_access_token_encrypted as unknown as string) : null;
+  if (!apiKey) {
+    logger.warn("[asaas] não consegui decifrar a chave; módulo tratado como desligado", { org: orgId });
+    return null;
+  }
+  return { id: data.id, status: data.status, config: parsed.data, cliente: new AsaasCliente(apiKey, parsed.data.ambiente), webhookPathToken: data.webhook_path_token };
+}
+
+/**
+ * Capacidades de integração da org, para o filtro de ferramentas do turno. Sem decifrar chave.
+ * "asaas" = ler cobranças; "asaas:reemitir" = também prorrogar (só com a cerca preenchida).
+ * Set vazio = nada de integração chega ao modelo (direção segura).
+ */
+export async function carregarCapacidadesDeIntegracao(admin: SupabaseClient, orgId: string): Promise<ReadonlySet<string>> {
+  const { data } = await admin.from("tenant_integrations").select("provider, store_metadata").eq("organization_id", orgId).eq("status", "healthy");
+  const caps = new Set<string>();
+  for (const r of data ?? []) {
+    if (r.provider !== "asaas") { caps.add(r.provider as string); continue; }
+    const cfg = configSchema.safeParse(r.store_metadata ?? {});
+    if (!cfg.success) continue;
+    caps.add("asaas");
+    if (cfg.data.reemissao) caps.add("asaas:reemitir");
+  }
+  return caps;
+}
