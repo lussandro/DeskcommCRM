@@ -83,6 +83,43 @@ describe("vincularContatoPorDocumento", () => {
     expect((calls.update![0] as unknown[])[0]).toEqual({ asaas_customer_id: "cus_1" });
     expect(calls.eq!.flat()).toEqual(expect.arrayContaining(["organization_id", ORG, "id", "ct1"]));
   });
+
+  it("dois customers para o mesmo documento, só o segundo tem o telefone que bate → liga no segundo", async () => {
+    const { sb, calls } = fakeSb([
+      { data: { id: "ct1", company_id: null, phone_number: "+5551999990001" }, error: null },
+      { data: null, error: null },
+    ]);
+    const cliente = {
+      customerPorDocumento: vi.fn(async () => ({
+        data: [
+          { id: "cus_errado", name: "X", cpfCnpj: "24971563792", mobilePhone: "51988880000" },
+          { id: "cus_certo", name: "X", cpfCnpj: "24971563792", mobilePhone: "51999990001" },
+        ],
+        totalCount: 2, hasMore: false, limit: 10, offset: 0,
+      })),
+    } as unknown as AsaasCliente;
+    const out = await vincularContatoPorDocumento(sb, ORG, "ct1", "24971563792", cliente);
+    expect(out).toEqual({ ok: true, customerId: "cus_certo" });
+    expect((calls.update![0] as unknown[])[0]).toEqual({ asaas_customer_id: "cus_certo" });
+  });
+
+  it("customer sem mobilePhone nem phone → telefone_nao_confere", async () => {
+    const { sb } = fakeSb({ data: { id: "ct1", company_id: null, phone_number: "+5551999990001" }, error: null });
+    const cliente = {
+      customerPorDocumento: vi.fn(async () => ({ data: [{ id: "cus_1", name: "X", cpfCnpj: "24971563792" }], totalCount: 1, hasMore: false, limit: 10, offset: 0 })),
+    } as unknown as AsaasCliente;
+    const out = await vincularContatoPorDocumento(sb, ORG, "ct1", "24971563792", cliente);
+    expect(out).toEqual({ ok: false, motivo: "telefone_nao_confere" });
+  });
+
+  it("contato com phone_number null nunca bate, mesmo que o customer também não tenha telefone", async () => {
+    const { sb } = fakeSb({ data: { id: "ct1", company_id: null, phone_number: null }, error: null });
+    const cliente = {
+      customerPorDocumento: vi.fn(async () => ({ data: [{ id: "cus_1", name: "X", cpfCnpj: "24971563792" }], totalCount: 1, hasMore: false, limit: 10, offset: 0 })),
+    } as unknown as AsaasCliente;
+    const out = await vincularContatoPorDocumento(sb, ORG, "ct1", "24971563792", cliente);
+    expect(out).toEqual({ ok: false, motivo: "telefone_nao_confere" });
+  });
 });
 
 describe("vincularPeloOperador", () => {

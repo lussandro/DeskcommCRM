@@ -43,15 +43,21 @@ export async function vincularContatoPorDocumento(
   if (!c) return { ok: false, motivo: "nao_encontrado" };
   if (c.company_id) return { ok: false, motivo: "contato_de_empresa" };
   const lista = await cliente.customerPorDocumento(document);
-  const customer = lista.data[0];
-  if (!customer) return { ok: false, motivo: "nao_encontrado" };
+  if (lista.data.length === 0) return { ok: false, motivo: "nao_encontrado" };
   const doContato = c.phone_number ? digitos(canonicalPhoneBR(c.phone_number)) : "";
-  const doCustomer = [customer.mobilePhone, customer.phone]
-    .map((p) => digitos(p))
-    .filter(Boolean)
-    .map((p) => (p.startsWith("55") ? p : `55${p}`))
-    .map((p) => digitos(canonicalPhoneBR(`+${p}`)));
-  if (!doContato || !doCustomer.includes(doContato)) return { ok: false, motivo: "telefone_nao_confere" };
+  // Asaas permite mais de um customer por documento — confere o telefone de CADA um,
+  // não só do primeiro, e liga no primeiro cujo telefone bate.
+  const customer = doContato
+    ? lista.data.find((cand) => {
+        const doCandidato = [cand.mobilePhone, cand.phone]
+          .map((p) => digitos(p))
+          .filter(Boolean)
+          .map((p) => (p.startsWith("55") ? p : `55${p}`))
+          .map((p) => digitos(canonicalPhoneBR(`+${p}`)));
+        return doCandidato.includes(doContato);
+      })
+    : undefined;
+  if (!customer) return { ok: false, motivo: "telefone_nao_confere" };
   const { error } = await admin.from("contacts").update({ asaas_customer_id: customer.id }).eq("organization_id", orgId).eq("id", contactId);
   if (error) throw new Error(`asaas_vinculo_falhou: ${error.message}`);
   return { ok: true, customerId: customer.id };
