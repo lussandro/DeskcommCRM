@@ -42,6 +42,7 @@ const config: VercelConfig = {
     { path: "/api/v1/cron/kb-conversations-batch", schedule: "30 3 * * *" },
     { path: "/api/v1/cron/sync-model-catalog", schedule: "15 4 * * *" },
     { path: "/api/v1/cron/data-retention", schedule: "40 4 * * *" },
+    { path: "/api/v1/cron/asaas-reconcile", schedule: "0 6 * * *" },
   ],
   functions: {
     "app/api/v1/cron/**/route.ts": { maxDuration: 120 },

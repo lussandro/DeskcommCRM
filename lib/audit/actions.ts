@@ -577,6 +577,10 @@ export const AUDIT_ACTIONS = [
   "asaas.integration_config_changed",
   "asaas.webhook_token_rotated",
   "asaas.webhook_invalid_signature",
+  // Cron diário `asaas-reconcile` (spec §9) — audita só quando emitiu algo
+  // (vencida perdida, paga perdida, webhook religado ou pausado). Mesmo
+  // critério de `attendant.heartbeat_swept`: rodada vazia não grava linha.
+  "cron.asaas_reconcile",
 ] as const;
 
 /** Um código de auditoria. Derivado de `AUDIT_ACTIONS` — não redigite a lista. */
