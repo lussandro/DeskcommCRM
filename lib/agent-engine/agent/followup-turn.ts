@@ -39,6 +39,7 @@ import {
   type LeadCheckpointRow,
 } from './inbound-turn';
 import { isLeadInHandoff } from './human-handoff';
+import { resolveFlowPinnedAgent } from './followup-flow-agent';
 import { fusoDaOrganizacao } from './fuso-da-org';
 import type { LeadStateRow } from './lead-state';
 import { loadReentryTemplate, pickReentryVariant } from './reentry-template';
@@ -368,7 +369,15 @@ async function runFlowDrivenTurn(
       }
       return;
     }
+    // Quem fala é o agente que arma o fluxo (fixado na matrícula), não o sticky
+    // da conversa — ver o cabeçalho de followup-flow-agent.ts. `null` ⇒ como antes.
+    const pinned = await resolveFlowPinnedAgent(
+      pool,
+      { tenantId: target.tenantId, enrollmentId, channelSessionId: target.channelSessionId },
+      { log: runLog },
+    );
     await runAgentTurn(deps, job, pool, ctx, {
+      ...(pinned !== null ? { resolvedAgent: pinned } : {}),
       channelSessionId: target.channelSessionId,
       conversationId: target.conversationId,
       buildOpening: ({ previous, leadState, context, notesIndexBlock, projeta }) => {
