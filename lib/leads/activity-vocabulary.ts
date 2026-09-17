@@ -149,7 +149,19 @@ export type ActivityType =
    * doutrina de migrations), então o banco aceitaria a divergência calado e a
    * timeline cairia no fallback.
    */
-  | "contacts_merged";
+  | "contacts_merged"
+  /**
+   * As seis fases de uma cobrança no Asaas (spec 2026-09-17 · módulo de
+   * cobrança), refletidas na timeline do negócio pelo webhook (Task 5) e pela
+   * ferramenta de prorrogação (Task 4) — a mesma régua do invariante 3: toda
+   * escrita que muda o que o cliente deve emite atividade.
+   */
+  | "charge_overdue"
+  | "charge_paid"
+  | "charge_deleted"
+  | "charge_due_changed"
+  | "charge_reissued"
+  | "charge_waiting_slot";
 
 export const ACTIVITY_LABELS: Record<ActivityType, string> = {
   lead_created: "Entrou pelo WhatsApp",
@@ -248,6 +260,12 @@ export const ACTIVITY_LABELS: Record<ActivityType, string> = {
   // cadastros da mesma pessoa viraram um — e é por isso que este negócio pode
   // ter mudado de contato sem ninguém tê-lo movido.
   contacts_merged: "Contatos duplicados juntados",
+  charge_overdue: "Cobrança vencida",
+  charge_paid: "Cobrança paga",
+  charge_deleted: "Cobrança cancelada no Asaas",
+  charge_due_changed: "Vencimento alterado no Asaas",
+  charge_reissued: "Boleto prorrogado",
+  charge_waiting_slot: "Cobrança vencida aguardando outro retorno terminar",
 };
 
 /** Quando o tipo é legado/desconhecido, a linha ainda é honesta — sem jargão. */

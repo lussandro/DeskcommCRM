@@ -37,6 +37,7 @@ export interface CapacidadeServida {
   o_que_toca: string;
   risco: ToolRisk;
   pacotes: ReadonlyArray<ToolBundle>;
+  requer_integracao?: "asaas" | "asaas:reemitir";
 }
 
 export function juntarCatalogoComHandlers(
@@ -64,6 +65,7 @@ export function juntarCatalogoComHandlers(
       o_que_toca: entrada.oQueToca,
       risco: entrada.risco,
       pacotes: entrada.pacotes,
+      requer_integracao: entrada.requerIntegracao,
     };
   });
 }

@@ -21,6 +21,7 @@ import type { Tool } from 'ai';
 
 import { pickToolsFromMcp, type RuntimeHandoffSignal } from '@/lib/ai/runtime/tools';
 import { mintEphemeralToken, revokeEphemeralToken } from '@/lib/ai/runtime/mcp_token';
+import { carregarCapacidadesDeIntegracao } from '@/lib/asaas/config';
 import type { McpAuthResult } from '@/lib/mcp/auth';
 import type { McpContext } from '@/lib/mcp/types';
 
@@ -106,6 +107,7 @@ export async function buildMcpTurnTools(
   // O engine não usa o sinal de handoff da ponte (a tool está bloqueada) — dummy.
   const handoffSignal: RuntimeHandoffSignal = { triggered: false };
 
+  const capacidadesDeIntegracao = await carregarCapacidadesDeIntegracao(cfg.supabase, ids.organizationId);
   const tools = pickToolsFromMcp({
     supabase: cfg.supabase,
     ctx,
@@ -113,6 +115,7 @@ export async function buildMcpTurnTools(
     toolIds: allowed,
     handoffToolEnabled: false,
     handoffSignal,
+    capacidadesDeIntegracao,
     // "Em que negócios ele pode mexer" — o campo é OPCIONAL na interface, e
     // omiti-lo não é neutro: `escopo ?? []` e vazio significa NENHUM. Este
     // turno, que é o de produção, montava as capacidades de CRM sem escopo, e

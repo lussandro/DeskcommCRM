@@ -562,6 +562,21 @@ export const AUDIT_ACTIONS = [
   // modo de falha que o cabeçalho deste arquivo descreve: a ausência lê-se como
   // "isso não acontece".
   "vertical.jornada_aplicada",
+
+  // O módulo de cobrança Asaas (spec 2026-09-17). Reemissão e vínculo são o
+  // agente mexendo em dinheiro do cliente; as demais são a INSTALAÇÃO do
+  // módulo (ligar/desligar a integração, mudar a cerca de reemissão) e a
+  // SEGURANÇA do webhook que a alimenta (rotação de token, assinatura
+  // inválida) — sem elas, "quem ligou a cobrança automática nesta org?" e
+  // "alguém tentou falsificar o webhook?" não têm resposta.
+  "asaas.charge_reissued",
+  "asaas.contact_linked",
+  "asaas.company_linked",
+  "asaas.integration_enabled",
+  "asaas.integration_disabled",
+  "asaas.integration_config_changed",
+  "asaas.webhook_token_rotated",
+  "asaas.webhook_invalid_signature",
 ] as const;
 
 /** Um código de auditoria. Derivado de `AUDIT_ACTIONS` — não redigite a lista. */

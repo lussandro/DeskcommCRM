@@ -46,6 +46,13 @@ function contexto() {
 
 describe("a ponte do turno respeita `apenasHumano`", () => {
   const apenasHumano = TOOL_CATALOG.filter((t) => t.apenasHumano).map((t) => t.name);
+  // Este `contexto()` não passa `capacidadesDeIntegracao` (ausente = fechado —
+  // ver `ponte-nao-monta-integracao-desligada.test.ts`), então toda capacidade
+  // com `requerIntegracao` também não é montada aqui. Não é o que este arquivo
+  // guarda — é o outro filtro, independente — mas precisa entrar na conta do
+  // controle positivo abaixo, senão a folga vira falso vermelho a cada
+  // capacidade de integração nova.
+  const requerIntegracao = TOOL_CATALOG.filter((t) => t.requerIntegracao).length;
 
   it("existe ao menos uma capacidade marcada (guarda de vacuidade)", () => {
     // Sem isto, remover a marca de todas faria o teste abaixo passar por
@@ -81,7 +88,9 @@ describe("a ponte do turno respeita `apenasHumano`", () => {
     });
     // Controle positivo: se o filtro derrubasse tudo, o teste acima passaria
     // vacuamente e o agente ficaria sem ferramenta nenhuma.
-    expect(Object.keys(montadas).length).toBeGreaterThan(allTools.length - apenasHumano.length - 3);
+    expect(Object.keys(montadas).length).toBeGreaterThan(
+      allTools.length - apenasHumano.length - requerIntegracao - 3,
+    );
     expect(montadas).toHaveProperty("crm_search_contacts");
   });
 });

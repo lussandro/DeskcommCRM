@@ -47,6 +47,7 @@ import { finalizeHandoff } from "./handoff";
 import { loadHistoryWithBudget } from "./history";
 import { mintEphemeralToken, revokeEphemeralToken } from "./mcp_token";
 import { pickToolsFromMcp, type RuntimeHandoffSignal } from "./tools";
+import { carregarCapacidadesDeIntegracao } from "@/lib/asaas/config";
 import { serializeSteps } from "./serialize";
 import {
   CHANNEL_SESSION_REF_COLUMNS,
@@ -469,6 +470,7 @@ export async function runAgent(input: RunAgentInput): Promise<RunAgentResult> {
       supabase: admin,
     };
     const handoffSignal: RuntimeHandoffSignal = { triggered: false };
+    const capacidadesDeIntegracao = await carregarCapacidadesDeIntegracao(admin, run.organization_id);
     const tools = pickToolsFromMcp({
       supabase: admin,
       ctx,
@@ -479,6 +481,7 @@ export async function runAgent(input: RunAgentInput): Promise<RunAgentResult> {
       pipelineIds: (version as { pipeline_ids?: string[] }).pipeline_ids ?? [],
       handoffSignal,
       contactId: run.contact_id,
+      capacidadesDeIntegracao,
     });
 
     // 8) Load history with budget.

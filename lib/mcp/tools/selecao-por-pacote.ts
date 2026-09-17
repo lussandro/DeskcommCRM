@@ -60,6 +60,8 @@ export interface CapacidadeSelecionavel {
   name: string;
   risco: ToolRisk;
   pacotes: ReadonlyArray<ToolBundle>;
+  /** Capacidade de integração desligada não entra por pacote, mesmo `seguro`. */
+  requerIntegracao?: string;
 }
 
 export type EstadoPacote = "ligado" | "parcial" | "desligado";
@@ -77,7 +79,7 @@ export function capacidadesAutomaticasDoPacote(
   pacote: ToolBundle,
 ): string[] {
   return doPacote(catalogo, pacote)
-    .filter((c) => entraPorPacote(c.risco))
+    .filter((c) => entraPorPacote(c.risco) && !c.requerIntegracao)
     .map((c) => c.name);
 }
 
@@ -87,7 +89,7 @@ export function capacidadesCriticasDoPacote(
   pacote: ToolBundle,
 ): string[] {
   return doPacote(catalogo, pacote)
-    .filter((c) => !entraPorPacote(c.risco))
+    .filter((c) => !entraPorPacote(c.risco) && !c.requerIntegracao)
     .map((c) => c.name);
 }
 

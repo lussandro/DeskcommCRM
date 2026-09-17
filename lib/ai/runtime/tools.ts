@@ -58,6 +58,14 @@ export interface PickToolsInput {
    * `crm_book_appointment` exige `contact_id` e ninguém o fornecia.
    */
   contactId?: string | null;
+  /**
+   * Capacidades de integração que a organização tem LIGADAS (ex.: "asaas",
+   * "asaas:reemitir" — `lib/asaas/config.ts` →
+   * `carregarCapacidadesDeIntegracao`). Opcional; ausente = `new Set()` —
+   * fechado, a direção segura. Tool do catálogo com `requerIntegracao` só é
+   * montada quando o conjunto a contém.
+   */
+  capacidadesDeIntegracao?: ReadonlySet<string>;
 }
 
 const HANDOFF_TOOL_NAME = "crm_request_human_handoff";
@@ -281,6 +289,11 @@ export function pickToolsFromMcp(input: PickToolsInput): Record<string, Tool> {
     // A marca era declaração sem efeito no runtime: eu a criei no catálogo e
     // não a apliquei aqui. Não montar é o que faz a declaração valer.
     if (catalogEntry(def.name)?.apenasHumano) continue;
+
+    // Capacidade de integração (Asaas hoje) só entra com a organização tendo
+    // a capacidade ligada — ver o comentário de `capacidadesDeIntegracao`.
+    const req = catalogEntry(def.name)?.requerIntegracao;
+    if (req && !(input.capacidadesDeIntegracao ?? new Set()).has(req)) continue;
 
     result[def.name] = wrapMcpTool(def, input);
   }

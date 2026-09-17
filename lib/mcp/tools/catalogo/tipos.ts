@@ -40,6 +40,12 @@ export interface McpToolCatalogEntry {
    * usar, e ela nunca dispara.
    */
   apenasHumano?: boolean;
+  /**
+   * Só chega ao modelo quando a organização tem essa capacidade de
+   * integração (`lib/asaas/config.ts` → `carregarCapacidadesDeIntegracao`).
+   * Nunca entra por pacote — ver `selecao-por-pacote.ts`.
+   */
+  requerIntegracao?: "asaas" | "asaas:reemitir";
 }
 
 /**
