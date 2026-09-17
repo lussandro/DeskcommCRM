@@ -115,4 +115,48 @@ describe("empresas (migration 0260)", () => {
     sql(`delete from public.crm_companies where id='${EMP_A}';`);
     expect(sql(`select count(*) from public.contacts where id in ('${CT_A1}','${CT_A2}');`).trim()).toBe("2");
   });
+
+  // Task 8: o passo genérico de repoint de FK (5) só cobre coluna única —
+  // `billing_contact_id` é FK composta e fica de fora. Sem tratamento
+  // explícito em `fn_mesclar_contatos`, uma empresa cujo principal era um
+  // secundário mesclado ficaria com o principal apontando para a lápide
+  // (contato `is_merged_into`), ou — pior — herdaria um principal de FORA da
+  // própria empresa. Uuids frescos, independentes do estado deixado pelos
+  // casos acima (EMP_A já foi deletada).
+  it("mesclar: principal de B era o secundário; sobrevivente é de A → B fica sem principal, A intacta", () => {
+    const EMP_M1 = "aaaaaaaa-0000-0000-0000-00000000c0e1";
+    const EMP_M2 = "aaaaaaaa-0000-0000-0000-00000000c0e2";
+    const P1 = "aaaaaaaa-0000-0000-0000-00000000c0f1";
+    const S1 = "aaaaaaaa-0000-0000-0000-00000000c0f2";
+    sql(`
+      insert into public.crm_companies (id, organization_id, name) values
+        ('${EMP_M1}', '${ORG_A}', 'Empresa M1'),
+        ('${EMP_M2}', '${ORG_A}', 'Empresa M2');
+      insert into public.contacts (id, organization_id, name, phone_number, company_id) values
+        ('${P1}', '${ORG_A}', 'Principal M1', '+5551999991001', '${EMP_M1}'),
+        ('${S1}', '${ORG_A}', 'Secundario M2', '+5551999991002', '${EMP_M2}');
+      update public.crm_companies set billing_contact_id = '${P1}' where id = '${EMP_M1}';
+      update public.crm_companies set billing_contact_id = '${S1}' where id = '${EMP_M2}';
+      select public.fn_mesclar_contatos('${ORG_A}', '${P1}', array['${S1}']::uuid[]);
+    `);
+    expect(sql(`select company_id::text from public.contacts where id = '${P1}';`).trim()).toBe(EMP_M1);
+    expect(sql(`select coalesce(billing_contact_id::text,'null') from public.crm_companies where id = '${EMP_M2}';`).trim()).toBe("null");
+    expect(sql(`select billing_contact_id::text from public.crm_companies where id = '${EMP_M1}';`).trim()).toBe(P1);
+  });
+
+  it("mesclar: principal de B era o secundário; sobrevivente também é de B → B ganha o sobrevivente como principal", () => {
+    const EMP_M3 = "aaaaaaaa-0000-0000-0000-00000000c0e3";
+    const P2 = "aaaaaaaa-0000-0000-0000-00000000c0f3";
+    const S2 = "aaaaaaaa-0000-0000-0000-00000000c0f4";
+    sql(`
+      insert into public.crm_companies (id, organization_id, name) values
+        ('${EMP_M3}', '${ORG_A}', 'Empresa M3');
+      insert into public.contacts (id, organization_id, name, phone_number, company_id) values
+        ('${P2}', '${ORG_A}', 'Principal M3', '+5551999991003', '${EMP_M3}'),
+        ('${S2}', '${ORG_A}', 'Secundario M3', '+5551999991004', '${EMP_M3}');
+      update public.crm_companies set billing_contact_id = '${S2}' where id = '${EMP_M3}';
+      select public.fn_mesclar_contatos('${ORG_A}', '${P2}', array['${S2}']::uuid[]);
+    `);
+    expect(sql(`select billing_contact_id::text from public.crm_companies where id = '${EMP_M3}';`).trim()).toBe(P2);
+  });
 });
