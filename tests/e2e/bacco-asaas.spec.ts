@@ -138,9 +138,10 @@ test("asaas: ativar, vincular empresa pelo CNPJ e desativar", async ({ page }) =
 
   // ── 5. Testar conexão → Ativar ───────────────────────────────────────────
   await page.getByRole("button", { name: "Testar conexão" }).click();
-  await expect(page.getByText(/conect|sucesso|ok/i).first(), "mensagem de sucesso do teste de conexão").toBeVisible({
-    timeout: 15_000,
-  });
+  await expect(
+    page.getByText("Conexão com o Asaas funcionando."),
+    "mensagem de sucesso do teste de conexão (texto exato de app/actions/integrations/asaas.ts)",
+  ).toBeVisible({ timeout: 30_000 });
   await foto(page, "asaas-04-testar-conexao-ok");
   await page.getByRole("button", { name: "Ativar", exact: true }).click();
   await expect(page.getByText("Ativa", { exact: true }), "badge Ativa aparece no cabeçalho").toBeVisible({
