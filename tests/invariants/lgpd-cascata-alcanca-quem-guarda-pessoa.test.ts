@@ -51,6 +51,10 @@ const PADRAO_PII =
  * razão precisa dizer QUANDO sai, não só por que está.
  */
 const DIVIDA_LGPD_CONHECIDA: Record<string, string> = {
+  crm_companies:
+    "Pessoa jurídica: name/cnpj/notes são da empresa, não do titular. A FK " +
+    "billing_contact_id é solta pelo trigger trg_crm_companies_principal_anonimizado; " +
+    "não há dado pessoal a redigir aqui.",
   calendar_appointments:
     "Achado do levantamento 13 §2 (QAVivo/maestro). Guarda title e notes do compromisso. " +
     "Conserto DESPACHADO ao Arquiteto — sai desta lista no mesmo commit que acrescentar a tabela à cascata.",

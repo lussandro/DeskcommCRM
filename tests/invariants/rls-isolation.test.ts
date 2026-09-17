@@ -1,5 +1,6 @@
 import { execFileSync } from "node:child_process";
 import { beforeAll, describe, expect, it } from "vitest";
+import { ORG_A, ORG_B, USER_A, USER_B, seedOrg } from "./rls-isolation.helpers";
 
 /**
  * G1-02 — RLS isolation invariant.
@@ -43,11 +44,7 @@ function sql(script: string): string {
   ).trim();
 }
 
-// Fixed UUIDs make the seed idempotent (on conflict do nothing).
-const ORG_A = "aaaaaaaa-0000-4000-8000-000000000001";
-const ORG_B = "bbbbbbbb-0000-4000-8000-000000000002";
-const USER_A = "aaaaaaaa-1111-4000-8000-000000000001";
-const USER_B = "bbbbbbbb-1111-4000-8000-000000000002";
+// Session ids stay local: only org/user identity + seedOrg were extracted.
 const SESS_A = "aaaaaaaa-2222-4000-8000-000000000001";
 const SESS_B = "bbbbbbbb-2222-4000-8000-000000000002";
 
@@ -68,23 +65,6 @@ function countAs(userId: string, countQuery: string): number {
     throw new Error(`unexpected psql output: ${out}`);
   }
   return Number(last);
-}
-
-function seedOrg(org: string, user: string, sess: string, tag: string): string {
-  // No real PII: synthetic emails/names only (LGPD).
-  return `
-    insert into auth.users (id, email) values ('${user}', 'rls-${tag}@invariant.test')
-      on conflict (id) do nothing;
-    insert into public.organizations (id, slug, legal_name, display_name)
-      values ('${org}', 'rls-inv-${tag}', 'RLS Invariant ${tag}', 'RLS ${tag}')
-      on conflict (id) do nothing;
-    insert into public.user_organizations (user_id, organization_id, role, accepted_at)
-      values ('${user}', '${org}', 'agent', now())
-      on conflict do nothing;
-    insert into public.channel_sessions (id, organization_id, waha_session_name, webhook_secret_encrypted)
-      values ('${sess}', '${org}', 'rls-inv-${tag}', '\\x00'::bytea)
-      on conflict (id) do nothing;
-  `;
 }
 
 beforeAll(() => {
