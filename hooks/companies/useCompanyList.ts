@@ -14,7 +14,7 @@ export interface CompanyListFilters {
   limit?: number;
 }
 
-export function useCompanyList(filters: CompanyListFilters) {
+export function useCompanyList(filters: CompanyListFilters, opts?: { enabled?: boolean }) {
   return useInfiniteQuery({
     queryKey: ["companies", filters],
     initialPageParam: undefined as string | undefined,
@@ -32,5 +32,6 @@ export function useCompanyList(filters: CompanyListFilters) {
     },
     getNextPageParam: (lastPage) =>
       lastPage.meta?.has_more ? lastPage.meta.cursor : undefined,
+    enabled: opts?.enabled ?? true,
   });
 }

@@ -41,7 +41,7 @@ interface Props {
 export function EditContactDialog({ contact, open, onOpenChange, customFieldDefs = [] }: Props) {
   const t = useT();
   const update = useUpdateContact(contact.id);
-  const temEmpresas = useTemEmpresas();
+  const temEmpresas = useTemEmpresas(open);
   const [serverError, setServerError] = useState<string | null>(null);
 
   const form = useForm<FormShape>({

@@ -24,7 +24,7 @@ vi.mock("@/hooks/contacts/useUpdateContact", () => ({
 
 const useCompanyListMock = vi.fn();
 vi.mock("@/hooks/companies/useCompanyList", () => ({
-  useCompanyList: (filters: unknown) => useCompanyListMock(filters),
+  useCompanyList: (filters: unknown, opts: unknown) => useCompanyListMock(filters, opts),
 }));
 
 const CONTACT: Contact = {
@@ -98,6 +98,18 @@ describe("EditContactDialog · campo Empresa", () => {
     useCompanyListMock.mockReturnValue(vazio());
     envolver(<EditContactDialog contact={CONTACT} open onOpenChange={vi.fn()} />);
     expect(screen.queryByText("Empresa")).not.toBeInTheDocument();
+  });
+
+  it("consulta empresas só enquanto o diálogo está aberto", () => {
+    useCompanyListMock.mockReturnValue(vazio());
+    envolver(<EditContactDialog contact={CONTACT} open={false} onOpenChange={vi.fn()} />);
+    const chamadaFechado = useCompanyListMock.mock.calls.find((c) => c[0]?.limit === 1);
+    expect(chamadaFechado?.[1]).toEqual({ enabled: false });
+
+    useCompanyListMock.mockClear();
+    envolver(<EditContactDialog contact={CONTACT} open onOpenChange={vi.fn()} />);
+    const chamadaAberto = useCompanyListMock.mock.calls.find((c) => c[0]?.limit === 1);
+    expect(chamadaAberto?.[1]).toEqual({ enabled: true });
   });
 
   it("com pelo menos uma empresa, o campo aparece", () => {

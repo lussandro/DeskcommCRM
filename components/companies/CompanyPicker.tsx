@@ -11,8 +11,8 @@ import type { Company } from "@/lib/types/companies";
 const NENHUMA = "__nenhuma__";
 const NOVA = "__nova__";
 
-export function useTemEmpresas(): boolean {
-  const q = useCompanyList({ limit: 1 });
+export function useTemEmpresas(enabled = true): boolean {
+  const q = useCompanyList({ limit: 1 }, { enabled });
   return (q.data?.pages[0]?.data.length ?? 0) > 0;
 }
 
