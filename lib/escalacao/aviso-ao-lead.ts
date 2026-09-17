@@ -70,6 +70,8 @@ export type MotivoDoAviso =
   | "suspeita_de_opt_out"
   /** O teto de gasto com IA parou o atendimento automático. */
   | "orcamento_de_ia"
+  /** O cliente disse que pagou e o sistema de pagamentos não mostra a cobrança paga. */
+  | "pagamento_nao_consta"
   /** O sistema decidiu escalar (sentimento, baixa confiança, etapa, termo jurídico…). */
   | "outro";
 
@@ -126,6 +128,14 @@ const ABERTURAS: Record<MotivoDoAviso, readonly string[]> = {
     "Vou passar seu atendimento para uma pessoa da equipe.",
     "A partir daqui quem continua com você é alguém do time.",
     "Estou transferindo esta conversa para um atendente humano.",
+  ],
+  // O cliente diz que pagou; o sistema de pagamentos ainda não mostra. A frase NÃO
+  // concorda nem discorda: constata o que o sistema vê e chama quem confere. Sai por
+  // código, sem modelo — é a única saída que não pode inventar recebimento.
+  pagamento_nao_consta: [
+    "Ainda não consta o pagamento no sistema, então pedi para uma pessoa do financeiro conferir.",
+    "Por aqui a cobrança segue em aberto; passei para o financeiro verificar o que aconteceu.",
+    "O sistema de pagamentos não identificou esse pagamento até agora — alguém do financeiro vai olhar.",
   ],
   outro: [
     "Esse caso é melhor resolvido por uma pessoa. Já acionei o time.",

@@ -152,6 +152,11 @@ import { READ_ONLY_TOOLS, wrapToolsWithBreaker, type ToolBreakerThresholds } fro
 import { loadChannelProvider, mencionaAnexo, runBeforeSend } from '../guardrails/before-send';
 import { decidirFallbackHumano, type VetoDoTurno } from './fallback-humano';
 import {
+  agenteTemCobranca,
+  decidirAlegacaoDePagamento,
+  situacaoDasCobrancasDoContato,
+} from './alegacao-de-pagamento';
+import {
   clienteAlegaPagamento,
   COBRANCA_TOOL_NAMES,
   resultadoMostraCobrancaPaga,
@@ -517,8 +522,19 @@ export async function lerSinaisDeAnexo(
   | undefined
 > {
   try {
-    const { rows } = await db.query<{ com_midia: boolean; ultima_inbound: string | null }>(
+    const { rows } = await db.query<{ com_midia: boolean; ultima_inbound: string | null; inbounds_pendentes: string | null }>(
       `select
+         (select string_agg(m.body, E'\\n' order by coalesce(m.sent_at, m.created_at), m.id)
+            from messages m
+           where m.organization_id = $1 and m.conversation_id = $2
+             and m.direction = 'inbound' and m.body is not null
+             and coalesce(m.sent_at, m.created_at) > coalesce(
+                   (select max(coalesce(o.sent_at, o.created_at))
+                      from messages o
+                     where o.organization_id = $1 and o.conversation_id = $2
+                       and o.direction = 'outbound'),
+                   '-infinity'::timestamptz)
+         ) as inbounds_pendentes,
          exists (
            select 1
              from messages m
@@ -546,7 +562,9 @@ export async function lerSinaisDeAnexo(
         inboundComMidiaDesdeUltimoOutbound: row.com_midia === true,
         ultimaInboundMencionaAnexo: mencionaAnexo(ultimaInbound),
       },
-      clienteAlegouPagamento: clienteAlegaPagamento(ultimaInbound),
+      // TODAS as inbounds sem resposta contam ("já paguei" e depois "você viu?" —
+      // Codex review): a alegação não some porque o cliente mandou mais uma mensagem.
+      clienteAlegouPagamento: clienteAlegaPagamento(row.inbounds_pendentes ?? ultimaInbound),
     };
   } catch (err) {
     log.warn('sinais de anexo não lidos — gate de comprovante desarmado neste turno', {
@@ -2401,6 +2419,64 @@ async function executarTurnoDoAgente(
   // resposta do turno por causa de uma consulta que não respondeu calaria o atendimento
   // inteiro, que é pior do que o defeito que este sinal persegue.
   const clienteAlegouPagamento = sinaisDoCliente?.clienteAlegouPagamento ?? false;
+  // O agente tem ferramenta de cobrança? Só aí a regra de pagamento (interceptação
+  // abaixo e gates de pagamento no envio) arma — adega, clínica e loja sem Asaas não
+  // ganham caso humano nem veto por um "paguei" que não é deles.
+  const agenteCobra = agentConfig !== null && agenteTemCobranca(agentConfig.toolIds);
+
+  // ── ALEGAÇÃO DE PAGAMENTO: A DECISÃO É DO CÓDIGO, NÃO DO MODELO ─────────────
+  // Ver o cabeçalho de `alegacao-de-pagamento.ts`. O cliente disse que pagou (ou que
+  // mandou comprovante) e o agente cobra: consulta o Asaas pelo titular, cobrança por
+  // cobrança. Qualquer cobrança em aberto, ou sem como verificar ⇒ abre caso humano e
+  // manda a linha fixa; o modelo NÃO roda neste turno — é a única forma de ele não
+  // concordar com um pagamento que ninguém viu. Sem cobrança em aberto ⇒ segue.
+  if (!preview && clienteAlegouPagamento && agenteCobra) {
+    const situacao = await situacaoDasCobrancasDoContato(deps.crmCfg.supabase, tenantId, leadId);
+    const decisao = decidirAlegacaoDePagamento(situacao);
+    if (decisao.acao === 'humano') {
+      const caso = await openCase(
+        pool,
+        { tenantId, conversationId: input.conversationId, agentId: agentConfig?.agentId ?? null },
+        {
+          title: 'Cliente diz que pagou — pagamento não consta',
+          summary:
+            situacao.kind === 'ok'
+              ? `O cliente afirma ter pago, mas o Asaas ainda mostra ${situacao.emAberto} cobrança(s) em aberto (${situacao.vencidas} vencida(s)). Conferir o pagamento e responder por aqui.`
+              : situacao.kind === 'sem_vinculo'
+                ? 'O cliente afirma ter pago, mas o contato não está vinculado a um cliente do Asaas. Vincular pelo CPF/CNPJ e conferir.'
+                : `O cliente afirma ter pago e não foi possível consultar o Asaas (${situacao.kind === 'erro' ? situacao.detalhe : situacao.kind}). Conferir manualmente.`,
+          blocker: 'pagamento_nao_consta',
+          source: 'guardrail_autofallback',
+          // Sem `contextSnapshot`: `buildCaseContextSnapshot` é declarado mais abaixo
+          // (const) e aqui ainda não existe — o modelo nem rodou, não há o que resumir.
+        },
+      ).catch((err) => {
+        runLog.error('alegação de pagamento: abertura de caso falhou', {
+          error: err instanceof Error ? err.message.slice(0, 200) : 'erro desconhecido',
+        });
+        return { ok: false as const, error: { code: 'erro_ao_abrir', message: '' } };
+      });
+      if (caso.ok) moverParaHandoffBestEffort('pagamento_nao_consta');
+      // A linha sai pela cadeia de guardrails (STOP, janela, LGPD valem). Caso já aberto
+      // NÃO repete a frase: quem está com a conversa é uma pessoa, e o cliente já ouviu.
+      const jaHaviaCaso = !caso.ok && caso.error.code === 'case_already_open';
+      const aviso = jaHaviaCaso
+        ? ({ avisado: false, porque: 'caso_ja_aberto' } as const)
+        : await avisarLeadDaEscalacao(pool, avisoDaEscalacao().ids, {
+            ...avisoDaEscalacao().base,
+            motivo: 'pagamento_nao_consta',
+          });
+      runLog.warn('cliente alegou pagamento sem cobrança paga — caso humano, modelo não roda', {
+        abort_reason: 'pagamento_nao_consta',
+        motivo: decisao.motivo,
+        situacao: situacao.kind,
+        caso_aberto: caso.ok,
+        ja_havia_caso: jaHaviaCaso,
+        lead_avisado: aviso.avisado,
+      });
+      return;
+    }
+  }
   // Arma o `pagamentoSoPelaFerramentaGate`: vira true quando uma tool de cobrança devolve
   // ALGUMA cobrança paga NESTE turno (marcado no wrapper das tools MCP, mais abaixo — o
   // mesmo lugar e o mesmo motivo do `agendaToolCalledThisTurn`).
@@ -2807,9 +2883,11 @@ async function executarTurnoDoAgente(
             // passos anteriores do mesmo laço, então o valor já está certo quando ele
             // decide falar) — mesma disciplina do `agendaToolCalledThisTurn`.
             pagamentos: {
-              active: true,
+              active: agenteCobra,
               cobrancaPagaPelaFerramentaNesteTurno,
-              casoHumanoAbertoNesteTurno: openedCaseThisTurn,
+              // Caso já aberto ANTES do turno conta: senão o gate de alegação calaria o
+              // agente para sempre a cada "já paguei" repetido (revisão adversarial, 2ª).
+              casoHumanoAbertoNesteTurno: openedCaseThisTurn || hasOpenCase,
               clienteAlegouPagamento,
             },
             ...(deps.knobs.disclosureMode !== undefined
@@ -2953,7 +3031,7 @@ async function executarTurnoDoAgente(
               // Pelo valor VIVO, mesma razão do `openedCaseThisTurn` logo acima.
               pagamentos: {
                 ...beforeSendArgs.pagamentos,
-                casoHumanoAbertoNesteTurno: openedCaseThisTurn,
+                casoHumanoAbertoNesteTurno: openedCaseThisTurn || hasOpenCase,
               },
             });
           }
