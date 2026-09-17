@@ -1,0 +1,118 @@
+{
+  "schema_version": 1,
+  "diagram_type": "architecture",
+  "meta": {
+    "title": "Empresas — o cliente pessoa jurídica com vários contatos",
+    "subtitle": "Cadastro e vinculação de contatos; faturamento aponta para o principal",
+    "output": "empresas.html",
+    "quality_profile": "standard"
+  },
+  "lanes": [
+    { "id": "tela", "label": "Tela" },
+    { "id": "api", "label": "API" },
+    { "id": "dados", "label": "Dados" }
+  ],
+  "mainPath": ["lista", "detalhe", "rota-vinculo", "contacts-company-id"],
+  "nodes": [
+    {
+      "id": "lista",
+      "lane": "tela",
+      "col": 0,
+      "type": "ui",
+      "label": "Lista de empresas (/app/companies)"
+    },
+    {
+      "id": "detalhe",
+      "lane": "tela",
+      "col": 1,
+      "type": "ui",
+      "label": "Detalhe da empresa (/app/companies/[id])"
+    },
+    {
+      "id": "contato-360",
+      "lane": "tela",
+      "col": 2,
+      "type": "ui",
+      "label": "Detalhe do contato (lado-a-lado empresa)"
+    },
+    {
+      "id": "rota-companies",
+      "lane": "api",
+      "col": 0,
+      "type": "service",
+      "label": "GET/POST /api/v1/companies (CRUD)"
+    },
+    {
+      "id": "rota-vinculo",
+      "lane": "api",
+      "col": 1,
+      "type": "service",
+      "label": "POST/DELETE /api/v1/contacts/.../company (vincular)"
+    },
+    {
+      "id": "crm-companies",
+      "lane": "dados",
+      "col": 0,
+      "type": "database",
+      "label": "crm_companies — id, org, name, phone, email, active_at"
+    },
+    {
+      "id": "contacts-company-id",
+      "lane": "dados",
+      "col": 1,
+      "type": "database",
+      "label": "contacts.company_id — coluna nullable"
+    },
+    {
+      "id": "crm-lead-links-company",
+      "lane": "dados",
+      "col": 2,
+      "type": "database",
+      "label": "crm_lead_links.company — referencia empresa em polimórfico"
+    }
+  ],
+  "edges": [
+    {
+      "id": "lista-chama-rota",
+      "from": "lista",
+      "to": "rota-companies",
+      "label": "GET /api/v1/companies"
+    },
+    {
+      "id": "detalhe-chama-rota-vinculo",
+      "from": "detalhe",
+      "to": "rota-vinculo",
+      "label": "POST/DELETE vincular contato"
+    },
+    {
+      "id": "contato-360-le-coluna",
+      "from": "contato-360",
+      "to": "contacts-company-id",
+      "label": "leitura do company_id no detalhe"
+    },
+    {
+      "id": "rota-companies-le-tabela",
+      "from": "rota-companies",
+      "to": "crm-companies",
+      "label": "SELECT/INSERT/UPDATE crm_companies"
+    },
+    {
+      "id": "rota-vinculo-atualiza-coluna",
+      "from": "rota-vinculo",
+      "to": "contacts-company-id",
+      "label": "UPDATE contacts.company_id"
+    },
+    {
+      "id": "crm-companies-referencia-contato",
+      "from": "crm-companies",
+      "to": "contacts-company-id",
+      "label": "billing_contact_id aponta o principal para cobrança"
+    },
+    {
+      "id": "crm-lead-links-referencia-empresa",
+      "from": "crm-lead-links-company",
+      "to": "crm-companies",
+      "label": "vincular empresa em lead_links polimórfico"
+    }
+  ]
+}
