@@ -182,6 +182,15 @@ export const NAV_CATALOG = [
     sidebar: true,
   },
   {
+    href: "/app/companies",
+    label: "Empresas",
+    description: "Clientes pessoa jurídica e os contatos de cada um.",
+    icon: "Buildings",
+    group: "crm",
+    section: "O dia a dia da venda",
+    sidebar: true,
+  },
+  {
     // Extraída do PR #418 (@clinicacentrodosorrisosc-code). Fica no CRM e no
     // sidebar porque é tela de USO DIÁRIO — quem atende abre para ver o que
     // vence hoje, do mesmo jeito que abre o Inbox. Sem `minRole`: `viewer` VÊ

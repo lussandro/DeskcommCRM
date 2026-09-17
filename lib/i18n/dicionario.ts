@@ -8719,6 +8719,58 @@ export const DICIONARIO: Traducoes = {
   },
   "Jornada ativada": { es: "Recorrido activado" },
   "Não consegui ativar tudo": { es: "No pude activar todo" },
+
+  // Empresas (0260)
+  Empresas: { es: "Empresas" },
+  "Clientes pessoa jurídica e os contatos de cada um.": {
+    es: "Clientes persona jurídica y los contactos de cada uno.",
+  },
+  "Nova empresa": { es: "Nueva empresa" },
+  "Buscar por nome, fantasia ou CNPJ…": { es: "Buscar por nombre, fantasía o CNPJ…" },
+  "Erro ao carregar empresas.": { es: "Error al cargar empresas." },
+  "Nenhuma empresa ainda.": { es: "Ninguna empresa todavía." },
+  "Cadastre a primeira para agrupar os contatos de um mesmo cliente.": {
+    es: "Registre la primera para agrupar los contactos de un mismo cliente.",
+  },
+  empresa: { es: "empresa" },
+  empresas: { es: "empresas" },
+  "carregadas — há mais resultados": { es: "cargadas — hay más resultados" },
+  "Nome fantasia": { es: "Nombre fantasía" },
+  "Cadastre a empresa para agrupar os contatos deste cliente.": {
+    es: "Registre la empresa para agrupar los contactos de este cliente.",
+  },
+  "Criar empresa": { es: "Crear empresa" },
+  "Empresa criada": { es: "Empresa creada" },
+  "Editar empresa": { es: "Editar empresa" },
+  "Atualize os dados desta empresa.": { es: "Actualice los datos de esta empresa." },
+  "Empresa atualizada": { es: "Empresa actualizada" },
+  "Contatos da empresa": { es: "Contactos de la empresa" },
+  "Vincular contato": { es: "Vincular contacto" },
+  "Nenhum contato vinculado. Vincule quem fala por esta empresa.": {
+    es: "Ningún contacto vinculado. Vincule a quien habla por esta empresa.",
+  },
+  "Número principal para cobrança": { es: "Número principal para cobro" },
+  "Tornar principal": { es: "Hacer principal" },
+  Desvincular: { es: "Desvincular" },
+  "Busque um contato para vinculá-lo a esta empresa.": {
+    es: "Busque un contacto para vincularlo a esta empresa.",
+  },
+  "já está em outra empresa": { es: "ya está en otra empresa" },
+  Vincular: { es: "Vincular" },
+  "Nenhum contato encontrado.": { es: "Ningún contacto encontrado." },
+  "Erro ao carregar empresa.": { es: "Error al cargar empresa." },
+  Dados: { es: "Datos" },
+  Observações: { es: "Observaciones" },
+  "Já existe uma empresa com este CNPJ nesta organização.": {
+    es: "Ya existe una empresa con este CNPJ en esta organización.",
+  },
+  "Contato ou empresa inválidos para este vínculo.": {
+    es: "Contacto o empresa inválidos para este vínculo.",
+  },
+  "Empresa não encontrada.": { es: "Empresa no encontrada." },
+  "O número principal precisa ser um contato desta empresa.": {
+    es: "El número principal debe ser un contacto de esta empresa.",
+  },
 };
 
 /**
