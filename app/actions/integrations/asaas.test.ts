@@ -154,6 +154,17 @@ describe("salvarConfigAsaas", () => {
     expect("token" in r).toBe(false);
   });
 
+  it("só dias, sem max_por_cobranca → config_invalida, não salva", async () => {
+    const { admin, db } = bancoFalso();
+    vi.mocked(createAdminClient).mockReturnValue(admin);
+    const r = await salvarConfigAsaas({ apiKey: "asaas_key_123", ambiente: "sandbox", reemissao: { dias: 5 } });
+    expect(r.ok).toBe(false);
+    if (r.ok) throw new Error("esperava ok:false");
+    expect(r.error).toBe("config_invalida");
+    expect(r.detalhe).toMatch(/máximo de prorrogações por cobrança/);
+    expect(db.tenant_integrations).toHaveLength(0);
+  });
+
   it("manager → forbidden", async () => {
     vi.mocked(resolveActiveOrg).mockResolvedValue({ orgId: ORG, role: "manager", name: "Org" } as never);
     const { admin } = bancoFalso();

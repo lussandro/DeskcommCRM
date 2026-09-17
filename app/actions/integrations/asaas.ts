@@ -73,7 +73,9 @@ export async function salvarConfigAsaas(input: SalvarInput): Promise<SalvarResul
     followup_pointer_id: input.followup_pointer_id ?? null,
     reemissao: input.reemissao ?? null,
   });
-  if (!parsedConfig.success) return { ok: false, error: "config_invalida" };
+  if (!parsedConfig.success) {
+    return { ok: false, error: "config_invalida", detalhe: parsedConfig.error.issues[0]?.message };
+  }
   const config = parsedConfig.data;
 
   if (config.followup_pointer_id) {

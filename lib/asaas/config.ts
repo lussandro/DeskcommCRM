@@ -4,12 +4,35 @@ import { decryptWebhookSecret } from "@/lib/webhooks/secrets";
 import { logger } from "@/lib/logger";
 import { AsaasCliente } from "./cliente";
 
-/** `store_metadata` da linha de tenant_integrations. Sem default para a cerca: os dois ou nenhum. */
+/**
+ * `store_metadata` da linha de tenant_integrations. Sem default para a cerca: os
+ * dois campos ou nenhum — metade preenchida é RECUSADA (`superRefine`), nunca
+ * apagada em silêncio. Preencher só `dias` e a linha salvar sem prorrogação
+ * nenhuma é o defeito que a Regra nº 1 proíbe: parece configurado e não é.
+ */
 export const configSchema = z
   .object({
     ambiente: z.enum(["sandbox", "producao"]),
     followup_pointer_id: z.string().uuid().nullable().optional().default(null),
     reemissao: z.object({ dias: z.number().int().min(1).max(90).optional(), max_por_cobranca: z.number().int().min(1).max(10).optional() }).nullable().optional(),
+  })
+  .superRefine((v, ctx) => {
+    if (!v.reemissao) return;
+    const { dias, max_por_cobranca } = v.reemissao;
+    if (dias !== undefined && max_por_cobranca === undefined) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["reemissao", "max_por_cobranca"],
+        message: "Informe também o máximo de prorrogações por cobrança.",
+      });
+    }
+    if (max_por_cobranca !== undefined && dias === undefined) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["reemissao", "dias"],
+        message: "Informe também os dias de prorrogação.",
+      });
+    }
   })
   .transform((v) => ({
     ambiente: v.ambiente,
@@ -31,7 +54,12 @@ export interface IntegracaoAsaas {
 
 const COLS = "id, status, store_metadata, oauth_access_token_encrypted, webhook_path_token";
 
-/** null = módulo desligado/inexistente/quebrado. NUNCA lança: quem chama trata null como "sem módulo". */
+/**
+ * null = módulo desligado/inexistente/quebrado. NUNCA lança: quem chama trata null como "sem módulo".
+ * `safeParse` aqui é fail-closed de propósito: uma linha legada com `reemissao` pela metade
+ * (só `dias` ou só `max_por_cobranca` — hoje impossível de GRAVAR, mas pode existir de antes
+ * do `superRefine`) vira "config inválida → módulo desligado", nunca comportamento adivinhado.
+ */
 export async function carregarIntegracaoAsaas(admin: SupabaseClient, orgId: string, opts: { exigirHealthy?: boolean } = {}): Promise<IntegracaoAsaas | null> {
   const { data, error } = await admin.from("tenant_integrations").select(COLS).eq("organization_id", orgId).eq("provider", "asaas").maybeSingle();
   if (error || !data) return null;

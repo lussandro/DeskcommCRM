@@ -50,8 +50,10 @@ export function FormularioAsaas({ precisaDeChave, configAtual, pointers, validac
     configAtual?.reemissao?.max_por_cobranca ? String(configAtual.reemissao.max_por_cobranca) : "",
   );
   const [tokenNovo, setTokenNovo] = useState<{ token: string; webhookUrl: string } | null>(null);
+  const [erroReemissao, setErroReemissao] = useState<string | null>(null);
 
   function salvar() {
+    setErroReemissao(null);
     startTransition(async () => {
       const diasNum = dias.trim() ? Number(dias) : undefined;
       const maxNum = maxPorCobranca.trim() ? Number(maxPorCobranca) : undefined;
@@ -62,6 +64,11 @@ export function FormularioAsaas({ precisaDeChave, configAtual, pointers, validac
         reemissao: diasNum !== undefined || maxNum !== undefined ? { dias: diasNum, max_por_cobranca: maxNum } : null,
       });
       if (!r.ok) {
+        if (r.error === "config_invalida" && r.detalhe) {
+          setErroReemissao(r.detalhe);
+          toast.error(r.detalhe);
+          return;
+        }
         const msg = r.error === "fluxo_invalido" ? r.detalhe : ERROS[r.error];
         toast.error(t(msg ?? `Erro: ${r.error}`));
         return;
@@ -155,6 +162,7 @@ export function FormularioAsaas({ precisaDeChave, configAtual, pointers, validac
           />
         </div>
       </div>
+      {erroReemissao ? <p className="text-xs text-destructive">{erroReemissao}</p> : null}
 
       <Button onClick={salvar} disabled={pending}>
         {pending ? t("Salvando…") : t("Salvar")}
