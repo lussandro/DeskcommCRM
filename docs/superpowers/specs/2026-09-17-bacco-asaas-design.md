@@ -255,13 +255,13 @@ mecânicas, cada uma com teste:
 | regra | como se garante | teste |
 |---|---|---|
 | Nada novo é obrigatório | `company_id` e `billing_contact_id` nullable; nenhum Zod existente ganha campo obrigatório | `route.test.ts` de contatos continua verde sem tocar |
-| Nenhum fluxo existente muda de caminho | criar/editar/importar/mesclar/anonimizar contato, criar lead, roteamento, follow-up, agente: **zero** `if (company)` fora de `lib/companies/` e `lib/asaas/` | gate novo `tests/unit/empresas-sao-aditivas.test.ts`: varre `app/api/v1/{contacts,leads,conversations}` e `lib/{followup,routing,agent-engine}` e reprova import de `lib/companies` ou referência a `company_id`/`crm_companies` |
+| Nenhum fluxo existente muda de caminho | criar/editar/importar/mesclar/anonimizar contato, criar lead, roteamento, follow-up, agente: **zero** `if (company)` fora de `lib/companies/` e `lib/asaas/` | gate novo `tests/unit/empresas-sao-aditivas.test.ts`: varre `app/api/v1/{contacts,leads,conversations,messages}` e `lib/{followup,routing,agent-engine,ai,leads,channels}` e reprova import de `lib/companies` ou referência a `crm_companies`/`company_id` — com uma allowlist só para `app/api/v1/contacts/`, que passa `company_id` como coluna (SELECT/PATCH) sem ramificar |
 | Respostas de API só ganham campo opcional | `contacts` GET devolve `company_id` e `company: {id,name} \| null` quando há; consumidores antigos ignoram | contrato em `docs/specs` atualizado como aditivo |
-| Anonimização é a única peça existente tocada | o trigger de anonimização passa a zerar `company_id` — extensão do mesmo bloco, sem novo trigger | teste de anonimização existente + 1 caso |
+| Anonimização é a única peça existente tocada | trigger-irmão `trg_crm_companies_principal_anonimizado` em `after update of is_anonymized` (o padrão do repo para efeitos colaterais da anonimização; não reescreve `fn_lgpd_anonymize_contact`) zera `company_id` e solta `billing_contact_id` | `tests/invariants/empresas.test.ts` |
 | Org sem empresa não vê diferença de desempenho | índices parciais `where company_id is not null`; nenhuma query existente ganha JOIN | `EXPLAIN` do GET de contatos sem empresa não muda de plano (medido uma vez, registrado no PR) |
 | Tela some quando não é usada | a entrada "Empresas" na navegação fica `sidebar: true` mas o contato 360 só mostra o campo "Empresa" quando a org tem ≥1 empresa ou o módulo Asaas está ativo; criar a primeira empresa é pela tela Empresas | teste de navegação + teste do 360 nos dois estados |
 | Módulo Asaas desligado não apaga empresas | empresas são CRM genérico (B2B de qualquer nicho); o bloco Asaas da tela some, o resto fica | caso no teste da tela |
-| Merge de contatos | `merge` já existente: se os dois têm `company_id` diferentes, **mantém o do sobrevivente** e registra atividade; não inventa | 1 caso no teste de merge |
+| Merge de contatos | `fn_mesclar_contatos`: o principal **manda** — mantém o `company_id` do sobrevivente e não herda o do secundário. O repoint automático de FKs pode deixar o sobrevivente como principal de uma empresa que não é a dele: a função solta esse `billing_contact_id`. Sem atividade nova (o merge já audita) | 1 caso em `tests/invariants/empresas.test.ts` |
 
 **Schema** (mesma migration `0260`):
 
@@ -314,11 +314,10 @@ create index if not exists idx_contacts_org_company on public.contacts (organiza
 
 **Tela** (porta em `lib/navigation/catalogo.ts`, grupo `crm`, ao lado de Contatos, `sidebar: true`):
 
-- `/app/companies`: lista com nome, CNPJ, nº de contatos, vínculo Asaas (sim/não), busca por
-  nome/CNPJ. Criar empresa: nome + CNPJ opcional.
+- `/app/companies`: lista com nome, CNPJ, nº de contatos, busca por nome/CNPJ (a coluna
+  "vínculo Asaas" entra com o módulo Asaas). Criar empresa: nome + CNPJ opcional.
 - `/app/companies/[id]`: dados, **contatos da empresa** (adicionar contato existente por
-  busca, remover, marcar um como **número principal para cobrança**), atividades recentes dos
-  contatos,
+  busca, remover, marcar um como **número principal para cobrança**),
   e o bloco **Asaas** (só aparece com o módulo ativo): "Vincular pelo CNPJ" → `GET
   /customers?cpfCnpj=` → grava `asaas_customer_id`, audit `asaas.company_linked`; mostra pendências
   ao vivo (`PENDING` + `OVERDUE`) com valor, vencimento e link — leitura, sem ação de reemitir
@@ -327,8 +326,9 @@ create index if not exists idx_contacts_org_company on public.contacts (organiza
   a etiqueta "número principal para cobrança" quando é o caso (a troca é feita na tela da empresa).
 - API `/api/v1/companies` (GET list, POST) e `/api/v1/companies/[id]` (GET, PATCH, DELETE) +
   `/api/v1/companies/[id]/contacts` (POST vincula, DELETE desvincula), com `ok()/fail()`,
-  Zod, audit (`company.created|updated|deleted|contact_linked|contact_unlinked`), rate limit,
-  papel `agent` para ler e vincular, `manager` para apagar.
+  Zod, audit (`company.created|updated|deleted|contact_linked|contact_unlinked`), papel
+  `agent` para ler e vincular, `manager` para apagar. **Sem rate limit**, como as rotas
+  cookie-auth de contatos e leads; entra quando houver caminho Bearer ou importação em massa.
 
 **Vínculo com o Asaas para empresa é ato do humano, não do agente.** O agente na conversa com um
 contato de empresa só age se a empresa já está vinculada. Se não está: responde que precisa do
