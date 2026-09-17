@@ -8771,6 +8771,9 @@ export const DICIONARIO: Traducoes = {
   "O número principal precisa ser um contato desta empresa.": {
     es: "El número principal debe ser un contacto de esta empresa.",
   },
+  Empresa: { es: "Empresa" },
+  Nenhuma: { es: "Ninguna" },
+  "Nova empresa…": { es: "Nueva empresa…" },
 };
 
 /**

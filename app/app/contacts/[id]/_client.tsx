@@ -5,6 +5,7 @@ import { useLocaleDeData } from "@/hooks/i18n/useLocaleDeData";
 import { useT } from "@/hooks/i18n/useT";
 import { useState } from "react";
 import { format } from "date-fns";
+import Link from "next/link";
 import { ShieldCheck, PencilSimple } from "@/lib/ui/icons";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card } from "@/components/ui/card";
@@ -160,6 +161,19 @@ export function ContactDetailClient({ contactId }: Props) {
                 <dt className="text-xs uppercase text-muted-foreground">{t("Origem")}</dt>
                 <dd className="mt-1">{contact.source}</dd>
               </div>
+              {contact.company && (
+                <div>
+                  <dt className="text-xs uppercase text-muted-foreground">{t("Empresa")}</dt>
+                  <dd className="mt-1 flex flex-wrap items-center gap-2">
+                    <Link href={`/app/companies/${contact.company.id}`} className="hover:underline">
+                      {contact.company.name}
+                    </Link>
+                    {contact.company.is_billing_contact && (
+                      <Badge>{t("Número principal para cobrança")}</Badge>
+                    )}
+                  </dd>
+                </div>
+              )}
               <div>
                 <dt className="text-xs uppercase text-muted-foreground">{t("Última atividade")}</dt>
                 <dd className="mt-1">

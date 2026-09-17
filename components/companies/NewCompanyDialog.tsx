@@ -18,6 +18,7 @@ import { Label } from "@/components/ui/label";
 import { companyCreateSchema } from "@/lib/schemas/companies";
 import type { CompanyCreate } from "@/lib/schemas/companies";
 import { useCreateCompany } from "@/hooks/companies/useCreateCompany";
+import type { Company } from "@/lib/types/companies";
 
 interface FormShape {
   name: string;
@@ -28,9 +29,11 @@ interface FormShape {
 interface Props {
   open: boolean;
   onOpenChange: (v: boolean) => void;
+  /** Quando informado, a empresa criada volta aqui em vez de navegar até ela. */
+  onCreated?: (company: Company) => void;
 }
 
-export function NewCompanyDialog({ open, onOpenChange }: Props) {
+export function NewCompanyDialog({ open, onOpenChange, onCreated }: Props) {
   const t = useT();
   const router = useRouter();
   const create = useCreateCompany();
@@ -57,7 +60,8 @@ export function NewCompanyDialog({ open, onOpenChange }: Props) {
       toast.success(t("Empresa criada"));
       form.reset();
       onOpenChange(false);
-      if (resposta?.data?.id) router.push(`/app/companies/${resposta.data.id}`);
+      if (resposta?.data && onCreated) onCreated(resposta.data);
+      else if (resposta?.data?.id) router.push(`/app/companies/${resposta.data.id}`);
     } catch {
       // hook handles toast
     }

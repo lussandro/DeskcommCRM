@@ -17,6 +17,7 @@ import { Label } from "@/components/ui/label";
 import { contactPatchSchema, type ContactPatch } from "@/lib/schemas/contacts";
 import { useUpdateContact } from "@/hooks/contacts/useUpdateContact";
 import { CustomFieldsEditor, type CustomFieldDef } from "@/components/contacts/CustomFieldsEditor";
+import { CompanyPicker, useTemEmpresas } from "@/components/companies/CompanyPicker";
 import type { Contact } from "@/lib/types/contacts";
 import { phoneForDisplay } from "@/lib/channels/phone-variants";
 
@@ -26,6 +27,7 @@ interface FormShape {
   phone_number?: string;
   tagsRaw?: string;
   custom_fields?: Record<string, unknown>;
+  company_id?: string | null;
 }
 
 interface Props {
@@ -39,6 +41,7 @@ interface Props {
 export function EditContactDialog({ contact, open, onOpenChange, customFieldDefs = [] }: Props) {
   const t = useT();
   const update = useUpdateContact(contact.id);
+  const temEmpresas = useTemEmpresas();
   const [serverError, setServerError] = useState<string | null>(null);
 
   const form = useForm<FormShape>({
@@ -48,10 +51,12 @@ export function EditContactDialog({ contact, open, onOpenChange, customFieldDefs
       phone_number: contact.phone_number ? phoneForDisplay(contact.phone_number) : "",
       tagsRaw: contact.tags.join(", "),
       custom_fields: contact.custom_fields ?? {},
+      company_id: contact.company_id ?? null,
     },
   });
 
   const customFields = useWatch({ control: form.control, name: "custom_fields" });
+  const companyId = useWatch({ control: form.control, name: "company_id" });
 
   useEffect(() => {
     if (open) {
@@ -61,6 +66,7 @@ export function EditContactDialog({ contact, open, onOpenChange, customFieldDefs
         phone_number: contact.phone_number ? phoneForDisplay(contact.phone_number) : "",
         tagsRaw: contact.tags.join(", "),
         custom_fields: contact.custom_fields ?? {},
+        company_id: contact.company_id ?? null,
       });
     }
   }, [open, contact, form]);
@@ -80,6 +86,11 @@ export function EditContactDialog({ contact, open, onOpenChange, customFieldDefs
     // Sempre no payload, mesmo vazio: o PATCH SUBSTITUI, e é assim que apagar um
     // campo pela tela chega ao banco.
     payload.custom_fields = values.custom_fields ?? {};
+    // company_id só entra se mudou: evita PATCH desnecessário quando a org não
+    // usa empresas (campo nem renderiza) ou quando o usuário não tocou nele.
+    if ((values.company_id ?? null) !== (contact.company_id ?? null)) {
+      payload.company_id = values.company_id ?? null;
+    }
 
     const parsed = contactPatchSchema.safeParse(payload);
     if (!parsed.success) {
@@ -119,6 +130,15 @@ export function EditContactDialog({ contact, open, onOpenChange, customFieldDefs
             <Label htmlFor="ec-tags">Tags</Label>
             <Input id="ec-tags" {...form.register("tagsRaw")} />
           </div>
+          {temEmpresas && (
+            <div className="space-y-2">
+              <Label htmlFor="ec-company">{t("Empresa")}</Label>
+              <CompanyPicker
+                value={companyId ?? null}
+                onChange={(v) => form.setValue("company_id", v, { shouldDirty: true })}
+              />
+            </div>
+          )}
           {customFieldDefs.length > 0 && (
             <div className="space-y-3 rounded-md border border-border p-3">
               <div>
