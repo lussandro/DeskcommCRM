@@ -1,0 +1,16 @@
+"use client";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { apiClient } from "@/lib/api/client";
+import { showApiError } from "@/components/feedback/ApiErrorToast";
+
+export function useDeleteCompany() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (companyId: string) =>
+      apiClient.delete<unknown>(`/api/v1/companies/${companyId}`),
+    onError: showApiError,
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["companies"] });
+    },
+  });
+}
