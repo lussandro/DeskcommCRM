@@ -134,6 +134,12 @@ export const ApiErrorCodes = {
   // procurar um interruptor quando o problema é o banco.
   voice_estado_indeterminado: "voice_estado_indeterminado",
 
+  // ─── Módulo ASAAS — vínculo empresa/contato ↔ cliente do Asaas (migration 0261) ───
+  asaas_inativo: "asaas_inativo", // integração desligada ou config inválida (409)
+  customer_nao_encontrado: "customer_nao_encontrado", // CNPJ/CPF sem customer no Asaas (404)
+  customer_ja_vinculado: "customer_ja_vinculado", // customer já vinculado a outro cadastro (409)
+  asaas_error: "asaas_error", // erro reportado pelo Asaas ao consultar/vincular (502)
+
   // 500 / upstream
   internal_error: "internal_error",
   upstream_unavailable: "upstream_unavailable",

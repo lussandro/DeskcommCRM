@@ -36,12 +36,14 @@ interface Props {
   onOpenChange: (v: boolean) => void;
   /** Definições vindas de `crm_pipelines.settings.fields[]`. Vazio = a seção some. */
   customFieldDefs?: CustomFieldDef[];
+  /** Módulo Asaas ativo na org: mostra o campo mesmo sem empresa cadastrada ainda (spec §5.2a). */
+  asaasAtivo?: boolean;
 }
 
-export function EditContactDialog({ contact, open, onOpenChange, customFieldDefs = [] }: Props) {
+export function EditContactDialog({ contact, open, onOpenChange, customFieldDefs = [], asaasAtivo = false }: Props) {
   const t = useT();
   const update = useUpdateContact(contact.id);
-  const temEmpresas = useTemEmpresas(open);
+  const temEmpresas = useTemEmpresas(open) || asaasAtivo;
   const [serverError, setServerError] = useState<string | null>(null);
 
   const form = useForm<FormShape>({

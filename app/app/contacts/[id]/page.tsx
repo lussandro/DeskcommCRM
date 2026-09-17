@@ -1,6 +1,8 @@
 import { notFound, redirect } from "next/navigation";
 import { requireAuth, resolveActiveOrg } from "@/lib/auth/server";
 import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
+import { carregarCapacidadesDeIntegracao } from "@/lib/asaas/config";
 import { ContactDetailClient } from "./_client";
 
 export const dynamic = "force-dynamic";
@@ -26,5 +28,8 @@ export default async function ContactDetailPage({
     .eq("id", id)
     .maybeSingle();
   if (!contact) notFound();
-  return <ContactDetailClient contactId={id} />;
+  // Com o módulo Asaas ativo, o campo "Empresa" aparece mesmo sem empresa
+  // cadastrada ainda (spec §5.2a) — é o caminho para vincular a primeira.
+  const asaasAtivo = (await carregarCapacidadesDeIntegracao(createAdminClient(), activeOrg.orgId)).has("asaas");
+  return <ContactDetailClient contactId={id} asaasAtivo={asaasAtivo} />;
 }

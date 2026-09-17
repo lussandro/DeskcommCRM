@@ -11,13 +11,15 @@ import { useAuth } from "@/hooks/auth/AuthProvider";
 import { ROLE_RANK } from "@/lib/auth/types";
 import { EditCompanyDialog } from "@/components/companies/EditCompanyDialog";
 import { CompanyContactsCard } from "@/components/companies/CompanyContactsCard";
+import { CartaoAsaas } from "@/components/companies/CartaoAsaas";
 import { formatarCnpj } from "@/lib/companies/cnpj";
 
 interface Props {
   companyId: string;
+  asaasAtivo: boolean;
 }
 
-export function CompanyDetailClient({ companyId }: Props) {
+export function CompanyDetailClient({ companyId, asaasAtivo }: Props) {
   const t = useT();
   const q = useCompany(companyId);
   const { activeOrg } = useAuth();
@@ -88,6 +90,8 @@ export function CompanyDetailClient({ companyId }: Props) {
       </Card>
 
       <CompanyContactsCard company={company} contacts={contacts} canWrite={canWrite} />
+
+      {asaasAtivo && <CartaoAsaas companyId={company.id} canWrite={canWrite} />}
 
       <EditCompanyDialog company={company} open={editOpen} onOpenChange={setEditOpen} />
     </div>

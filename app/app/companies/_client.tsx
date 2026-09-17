@@ -11,7 +11,11 @@ import { useCompanyList } from "@/hooks/companies/useCompanyList";
 import { CompaniesTable } from "@/components/companies/CompaniesTable";
 import { NewCompanyDialog } from "@/components/companies/NewCompanyDialog";
 
-export function CompaniesListClient() {
+interface Props {
+  asaasAtivo: boolean;
+}
+
+export function CompaniesListClient({ asaasAtivo }: Props) {
   const t = useT();
   const [searchInput, setSearchInput] = useState("");
   const [search, setSearch] = useState("");
@@ -86,7 +90,7 @@ export function CompaniesListClient() {
       ) : (
         <>
           <Card className="overflow-hidden">
-            <CompaniesTable companies={allCompanies} />
+            <CompaniesTable companies={allCompanies} asaasAtivo={asaasAtivo} />
           </Card>
           <div className="flex flex-col items-center gap-2 sm:flex-row sm:justify-between">
             <p className="text-sm text-muted-foreground">

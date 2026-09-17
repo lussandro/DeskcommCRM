@@ -1,6 +1,8 @@
 import { notFound, redirect } from "next/navigation";
 import { requireAuth, resolveActiveOrg } from "@/lib/auth/server";
 import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
+import { carregarCapacidadesDeIntegracao } from "@/lib/asaas/config";
 import { CompanyDetailClient } from "./_client";
 
 export const dynamic = "force-dynamic";
@@ -24,5 +26,7 @@ export default async function CompanyDetailPage({
     .eq("id", id)
     .maybeSingle();
   if (!company) notFound();
-  return <CompanyDetailClient companyId={id} />;
+  // Bloco Asaas só aparece com o módulo ativo (spec §5.2a) — org sem Asaas não vê diferença.
+  const asaasAtivo = (await carregarCapacidadesDeIntegracao(createAdminClient(), activeOrg.orgId)).has("asaas");
+  return <CompanyDetailClient companyId={id} asaasAtivo={asaasAtivo} />;
 }

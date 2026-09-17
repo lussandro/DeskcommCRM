@@ -8829,6 +8829,24 @@ export const DICIONARIO: Traducoes = {
   "Integração Asaas ativada.": { es: "Integración Asaas activada." },
   "Integração Asaas desativada.": { es: "Integración Asaas desactivada." },
   "Chave esquecida — a integração foi removida.": { es: "Clave olvidada — la integración fue eliminada." },
+
+  // Asaas — cartão da empresa, coluna da lista e vínculo pela Central (Task 9, migration 0261)
+  "Abrir boleto/fatura": { es: "Abrir boleto/factura" },
+  "Cliente do Asaas vinculado": { es: "Cliente de Asaas vinculado" },
+  "Esta empresa ainda não está vinculada a um cliente do Asaas.": {
+    es: "Esta empresa aún no está vinculada a un cliente de Asaas.",
+  },
+  "Não foi possível carregar a integração Asaas.": { es: "No fue posible cargar la integración Asaas." },
+  "Não foi possível vincular. Tente novamente.": { es: "No fue posible vincular. Inténtalo de nuevo." },
+  "Nenhuma pendência agora.": { es: "Ningún pendiente ahora." },
+  Vencimento: { es: "Vencimiento" },
+  "Vinculando…": { es: "Vinculando…" },
+  "Vincular pelo CNPJ": { es: "Vincular por CNPJ" },
+  Vinculado: { es: "Vinculado" },
+  "Vincular cobrança": { es: "Vincular cobro" },
+  "Encontre a empresa ou o contato dono desta cobrança no Asaas.": {
+    es: "Encuentra la empresa o el contacto dueño de este cobro en Asaas.",
+  },
 };
 
 /**

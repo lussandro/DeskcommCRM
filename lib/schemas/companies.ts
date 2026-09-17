@@ -29,3 +29,9 @@ export type CompanyListQuery = z.infer<typeof companyListQuerySchema>;
 export const companyLinkContactSchema = z.object({
   contact_id: z.string().uuid(),
 });
+
+/** POST /api/v1/companies/[id]/asaas — vincular pelo CNPJ. */
+export const companyAsaasLinkSchema = z.object({
+  cnpj: cnpjSchema,
+});
+export type CompanyAsaasLink = z.infer<typeof companyAsaasLinkSchema>;

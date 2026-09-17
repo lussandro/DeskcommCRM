@@ -15,9 +15,11 @@ import type { Company } from "@/lib/types/companies";
 
 interface Props {
   companies: Company[];
+  /** Coluna "Asaas" só aparece com o módulo ativo (spec §5.2a) — aditivo. */
+  asaasAtivo: boolean;
 }
 
-export function CompaniesTable({ companies }: Props) {
+export function CompaniesTable({ companies, asaasAtivo }: Props) {
   const t = useT();
   return (
     <Table>
@@ -27,6 +29,7 @@ export function CompaniesTable({ companies }: Props) {
           <TableHead>{t("Nome fantasia")}</TableHead>
           <TableHead>CNPJ</TableHead>
           <TableHead>{t("Contatos")}</TableHead>
+          {asaasAtivo && <TableHead>Asaas</TableHead>}
         </TableRow>
       </TableHeader>
       <TableBody>
@@ -42,6 +45,11 @@ export function CompaniesTable({ companies }: Props) {
               {c.cnpj ? formatarCnpj(c.cnpj) : "—"}
             </TableCell>
             <TableCell className="text-muted-foreground">{c.contacts_count ?? 0}</TableCell>
+            {asaasAtivo && (
+              <TableCell className="text-muted-foreground">
+                {c.asaas_customer_id ? t("Vinculado") : "—"}
+              </TableCell>
+            )}
           </TableRow>
         ))}
       </TableBody>

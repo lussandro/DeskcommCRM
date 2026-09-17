@@ -29,9 +29,10 @@ import { DialButton } from "@/components/voice/DialButton";
 
 interface Props {
   contactId: string;
+  asaasAtivo?: boolean;
 }
 
-export function ContactDetailClient({ contactId }: Props) {
+export function ContactDetailClient({ contactId, asaasAtivo = false }: Props) {
   const localeDaData = useLocaleDeData();
   const t = useT();
   const q = useContact(contactId);
@@ -241,6 +242,7 @@ export function ContactDetailClient({ contactId }: Props) {
         open={editOpen}
         onOpenChange={setEditOpen}
         customFieldDefs={camposDoFunil(pipelineQuery.data?.pipeline.settings ?? null)}
+        asaasAtivo={asaasAtivo}
       />
       <AnonymizeDialog contactId={contactId} open={anonOpen} onOpenChange={setAnonOpen} />
     </div>
