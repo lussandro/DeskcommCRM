@@ -1,0 +1,226 @@
+/**
+ * Consumidor do `event_log` para os 4 eventos do Asaas (spec §8). Matricula o
+ * titular no fluxo de retorno quando uma cobrança vence, cancela quando paga
+ * ou é apagada, e avisa a Central quando não dá para agir.
+ *
+ * Lógica pura sobre `ConsumidorDb` — o adapter real (`consumidor.db.ts`) fica
+ * fora daqui, no molde de `gatilho-caso.ts`.
+ */
+import { z } from "zod";
+
+import type { EventRow } from "@/lib/event-log/dispatcher";
+import type { EnrollFollowupResult } from "@/lib/followup/enroll";
+import { chaveDeAviso } from "./avisos";
+
+const payloadSchema = z.object({
+  event: z.string(),
+  payment: z
+    .object({
+      id: z.string(),
+      customer: z.string(),
+      status: z.string(),
+      value: z.number(),
+      dueDate: z.string(),
+    })
+    .passthrough(),
+});
+
+export const EVENTO_OVERDUE = "asaas.payment_overdue";
+export const EVENTO_RECEIVED = "asaas.payment_received";
+export const EVENTO_DELETED = "asaas.payment_deleted";
+export const EVENTO_UPDATED = "asaas.payment_updated";
+
+export type Titular =
+  | { kind: "company"; id: string; customerId: string; billingContactId: string | null }
+  | { kind: "contact"; id: string; customerId: string };
+
+export type ResultadoValidacaoFluxo =
+  | { ok: true; agentId: string; avisoTextoFixo: boolean }
+  | { ok: false; motivo: string; detalhe: string };
+
+export interface ConsumidorDb {
+  /** Upsert por `(organization_id, payment_id)`; devolve o `enrollment_id` vivo, se houver. */
+  upsertCharge(input: {
+    organizationId: string;
+    paymentId: string;
+    customerId: string;
+    status: string;
+    dueDate: string;
+    valueCents: number;
+    holderKind?: "company" | "contact";
+    holderId?: string;
+  }): Promise<void>;
+  carregarCharge(organizationId: string, paymentId: string): Promise<{ enrollmentId: string | null; dueDate: string } | null>;
+  titularPorCustomer(organizationId: string, customerId: string): Promise<Titular | null>;
+  nomeDaEmpresa(organizationId: string, companyId: string): Promise<string>;
+  enrollmentViva(enrollmentId: string): Promise<boolean>;
+  enroll(pointerId: string, contactId: string): Promise<EnrollFollowupResult>;
+  cancelaEnrollment(id: string, reason: string, outcome: "converted" | "exhausted"): Promise<boolean>;
+  gravaEnrollmentNaCharge(organizationId: string, paymentId: string, enrollmentId: string | null): Promise<void>;
+  /** Dedup por `(organization_id, kind, ref_id)` aberto — não insere de novo se já existe. */
+  abrirAviso(kind: string, refKind: "contact" | null, refId: string, title: string, body: string): Promise<void>;
+  atividade(contactId: string, type: string, reason: string, payload: Record<string, unknown>): Promise<void>;
+  /** `"falhou"` quando a consulta ao vivo ao Asaas deu erro. */
+  vencidasAoVivo(customerId: string): Promise<number | "falhou">;
+  validarFluxo(pointerId: string): Promise<ResultadoValidacaoFluxo>;
+  followupPointerId(organizationId: string): Promise<string | null>;
+  diaLocalDaOrg(organizationId: string): Promise<string>;
+  existeAcaoComVencimento(organizationId: string, paymentId: string, newDueDate: string): Promise<boolean>;
+}
+
+export interface ConsumidorDeps {
+  db: ConsumidorDb;
+  agora: () => Date;
+}
+
+export type ConsumidorResultado = { status: "ok" | "skipped"; detail: string };
+
+function centavos(v: number): number {
+  return Math.round(v * 100);
+}
+
+async function tratarOverdue(deps: ConsumidorDeps, row: EventRow, p: z.infer<typeof payloadSchema>["payment"]): Promise<ConsumidorResultado> {
+  const { db } = deps;
+  const orgId = row.organization_id;
+
+  await db.upsertCharge({
+    organizationId: orgId,
+    paymentId: p.id,
+    customerId: p.customer,
+    status: p.status,
+    dueDate: p.dueDate,
+    valueCents: centavos(p.value),
+  });
+
+  const titular = await db.titularPorCustomer(orgId, p.customer);
+  if (!titular) {
+    await db.abrirAviso("charge_unmatched", null, chaveDeAviso("charge_unmatched", p.customer), "Cobrança sem cliente cadastrado", `O Asaas enviou uma cobrança vencida (${p.id}) para um cliente que não está no CRM.`);
+    return { status: "skipped", detail: "titular_nao_encontrado" };
+  }
+  await db.upsertCharge({
+    organizationId: orgId,
+    paymentId: p.id,
+    customerId: p.customer,
+    status: p.status,
+    dueDate: p.dueDate,
+    valueCents: centavos(p.value),
+    holderKind: titular.kind,
+    holderId: titular.id,
+  });
+
+  let contactId: string;
+  if (titular.kind === "company") {
+    if (!titular.billingContactId) {
+      const nome = await db.nomeDaEmpresa(orgId, titular.id);
+      await db.abrirAviso("charge_overdue_no_flow", null, chaveDeAviso("charge_overdue_no_flow", titular.id), "Empresa sem contato de cobrança", `A empresa "${nome}" tem uma cobrança vencida, mas não há contato de cobrança definido.`);
+      return { status: "skipped", detail: "empresa_sem_principal" };
+    }
+    contactId = titular.billingContactId;
+  } else {
+    contactId = titular.id;
+  }
+
+  const charge = await db.carregarCharge(orgId, p.id);
+  if (charge?.enrollmentId && (await db.enrollmentViva(charge.enrollmentId))) {
+    return { status: "ok", detail: "enrollment_ja_vivo" };
+  }
+
+  const pointerId = await db.followupPointerId(orgId);
+  const diaOrg = await db.diaLocalDaOrg(orgId);
+  if (!pointerId) {
+    await db.abrirAviso("charge_overdue_no_flow", null, chaveDeAviso("charge_overdue_no_flow", diaOrg), "Sem fluxo de retorno configurado", "A integração Asaas está ativa, mas nenhum fluxo de retorno foi escolhido para cobrança vencida.");
+    return { status: "skipped", detail: "sem_pointer_configurado" };
+  }
+
+  const validado = await db.validarFluxo(pointerId);
+  if (!validado.ok) {
+    await db.abrirAviso("charge_overdue_no_flow", null, chaveDeAviso("charge_overdue_no_flow", diaOrg), "Fluxo de retorno não está pronto", validado.detalhe);
+    return { status: "skipped", detail: `fluxo_invalido:${validado.motivo}` };
+  }
+
+  try {
+    const resultado = await db.enroll(pointerId, contactId);
+    if (!resultado.ok) {
+      if (resultado.code === "conflict") {
+        await db.atividade(contactId, "charge_waiting_slot", "Cobrança vencida aguardando outro retorno terminar", { payment_id: p.id });
+        return { status: "ok", detail: "aguardando_outro_fluxo" };
+      }
+      await db.abrirAviso("charge_overdue_no_flow", null, chaveDeAviso("charge_overdue_no_flow", diaOrg), "Não consegui matricular o cliente no retorno", resultado.message);
+      return { status: "skipped", detail: `enroll_falhou:${resultado.code}` };
+    }
+    const enrollmentId = String((resultado.enrollment as { id?: unknown }).id ?? "");
+    await db.gravaEnrollmentNaCharge(orgId, p.id, enrollmentId || null);
+    await db.atividade(contactId, "charge_overdue", `Cobrança vencida em ${p.dueDate}`, { payment_id: p.id, due_date: p.dueDate });
+    return { status: "ok", detail: "matriculado" };
+  } catch (err) {
+    const detalhe = err instanceof Error ? err.message : String(err);
+    await db.abrirAviso("charge_overdue_no_flow", null, chaveDeAviso("charge_overdue_no_flow", diaOrg), "Não consegui matricular o cliente no retorno", detalhe);
+    return { status: "skipped", detail: `enroll_lancou:${detalhe}` };
+  }
+}
+
+async function tratarPagaOuApagada(deps: ConsumidorDeps, row: EventRow, p: z.infer<typeof payloadSchema>["payment"], tipo: "paid" | "deleted"): Promise<ConsumidorResultado> {
+  const { db } = deps;
+  const orgId = row.organization_id;
+
+  await db.upsertCharge({ organizationId: orgId, paymentId: p.id, customerId: p.customer, status: p.status, dueDate: p.dueDate, valueCents: centavos(p.value) });
+
+  const charge = await db.carregarCharge(orgId, p.id);
+  if (!charge?.enrollmentId) return { status: "ok", detail: "sem_enrollment" };
+  if (!(await db.enrollmentViva(charge.enrollmentId))) return { status: "ok", detail: "enrollment_ja_encerrada" };
+
+  const restantes = await db.vencidasAoVivo(p.customer);
+  const falhouConsulta = restantes === "falhou";
+  if (!falhouConsulta && (restantes as number) > 0) {
+    return { status: "ok", detail: `mantido_restam_${restantes}` };
+  }
+
+  const cancelou = await db.cancelaEnrollment(charge.enrollmentId, "charge_settled", "converted");
+  const titular = await db.titularPorCustomer(orgId, p.customer);
+  const contactId = titular ? (titular.kind === "company" ? titular.billingContactId : titular.id) : null;
+  if (contactId) {
+    const type = tipo === "paid" ? "charge_paid" : "charge_deleted";
+    const reason = falhouConsulta
+      ? `Cobrança ${tipo === "paid" ? "paga" : "cancelada"} no Asaas — não consegui confirmar se restam outras vencidas, encerrei o retorno`
+      : `Cobrança ${tipo === "paid" ? "paga" : "cancelada"} no Asaas`;
+    await db.atividade(contactId, type, reason, { payment_id: p.id, consulta_falhou: falhouConsulta });
+  }
+  return { status: cancelou ? "ok" : "ok", detail: falhouConsulta ? "cancelado_apesar_da_falha" : "cancelado" };
+}
+
+async function tratarUpdated(deps: ConsumidorDeps, row: EventRow, p: z.infer<typeof payloadSchema>["payment"]): Promise<ConsumidorResultado> {
+  const { db } = deps;
+  const orgId = row.organization_id;
+  const anterior = await db.carregarCharge(orgId, p.id);
+  await db.upsertCharge({ organizationId: orgId, paymentId: p.id, customerId: p.customer, status: p.status, dueDate: p.dueDate, valueCents: centavos(p.value) });
+
+  if (!anterior || anterior.dueDate === p.dueDate) return { status: "ok", detail: "sem_mudanca_de_vencimento" };
+  if (await db.existeAcaoComVencimento(orgId, p.id, p.dueDate)) return { status: "ok", detail: "vencimento_por_acao_conhecida" };
+
+  const titular = await db.titularPorCustomer(orgId, p.customer);
+  const contactId = titular ? (titular.kind === "company" ? titular.billingContactId : titular.id) : null;
+  if (contactId) {
+    await db.atividade(contactId, "charge_due_changed", `Vencimento alterado no painel do Asaas para ${p.dueDate}`, { payment_id: p.id, old_due_date: anterior.dueDate, new_due_date: p.dueDate });
+  }
+  return { status: "ok", detail: "vencimento_alterado" };
+}
+
+/** Uma linha de `asaas.*`. Devolve `{status, detail}` — o handler cuida de `error` (try/catch em volta). */
+export async function processarEvento(deps: ConsumidorDeps, row: EventRow): Promise<ConsumidorResultado> {
+  const parsed = payloadSchema.safeParse(row.payload);
+  if (!parsed.success) return { status: "skipped", detail: "payload_invalido" };
+  const p = parsed.data.payment;
+
+  switch (row.event_type) {
+    case EVENTO_OVERDUE:
+      return tratarOverdue(deps, row, p);
+    case EVENTO_RECEIVED:
+      return tratarPagaOuApagada(deps, row, p, "paid");
+    case EVENTO_DELETED:
+      return tratarPagaOuApagada(deps, row, p, "deleted");
+    case EVENTO_UPDATED:
+      return tratarUpdated(deps, row, p);
+    default:
+      return { status: "skipped", detail: "evento_nao_tratado" };
+  }
+}
