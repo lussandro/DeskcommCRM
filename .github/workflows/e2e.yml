@@ -133,6 +133,17 @@ jobs:
     # e credenciais que só existem em `/root/.bacco_qa`. Roda no mesmo contêiner
     # `mcr.microsoft.com/playwright:v1.63.0-noble`, sem `playwright.config` do repo.
     #
+    # ═══ `bacco-empresas`: RODA NA VPS, CONTRA A PRODUÇÃO ═══
+    #
+    # Fork Bacco (spec "2026-09-17-empresas", Task 10). Prova em tela de
+    # Empresas — cadastrar, vincular contatos, marcar o número principal para
+    # cobrança e desvincular pelo diálogo de edição — na conta QA real da
+    # instalação de produção. Mesmo impedimento das specs acima: o runner não
+    # tem nem a URL nem as credenciais de `/root/.bacco_qa`, e rodar contra o
+    # Supabase local mediria outra instalação. Roda no mesmo contêiner
+    # `mcr.microsoft.com/playwright:v1.63.0-noble`, sem `playwright.config` do
+    # repo.
+    #
     # ═══ `bacco-suspensao`: SUSPENDE UMA ORGANIZAÇÃO REAL, E SÓ A DE QA ═══
     #
     # Fork Bacco (Plano 3 "Enforcement da suspensão", Task 6). Ela SUSPENDE e
@@ -654,6 +665,7 @@ jobs:
         bacco-qa-cadastro.spec.ts
         bacco-jornadas.spec.ts
         bacco-suspensao.spec.ts
+        bacco-empresas.spec.ts
     steps:
       - uses: actions/checkout@v7
 

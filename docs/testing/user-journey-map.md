@@ -2086,3 +2086,32 @@ Produto `7f1d0f3e`, integrado à main `ca895850`: as dez specs de organizações
 Evidência local preservada em `.superpowers/evidence/comunidade-360/final-qa-targeted-r4/` e log `.superpowers/sdd/comunidade-360/final-qa-targeted-r4.log`. A rodada inclui atualização concorrente da interface sem perder formulário, sugestão obsoleta sem confirmação antiga de sucesso e encerramento de suporte com retorno ao contexto original.
 
 Validação integral do mesmo produto: 733 arquivos unitários / 7.911 casos aprovados + 1 falha esperada; 184 arquivos de banco / 1.466 casos aprovados + 1 falha esperada e 1 ignorado, com INSTALL e UPDATE; tipos, lint (0 erros, 344 avisos) e build aprovados. `lint:channels`, validadores shell e conferência de release também passaram. Os checks remotos continuam sendo condição do merge pelo revisor da PR #613.
+
+## J23 — Empresas: cadastrar, vincular contatos, número principal para cobrança `[P1]`
+
+Contexto do código: spec "2026-09-17-empresas" (Task 10). `crm_companies` agrupa
+contatos pessoa jurídica; `crm_contacts.company_id` referencia a empresa e
+`crm_companies.billing_contact_id` marca qual contato vinculado é o número
+principal para cobrança. Telas: `/app/companies` (lista + "Nova empresa"),
+`/app/companies/[id]` (dados, "Contatos da empresa" com "Vincular contato",
+"Tornar principal", "Desvincular" e a badge `data-testid="principal"`), e o
+360 do contato (`/app/contacts/[id]`) mostra a linha "Empresa" só quando o
+contato tem uma, com a mesma badge quando ele é o principal. O campo
+"Empresa" só aparece no diálogo de editar contato quando a organização já tem
+ao menos uma empresa (`useTemEmpresas`).
+
+| # | Caso | Expectativa |
+|---|------|-------------|
+| J23.1 | Chegar em Empresas pela barra lateral | `/app/companies`, sem digitar a URL |
+| J23.2 | Criar empresa (nome + CNPJ) | vai para o detalhe da empresa criada |
+| J23.3 | Vincular dois contatos pelo diálogo de busca | os dois aparecem em "Contatos da empresa" |
+| J23.4 | "Tornar principal" no primeiro | badge "Número principal para cobrança" aparece, e só uma vez (`getByTestId("principal")` count 1) |
+| J23.5 | Abrir o 360 do contato principal | linha "Empresa" mostra o nome da empresa e a badge |
+| J23.6 | Editar o contato → escolher "Nenhuma" no seletor de empresa → salvar | a linha "Empresa" some do 360; o detalhe da empresa volta a mostrar 1 contato e nenhuma badge de principal |
+
+Spec: `tests/e2e/bacco-empresas.spec.ts` — roda na VPS contra a produção com a
+conta QA (mesmo molde de `bacco-jornadas.spec.ts`; fora do CI, ver
+`.github/workflows/e2e.yml`). **Status: spec escrita; execução na VPS
+pendente** — este checkpoint (Task 10 da spec) cobre a spec e a declaração de
+CI; a corrida real, com evidência em `.superpowers/evidence/`, é um
+checkpoint separado do controlador.
