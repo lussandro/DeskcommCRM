@@ -8,14 +8,22 @@ const ORG = "11111111-1111-4111-8111-111111111111";
 const OUTRA = "22222222-2222-4222-8222-222222222222";
 const ctx = { organization_id: ORG, actor: { type: "user" as const, id: "u1" }, requestId: "r1", idioma: "pt-BR" as const };
 
-/** Builder mínimo: grava os filtros e devolve o que `resultado` mandar. */
-function fakeSb(resultado: { data: unknown; error: unknown }) {
+/**
+ * Builder mínimo: grava os filtros e devolve o que `resultado` mandar.
+ * Aceita um único resultado (repetido em toda resolução) ou uma fila de
+ * resultados — cada resolução (`maybeSingle`/`single`/`then` implícito)
+ * consome o próximo item, ficando no último quando a fila acaba. Necessário
+ * para handlers com duas queries sequenciais (ex.: `unlinkContactHandler`).
+ */
+function fakeSb(resultado: { data: unknown; error: unknown } | Array<{ data: unknown; error: unknown }>) {
+  const fila = Array.isArray(resultado) ? [...resultado] : null;
+  const proximo = () => (fila ? (fila.length > 1 ? fila.shift()! : fila[0]) : (resultado as { data: unknown; error: unknown }));
   const calls: Record<string, unknown[]> = {};
   const b: Record<string, unknown> = {};
   for (const m of ["from","select","eq","ilike","or","order","limit","insert","update","delete","maybeSingle","single","in","is"]) {
-    b[m] = vi.fn((...a: unknown[]) => { (calls[m] ??= []).push(a); return m === "maybeSingle" || m === "single" ? Promise.resolve(resultado) : b; });
+    b[m] = vi.fn((...a: unknown[]) => { (calls[m] ??= []).push(a); return m === "maybeSingle" || m === "single" ? Promise.resolve(proximo()) : b; });
   }
-  (b as { then?: unknown }).then = (res: (v: unknown) => void) => res(resultado);
+  (b as { then?: unknown }).then = (res: (v: unknown) => void) => res(proximo());
   return { sb: b as never, calls };
 }
 
@@ -40,6 +48,28 @@ describe("createCompanyHandler", () => {
 });
 
 describe("listCompaniesHandler", () => {
+  it("desambigua o embed de contacts com o nome da FK (evita PGRST201 — NÃO MEDIDO contra PostgREST real, provado na VPS na Task 10)", async () => {
+    const { listCompaniesHandler } = await import("./handler");
+    const { sb, calls } = fakeSb({ data: [], error: null });
+    await listCompaniesHandler(sb, ctx, { limit: 25 });
+    const selectExpr = String((calls.select![0] as unknown[])[0]);
+    expect(selectExpr).toContain("contacts!contacts_company_org_fk(count)");
+  });
+
+  it("cursor com nome contendo , ( ) \" não vaza esses caracteres pro valor entre aspas do .or()", async () => {
+    const { listCompaniesHandler } = await import("./handler");
+    const nomeMalicioso = 'Malicioso, (Sul)"drop';
+    const cursor = Buffer.from(JSON.stringify({ name: nomeMalicioso, id: "c9" }), "utf8").toString("base64url");
+    const { sb, calls } = fakeSb({ data: [], error: null });
+    await listCompaniesHandler(sb, ctx, { limit: 25, cursor });
+    const expr = String((calls.or!.at(-1) as unknown[])[0]);
+    const valoresEntreAspas = expr.match(/"([^"]*)"/g) ?? [];
+    expect(valoresEntreAspas.length).toBeGreaterThan(0);
+    for (const trecho of valoresEntreAspas) {
+      expect(trecho.slice(1, -1)).not.toMatch(/[,()"]/);
+    }
+  });
+
   it("busca com vírgula e parêntese não injeta condição no .or()", async () => {
     const { listCompaniesHandler } = await import("./handler");
     const { sb, calls } = fakeSb({ data: [], error: null });
@@ -81,5 +111,16 @@ describe("linkContactHandler", () => {
     const { linkContactHandler } = await import("./handler");
     const { sb } = fakeSb({ data: null, error: { code: "23503", message: "crm_companies_billing_contact_org_fk" } });
     await expect(linkContactHandler(sb, ctx, { companyId: "c1", contactId: "ct1" })).rejects.toMatchObject({ status: 422, code: "validation_failed" });
+  });
+});
+
+describe("unlinkContactHandler", () => {
+  it("erro na segunda atualização (zerar billing_contact_id) não é engolido", async () => {
+    const { unlinkContactHandler } = await import("./handler");
+    const { sb } = fakeSb([
+      { data: { id: "ct1", company_id: null }, error: null }, // update em contacts (mudarVinculo)
+      { data: null, error: { message: "boom" } }, // update em crm_companies (zera billing_contact_id)
+    ]);
+    await expect(unlinkContactHandler(sb, ctx, { companyId: "c1", contactId: "ct1" })).rejects.toMatchObject({ status: 500, code: "internal_error" });
   });
 });

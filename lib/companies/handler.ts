@@ -42,7 +42,10 @@ export async function listCompaniesHandler(
 ): Promise<{ companies: Company[]; cursor: string | null; has_more: boolean }> {
   let q = supabase
     .from("crm_companies")
-    .select(`${COLS}, contacts:contacts(count)`)
+    // Hint da FK obrigatório: há DUAS FKs entre contacts e crm_companies
+    // (contacts_company_org_fk e crm_companies_billing_contact_org_fk) — sem o
+    // nome, o PostgREST responde PGRST201 (relacionamento ambíguo), não dado.
+    .select(`${COLS}, contacts:contacts!contacts_company_org_fk(count)`)
     .eq("organization_id", ctx.organization_id)
     .order("name", { ascending: true })
     .order("id", { ascending: true })
@@ -253,10 +256,11 @@ export function linkContactHandler(supabase: SB, ctx: HandlerCtx, input: { compa
 /** Desvincular o principal também zera `billing_contact_id` — o trigger do banco não cobre este caminho (só anonimização). */
 export async function unlinkContactHandler(supabase: SB, ctx: HandlerCtx, input: { companyId: string; contactId: string }) {
   await mudarVinculo(supabase, ctx, input, null, "company.contact_unlinked");
-  await supabase
+  const { error } = await supabase
     .from("crm_companies")
     .update({ billing_contact_id: null })
     .eq("organization_id", ctx.organization_id)
     .eq("id", input.companyId)
     .eq("billing_contact_id", input.contactId);
+  if (error) erroBanco(ctx, error);
 }
