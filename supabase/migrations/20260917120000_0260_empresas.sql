@@ -17,7 +17,7 @@ create table if not exists public.crm_companies (
   trade_name text,
   cnpj text,
   asaas_customer_id text,
-  billing_contact_id uuid references public.contacts(id) on delete set null,
+  billing_contact_id uuid,
   notes text,
   created_by_user_id uuid references auth.users(id) on delete set null,
   created_at timestamptz not null default now(),
@@ -53,10 +53,39 @@ comment on table public.crm_companies is
   'Empresa cliente (pessoa jurídica) com N contatos. billing_contact_id = o contato que recebe aviso de cobrança (módulo Asaas). Aditiva: nada depende dela.';
 
 -- O contato aponta a empresa. Nullable, sem default, sem trigger.
-alter table public.contacts add column if not exists company_id uuid
-  references public.crm_companies(id) on delete set null;
+alter table public.contacts add column if not exists company_id uuid;
 create index if not exists idx_contacts_org_company
   on public.contacts (organization_id, company_id) where company_id is not null;
+
+-- FK CERCADA POR ORGANIZAÇÃO (fix round 1): a FK de coluna única aceitava uma
+-- empresa/contato de OUTRO tenant — RLS barra a LEITURA, não o INSERT/UPDATE
+-- pela service role nem uma query que erre o filtro. Mesmo padrão da 0228
+-- (`channel_routing_policies` -> `channel_sessions(organization_id,id)`):
+-- índice único (organization_id, id) como alvo, FK composta usando as duas
+-- colunas. `drop constraint if exists <nome_default>` cobre quem já rodou o
+-- apêndice com a FK de coluna única inline (nome autogerado pelo Postgres);
+-- `drop ... if exists <nome_novo>` cobre a reaplicação idempotente normal.
+create unique index if not exists uq_contacts_org_id
+  on public.contacts (organization_id, id);
+create unique index if not exists uq_crm_companies_org_id
+  on public.crm_companies (organization_id, id);
+
+-- ⚠️ `on delete set null` SEM lista de colunas, numa FK composta, zera TODAS as
+-- colunas da FK — inclusive `organization_id`, que é NOT NULL em `contacts` e
+-- `crm_companies`. Medido: `delete from crm_companies` derrubou com "null value
+-- in column organization_id violates not-null constraint" antes deste comentário
+-- existir. O PG15 (piso do baseline) aceita a forma com lista de colunas.
+alter table public.contacts drop constraint if exists contacts_company_id_fkey;
+alter table public.contacts drop constraint if exists contacts_company_org_fk;
+alter table public.contacts add constraint contacts_company_org_fk
+  foreign key (organization_id, company_id)
+  references public.crm_companies (organization_id, id) on delete set null (company_id);
+
+alter table public.crm_companies drop constraint if exists crm_companies_billing_contact_id_fkey;
+alter table public.crm_companies drop constraint if exists crm_companies_billing_contact_org_fk;
+alter table public.crm_companies add constraint crm_companies_billing_contact_org_fk
+  foreign key (organization_id, billing_contact_id)
+  references public.contacts (organization_id, id) on delete set null (billing_contact_id);
 
 -- A oportunidade pode apontar a empresa pelo vínculo polimórfico (DIRC: Referenciar).
 -- ⚠️ CHECK recriado inteiro (mesmo formato da 0242): `add constraint` não é idempotente.
