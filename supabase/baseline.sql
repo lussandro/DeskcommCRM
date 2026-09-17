@@ -25442,6 +25442,44 @@ create index if not exists agent_inbox_items_charge_aberto_idx
 
 notify pgrst, 'reload schema';
 
+-- ---- o funil pertence a um número (migration 0262, bacco) ----
+--
+-- Toda primeira mensagem de um contato sem card cria lead no funil `is_default` da
+-- ORGANIZAÇÃO, sem olhar por qual número chegou. Com mais de um número, de negócios
+-- diferentes, os funis de um recebem os contatos do outro — medido em produção
+-- (17/09/2026): 7 de 12 cards vieram de dois números que não são daquele negócio.
+--
+-- `channel_session_id` null = serve a todos (o comportamento de hoje, e o de toda
+-- instalação com um número só): aplicar isto não muda nada até alguém preencher.
+alter table public.crm_pipelines
+  add column if not exists channel_session_id uuid;
+
+create unique index if not exists uq_channel_sessions_org_id
+  on public.channel_sessions (organization_id, id);
+
+-- FK COMPOSTA: um funil não aponta para o número de OUTRA organização. O
+-- `set null (channel_session_id)` zera só a coluna — nunca o `organization_id`.
+do $$
+begin
+  if not exists (
+    select 1 from pg_constraint
+     where conname = 'crm_pipelines_channel_org_fk'
+       and conrelid = 'public.crm_pipelines'::regclass
+  ) then
+    alter table public.crm_pipelines
+      add constraint crm_pipelines_channel_org_fk
+      foreign key (organization_id, channel_session_id)
+      references public.channel_sessions (organization_id, id)
+      on delete set null (channel_session_id);
+  end if;
+end $$;
+
+create index if not exists idx_crm_pipelines_channel
+  on public.crm_pipelines (organization_id, channel_session_id)
+  where channel_session_id is not null;
+
+notify pgrst, 'reload schema';
+
 -- ---- VARREDURA anon: função nova nasce exposta em quem ATUALIZA (migration 0116) ----
 --
 -- ⚠️ ESTE BLOCO É, DE PROPÓSITO, O ÚLTIMO DO ARQUIVO. Apêndice novo entra ANTES

@@ -35,6 +35,8 @@ export interface PatchDeFunil {
   description?: string | null;
   is_default?: boolean;
   depois_de?: string | null;
+  /** De qual número é o funil (migration 0262); `null` = de todos. */
+  channel_session_id?: string | null;
 }
 
 /** O funil como as rotas o devolvem — a mesma forma que a página entrega por props. */
@@ -45,6 +47,8 @@ export interface FunilDaResposta {
   description: string | null;
   position: number;
   is_default: boolean;
+  /** De qual número é o funil (migration 0262); `null` = de todos. */
+  channel_session_id?: string | null;
 }
 
 type Resposta = { data: { pipelines: FunilDaResposta[] } };

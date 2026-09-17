@@ -80,8 +80,57 @@ export interface DadosDoNascimento {
   contactId: string;
   /** conversa que originou — vai ao vínculo e ao registro. */
   conversationId: string;
+  /**
+   * Número por onde a mensagem chegou (`channel_sessions.id`). Decide o funil —
+   * ver `escolherFunilDeEntrada`. Ausente ⇒ funil padrão sem número (como antes
+   * da migration 0262), que é o caminho das importações e das chamadas antigas.
+   */
+  channelSessionId?: string | null;
   /** nome do contato, para o título do card. */
   nomeDoContato: string | null;
+}
+
+/** Funil como a escolha o enxerga: id, se é o padrão, a ordem e o número dono. */
+export interface FunilCandidato {
+  id: string;
+  is_default: boolean;
+  position: number | null;
+  channel_session_id: string | null;
+}
+
+/**
+ * QUAL FUNIL RECEBE O CARD, dado o número por onde a mensagem chegou.
+ *
+ * Regra, nesta ordem (migration 0262):
+ *   1. funil DESTE número — entre eles, o `is_default`; senão o de menor `position`;
+ *   2. funil SEM número (`channel_session_id` null) e `is_default` — o comportamento
+ *      de sempre, e o de toda instalação com um número só;
+ *   3. nenhum ⇒ não nasce card.
+ *
+ * O degrau 3 é o pedido do dono, e é o que separa negócios: numa organização que
+ * já amarrou seus funis a um número, a mensagem que chega por OUTRO número não
+ * tem onde entrar — e não entra no funil alheio, que é o defeito medido (7 de 12
+ * cards vindos de dois números que não eram daquele negócio).
+ *
+ * Pura de propósito: a consulta traz os funis vivos (são poucos por organização) e
+ * a decisão fica aqui, testável sem banco.
+ */
+export function escolherFunilDeEntrada(
+  funis: readonly FunilCandidato[],
+  channelSessionId: string | null | undefined,
+): string | null {
+  const porPosicao = (a: FunilCandidato, b: FunilCandidato): number =>
+    (a.position ?? Number.MAX_SAFE_INTEGER) - (b.position ?? Number.MAX_SAFE_INTEGER);
+
+  if (channelSessionId) {
+    const doNumero = funis.filter((f) => f.channel_session_id === channelSessionId);
+    if (doNumero.length > 0) {
+      const padrao = doNumero.filter((f) => f.is_default).sort(porPosicao)[0];
+      return (padrao ?? [...doNumero].sort(porPosicao)[0])!.id;
+    }
+  }
+  const semNumero = funis.filter((f) => f.channel_session_id === null && f.is_default).sort(porPosicao)[0];
+  return semNumero?.id ?? null;
 }
 
 /**
@@ -91,20 +140,25 @@ export interface DadosDoNascimento {
  * configura (spec 17 §7, invariante 6): uma tela que queira dizer "novos
  * contatos entram em X, etapa Y" pergunta aqui, em vez de reimplementar a regra
  * e divergir dela.
+ *
+ * `channelSessionId` é o número por onde a mensagem chegou — ver
+ * `escolherFunilDeEntrada`. Ausente (importação, chamada antiga) cai no funil
+ * padrão sem número, como antes da migration 0262.
  */
 export async function funilDeEntrada(
   db: SupabaseClient,
   organizationId: string,
+  channelSessionId?: string | null,
 ): Promise<{ pipelineId: string; stageId: string } | { erro: MotivoSemLead }> {
-  const { data: funil } = await db
+  const { data: funis } = await db
     .from("crm_pipelines")
-    .select("id")
+    .select("id, is_default, position, channel_session_id")
     .eq("organization_id", organizationId)
-    .eq("is_default", true)
-    .eq("is_archived", false)
-    .maybeSingle();
+    .eq("is_archived", false);
 
-  if (!funil) return { erro: "sem_funil_de_entrada" };
+  const escolhido = escolherFunilDeEntrada((funis ?? []) as FunilCandidato[], channelSessionId);
+  if (!escolhido) return { erro: "sem_funil_de_entrada" };
+  const funil = { id: escolhido };
 
   // A PRIMEIRA etapa é a de menor `position` — a ordem do funil já diz qual é.
   // Etapas de ganho/perda ficam de fora: um lead não nasce fechado, e um funil
@@ -165,7 +219,7 @@ export async function garantirLeadDaConversa(
   if (existente) return { criado: false, motivo: "ja_existe" };
 
   // 3 · onde entra
-  const destino = await funilDeEntrada(db, organizationId);
+  const destino = await funilDeEntrada(db, organizationId, dados.channelSessionId);
   if ("erro" in destino) return { criado: false, motivo: destino.erro };
 
   // 4 · o card.

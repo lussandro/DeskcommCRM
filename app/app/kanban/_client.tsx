@@ -3,6 +3,7 @@ import { useState } from "react";
 import Link from "next/link";
 
 import { useT } from "@/hooks/i18n/useT";
+import { channelLabel, useChannelSessions } from "@/hooks/channels/useChannelSessions";
 
 import { ImportarLeads } from "./_components/ImportarLeads";
 import { EmptyPipeline } from "@/components/empty";
@@ -21,6 +22,12 @@ export interface FunilDaLista {
   description: string | null;
   position: number;
   is_default: boolean;
+  /**
+   * De qual NÚMERO é este funil (migration 0262). `null` = de todos — o
+   * comportamento de sempre, e o de quem tem um número só. Preenchido, só a
+   * conversa que chega por esse número cria card aqui.
+   */
+  channel_session_id?: string | null;
 }
 
 /**
@@ -89,6 +96,11 @@ export function FunisClient({
   const criar = useCriarFunil();
   const editar = useEditarFunil();
   const arquivar = useArquivarFunil();
+
+  // Os números conectados — para dizer de qual deles é cada funil (0262). Só
+  // muda a tela quando há mais de um; com um só, nada aparece.
+  const { data: canaisDaOrg } = useChannelSessions();
+  const canais = canaisDaOrg ?? [];
 
   const [novo, setNovo] = useState<string | null>(null);
   const [renomeando, setRenomeando] = useState<{ id: string; nome: string } | null>(null);
@@ -323,6 +335,28 @@ export function FunisClient({
                       >
                         <Check size={16} className="mr-1" aria-hidden /> {t("Tornar padrão")}
                       </Button>
+                    )}
+                    {/* De qual número vêm os cards deste funil. Só aparece com mais de um
+                        número conectado: com um só, a pergunta não existe e o campo seria
+                        ruído numa tela que já tem quatro botões. */}
+                    {canais.length > 1 && (
+                      <select
+                        className="h-8 rounded-md border bg-background px-2 text-xs"
+                        value={funil.channel_session_id ?? ""}
+                        disabled={ocupado}
+                        aria-label={t("Número deste funil")}
+                        data-testid={`numero-do-funil-${funil.id}`}
+                        onChange={(e) =>
+                          aplicar(funil.id, { channel_session_id: e.target.value === "" ? null : e.target.value })
+                        }
+                      >
+                        <option value="">{t("Todos os números")}</option>
+                        {canais.map((c) => (
+                          <option key={c.id} value={c.id}>
+                            {channelLabel(c, t)}
+                          </option>
+                        ))}
+                      </select>
                     )}
                     <Button
                       variant="ghost"

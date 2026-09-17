@@ -54,11 +54,23 @@ const bodySchema = z
     description: z.string().max(280).nullable().optional(),
     is_default: z.boolean().optional(),
     depois_de: z.string().min(1).nullable().optional(),
+    /**
+     * De qual NÚMERO este funil é (migration 0262). `null` = de todos, que é o
+     * comportamento de sempre. Com ele preenchido, só a conversa que chega por
+     * esse número cria card aqui — ver `escolherFunilDeEntrada`.
+     */
+    channel_session_id: z.string().uuid().nullable().optional(),
   })
   .strict()
   .refine((b) => Object.keys(b).length > 0, { message: "Nada para alterar." });
 
-type PatchDoFunil = { name?: string; description?: string | null; position?: number; is_default?: boolean };
+type PatchDoFunil = {
+  name?: string;
+  description?: string | null;
+  position?: number;
+  is_default?: boolean;
+  channel_session_id?: string | null;
+};
 
 export async function PATCH(req: NextRequest, ctx: RouteCtx): Promise<Response> {
   const supportDenied = await requireSupportWrite();
@@ -137,6 +149,12 @@ export async function PATCH(req: NextRequest, ctx: RouteCtx): Promise<Response> 
   }
 
   const patchDoAlvo: PatchDoFunil = {};
+  // De qual número é este funil (0262). A FK composta do banco recusa canal de
+  // OUTRA organização — não é preciso conferir aqui, e conferir aqui daria a
+  // impressão de que a garantia mora no app quando ela mora no schema.
+  if (pedido.channel_session_id !== undefined) {
+    patchDoAlvo.channel_session_id = pedido.channel_session_id;
+  }
   if (pedido.name !== undefined) patchDoAlvo.name = pedido.name.trim();
   if (pedido.description !== undefined) {
     patchDoAlvo.description = pedido.description?.trim() || null;

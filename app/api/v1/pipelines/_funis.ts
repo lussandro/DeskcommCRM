@@ -20,7 +20,7 @@ import type { createClient } from "@/lib/supabase/server";
 type Supabase = Awaited<ReturnType<typeof createClient>>;
 
 /** `position` entra: a reordenação calcula em cima dela. */
-const COLUNAS = "id, name, slug, description, position, is_default, is_archived";
+const COLUNAS = "id, name, slug, description, position, is_default, is_archived, channel_session_id";
 
 /**
  * Os funis da organização, na ordem da lista, arquivados inclusive.

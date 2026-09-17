@@ -254,6 +254,9 @@ async function abrirDemanda(admin: Admin, entrada: EntradaDeMensagem): Promise<v
       contactId: entrada.contactId,
       conversationId: entrada.conversationId,
       nomeDoContato: entrada.nomeDoContato,
+      // O número por onde a mensagem chegou decide o funil (migration 0262): sem
+      // isto, os funis de um negócio recebem os contatos de outro número.
+      channelSessionId: entrada.channelSessionId,
     });
 
     // Os DOIS desfechos viram log. Sem a linha do "não criou", o silêncio de

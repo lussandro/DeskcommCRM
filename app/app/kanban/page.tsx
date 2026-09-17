@@ -38,7 +38,7 @@ export default async function KanbanPickerPage() {
   const supabase = await createClient();
   const { data } = await supabase
     .from("crm_pipelines")
-    .select("id, name, slug, description, position, is_default")
+    .select("id, name, slug, description, position, is_default, channel_session_id")
     .eq("organization_id", activeOrg.orgId)
     .eq("is_archived", false)
     .order("position");
