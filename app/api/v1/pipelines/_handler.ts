@@ -51,7 +51,7 @@ export async function listPipelinesHandler(
   let query = supabase
     .from("crm_pipelines")
     .select(
-      "id, organization_id, name, slug, description, is_default, is_archived, position, vocabulary, settings, created_at, updated_at",
+      "id, organization_id, name, slug, description, is_default, is_archived, position, vocabulary, settings, created_at, updated_at, channel_session_id",
     )
     .eq("organization_id", ctx.organization_id)
     .order("position", { ascending: true });
