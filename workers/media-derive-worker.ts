@@ -107,9 +107,7 @@ export async function deriveMessageMedia(row: EventRow): Promise<HandlerResult> 
       openrouterApiKey: process.env.OPENROUTER_API_KEY,
       cacheTtl: "1h",
     };
-    let llm = await resolveOrgLlmConfig(derivePool(), llmCfg, row.organization_id);
-
-    // ─── O painel de provedores manda AQUI também ────────────────────────────
+    // ─── O painel de provedores manda AQUI também — e manda PRIMEIRO ─────────
     //
     // `visao_de_imagem` está no registro de pontos, sem `fixo`, e fora dos
     // pontos governados pela versão publicada — ou seja, a tela o oferece como
@@ -117,9 +115,15 @@ export async function deriveMessageMedia(row: EventRow): Promise<HandlerResult> 
     // operador escolhia um modelo com visão, a tela dizia "salvo", a linha
     // entrava em `ai_purpose_bindings` e a descrição de imagem seguia usando o
     // modelo padrão. É textualmente a classe de defeito que
-    // `lib/ai/gateway-binding.ts` declara ter vindo matar — três pontos foram
-    // fechados e este ficou igual.
+    // `lib/ai/gateway-binding.ts` declara ter vindo matar.
+    //
+    // E a ORDEM importa: a org era resolvida ANTES do binding, e uma org sem
+    // chave no provedor padrão lançava `LlmNotConfiguredError` antes de o
+    // binding (com chave) ser lido — imagem do cliente `failed` 5×, aviso
+    // `midia_nao_lida` na Central (medido em 2026-09-16, a mesma forma do
+    // defeito consertado no seam do agente na v26.9.6).
     const bindingDaVisao = await lerBindingDoPonto(admin, row.organization_id, "visao_de_imagem");
+    let llm: Awaited<ReturnType<typeof resolveOrgLlmConfig>> | null = null;
     if (bindingDaVisao) {
       try {
         const comBinding = await resolveOrgLlmConfig(derivePool(), llmCfg, row.organization_id, {
@@ -138,6 +142,9 @@ export async function deriveMessageMedia(row: EventRow): Promise<HandlerResult> 
         });
       }
     }
+    // Sem binding utilizável: o padrão da organização — e se ele também não
+    // tem chave, lança como sempre lançou.
+    if (llm === null) llm = await resolveOrgLlmConfig(derivePool(), llmCfg, row.organization_id);
 
     // A transcrição é SEMPRE do Whisper (api.openai.com), então precisa de uma
     // chave OpenAI — não da chave do provedor de chat da org. O comentário

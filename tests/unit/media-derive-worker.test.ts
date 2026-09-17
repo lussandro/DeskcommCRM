@@ -23,7 +23,7 @@ const messageRow = {
  * (o caso "ninguém configurou nada", que é o comportamento anterior que estes
  * casos existem para preservar).
  */
-const bindingDeVisao: { provider: string; model_id: string; credential_id: string | null } | null = null;
+let bindingDeVisao: { provider: string; model_id: string; credential_id: string | null } | null = null;
 
 /**
  * A Central: o que ela JÁ TEM aberto, e o que o worker manda inserir.
@@ -123,6 +123,33 @@ describe("deriveMessageMedia", () => {
     expect(updateEqMock).toHaveBeenCalledWith(
       expect.objectContaining({ media_derived_text: "transcrição do áudio real", media_derived_status: "ready" }),
     );
+  });
+
+  it("org SEM chave no provedor padrão + binding de visão COM chave → deriva (o binding vem primeiro)", async () => {
+    // Medido em 2026-09-16: org em anthropic sem chave, painel com visao_de_imagem
+    // em OpenAI; a org era resolvida ANTES do binding, lançava, e a imagem do
+    // cliente ficou `failed` 5× com aviso midia_nao_lida. A ordem é o conserto.
+    bindingDeVisao = { provider: "openai", model_id: "gpt-5.4", credential_id: "cred-openai" };
+    const { resolveOrgLlmConfig } = await import("@/lib/agent-engine/edge/llm/credentials");
+    vi.mocked(resolveOrgLlmConfig).mockImplementation(async (_db, _cfg, _org, override) => {
+      if (!override) throw new Error("org sem credencial LLM utilizável");
+      return {
+        provider: "openai", apiKey: "sk-byok", defaultModel: "gpt-5", params: {}, enabledModels: [],
+        orcamento: { modo: "off", tetoCents: 0, efetivoEm: null, limiarPct: 80 }, orcamentoIndisponivelPorque: null,
+      } as never;
+    });
+    try {
+      messageRow.type = "image";
+      const r = await deriveMessageMedia(eventRow());
+      expect(r.status).toBe("ok");
+      expect(updateEqMock).toHaveBeenCalledWith(expect.objectContaining({ media_derived_status: "ready" }));
+    } finally {
+      bindingDeVisao = null;
+      vi.mocked(resolveOrgLlmConfig).mockReset().mockResolvedValue({
+        provider: "openai", apiKey: "sk-test", defaultModel: "gpt-5", params: {}, enabledModels: [],
+        orcamento: { modo: "off", tetoCents: 0, efetivoEm: null, limiarPct: 80 }, orcamentoIndisponivelPorque: null,
+      } as never);
+    }
   });
 
   it("pula se já derivado (idempotência)", async () => {
