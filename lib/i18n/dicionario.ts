@@ -8829,6 +8829,24 @@ export const DICIONARIO: Traducoes = {
   "Integração Asaas ativada.": { es: "Integración Asaas activada." },
   "Integração Asaas desativada.": { es: "Integración Asaas desactivada." },
   "Chave esquecida — a integração foi removida.": { es: "Clave olvidada — la integración fue eliminada." },
+  "Desative a integração antes de esquecer a chave.": { es: "Desactiva la integración antes de olvidar la clave." },
+
+  // Asaas — orientação e rótulo dos avisos charge_* na Central (lib/ai/inbox-destino.ts, migration 0261)
+  "Abra a integração Asaas, encontre a cobrança pelo nome do cliente e vincule-a a uma empresa ou a um contato.": {
+    es: "Abre la integración Asaas, encuentra el cobro por el nombre del cliente y vincúlalo a una empresa o a un contacto.",
+  },
+  "Escolha o fluxo de retorno para cobrança vencida na integração Asaas, ou marque o número principal da empresa.": {
+    es: "Elige el flujo de retorno para cobro vencido en la integración Asaas, o marca el número principal de la empresa.",
+  },
+  "Leia o motivo do Asaas e resolva no painel dele; o cliente já recebeu a resposta do assistente.": {
+    es: "Lee el motivo de Asaas y resuélvelo en su panel; el cliente ya recibió la respuesta del asistente.",
+  },
+  "O Asaas pausa os avisos depois de falhas seguidas. O sistema religou; confira se a URL do webhook continua cadastrada.": {
+    es: "Asaas pausa los avisos después de fallos seguidos. El sistema volvió a conectarlo; confirma que la URL del webhook siga registrada.",
+  },
+  "Abrir integração Asaas": { es: "Abrir integración Asaas" },
+  "Configurar avisos de cobrança": { es: "Configurar avisos de cobro" },
+  "Conferir webhook": { es: "Revisar webhook" },
 
   // Asaas — cartão da empresa, coluna da lista e vínculo pela Central (Task 9, migration 0261)
   "Abrir boleto/fatura": { es: "Abrir boleto/factura" },

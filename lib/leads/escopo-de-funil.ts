@@ -134,6 +134,12 @@ export const ALVO_DE_FUNIL: Record<string, AlvoDeFunil> = {
   crm_create_webhook_source: "sem_funil",
   crm_set_webhook_source_active: "sem_funil",
   crm_set_automation_rule_active: "sem_funil",
+  // Módulo Asaas (lib/mcp/tools/cobranca.ts): operam sobre o CONTATO
+  // (`contact_id`), nunca sobre um negócio — não recebem `lead_id` nem
+  // `pipeline_id`. Mesmo argumento de `crm_propose_contact_field`: cobrança
+  // pertence ao cliente, não ao funil que ele está percorrendo agora.
+  crm_link_contact_to_billing: "sem_funil",
+  crm_reissue_overdue_charge: "sem_funil",
 };
 
 /**
