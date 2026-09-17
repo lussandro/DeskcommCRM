@@ -167,6 +167,30 @@ export const CONFERENCIAS_DE_SAIDA: readonly ConferenciaDeSaida[] = [
     camada: null,
   },
   {
+    nome: "comprovante_sem_anexo",
+    rotulo: "Não dizer que recebeu um arquivo que não chegou",
+    oQueProtege:
+      "Barra o “recebi o comprovante” quando nenhuma foto, imagem ou arquivo chegou " +
+      "de verdade na conversa — o cliente desliga achando que está resolvido.",
+    escolha: null,
+    porQueNaoSeDesliga:
+      "O cliente fica esperando uma confirmação que ninguém viu, e o pagamento dele fica no " +
+      "limbo. Regra fixa, sem custo.",
+    camada: null,
+  },
+  {
+    nome: "acao_de_pagamento",
+    rotulo: "Não confirmar, registrar nem liberar pagamento",
+    oQueProtege:
+      "Barra o “já liberei seu acesso” e o “deixo registrado para o financeiro”: " +
+      "a baixa e a liberação são automáticas, e o assistente não faz nenhuma das duas.",
+    escolha: null,
+    porQueNaoSeDesliga:
+      "É promessa que ninguém vai cumprir, sobre dinheiro. O cliente para de cobrar e a " +
+      "pendência fica invisível. Regra fixa, sem custo.",
+    camada: null,
+  },
+  {
     nome: "disclosure",
     rotulo: "Dizer que é um assistente quando perguntam",
     oQueProtege: "Se o cliente pergunta se está falando com um robô, a resposta não pode enganar.",

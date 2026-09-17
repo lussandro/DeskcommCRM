@@ -8445,6 +8445,24 @@ export const DICIONARIO: Traducoes = {
   "Barra o \"vou verificar/confirmar o horário\" quando o assistente ainda não chamou a ferramenta de agenda nesta resposta — a promessa só sai depois de checar de verdade.": {
     es: "Bloquea el \"voy a verificar/confirmar el horario\" cuando el asistente todavía no llamó a la herramienta de agenda en esta respuesta — la promesa solo sale después de revisar de verdad.",
   },
+  "Não dizer que recebeu um arquivo que não chegou": {
+    es: "No decir que recibió un archivo que no llegó",
+  },
+  "Barra o “recebi o comprovante” quando nenhuma foto, imagem ou arquivo chegou de verdade na conversa — o cliente desliga achando que está resolvido.": {
+    es: "Bloquea el “recibí el comprobante” cuando ninguna foto, imagen o archivo llegó de verdad a la conversación — el cliente se va creyendo que está resuelto.",
+  },
+  "O cliente fica esperando uma confirmação que ninguém viu, e o pagamento dele fica no limbo. Regra fixa, sem custo.": {
+    es: "El cliente se queda esperando una confirmación que nadie vio, y su pago queda en el limbo. Regla fija, sin costo.",
+  },
+  "Não confirmar, registrar nem liberar pagamento": {
+    es: "No confirmar, registrar ni liberar pagos",
+  },
+  "Barra o “já liberei seu acesso” e o “deixo registrado para o financeiro”: a baixa e a liberação são automáticas, e o assistente não faz nenhuma das duas.": {
+    es: "Bloquea el “ya liberé tu acceso” y el “lo dejo registrado para finanzas”: la baja y la liberación son automáticas, y el asistente no hace ninguna de las dos.",
+  },
+  "É promessa que ninguém vai cumprir, sobre dinheiro. O cliente para de cobrar e a pendência fica invisível. Regra fixa, sem custo.": {
+    es: "Es una promesa que nadie va a cumplir, sobre dinero. El cliente deja de reclamar y la pendencia queda invisible. Regla fija, sin costo.",
+  },
   "Se o cliente pergunta se está falando com um robô, a resposta não pode enganar.": {
     es: "Si el cliente pregunta si está hablando con un robot, la respuesta no puede engañar.",
   },

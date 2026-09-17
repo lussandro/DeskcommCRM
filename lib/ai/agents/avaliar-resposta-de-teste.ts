@@ -72,6 +72,17 @@ const NAO_AVALIAVEIS_SEM_TURNO: ReadonlyArray<{ gate: string; porque: string }> 
     gate: "agenda_stall",
     porque: "depende de a ferramenta de agenda ter sido chamada neste turno — não há turno real no teste",
   },
+  {
+    gate: "comprovante_sem_anexo",
+    porque: "depende de ter chegado (ou não) uma foto ou arquivo na conversa real",
+  },
+  {
+    // Honesto: este NÃO depende do turno — é regra fixa de texto e caberia aqui.
+    // Simplesmente ainda não é checado pelo botão, e dizer "passou" sem checar é
+    // o defeito que este módulo inteiro existe para não repetir.
+    gate: "acao_de_pagamento",
+    porque: "ainda não é checado pelo botão Testar — só no envio real",
+  },
   { gate: "disclosure", porque: "depende de esta ser a primeira mensagem ao contato" },
 ];
 

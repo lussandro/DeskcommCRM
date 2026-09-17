@@ -253,6 +253,31 @@ export interface GateContext {
    * site, que é quem monta as tools).
    */
   agenda?: { active: boolean; podeMarcar: boolean; toolCalledThisTurn: boolean };
+  /**
+   * Arma o `comprovanteSemAnexoGate`. Ausente = no-op — mesmo default seguro de
+   * `agenda`: caller que não conhece o campo não arma nada.
+   *
+   * `inboundComMidiaDesdeUltimoOutbound`: chegou ALGUMA mensagem do cliente com
+   * `media_url` nesta conversa depois da última outbound? Se sim, o agente pode
+   * dizer que recebeu — e o gate passa.
+   *
+   * `ultimaInboundMencionaAnexo`: o corpo da última inbound fala de comprovante/
+   * foto/imagem/print/arquivo? É o que dá sentido a um "Recebi sim por aqui."
+   * solto — a frase medida em produção (17/09/2026), que não tem substantivo de
+   * anexo nenhum e mesmo assim afirma ter recebido o que o cliente acabou de
+   * dizer que mandou (e não mandou).
+   */
+  anexos?: { inboundComMidiaDesdeUltimoOutbound: boolean; ultimaInboundMencionaAnexo: boolean };
+  /**
+   * Arma o `acaoDePagamentoGate`. Ausente = no-op.
+   *
+   * A regra vale para TODO agente (o dono do produto: o agente não confirma
+   * pagamento, não registra, não libera acesso — a baixa é do sistema de
+   * pagamentos). O campo existe só para que um caller que não conhece o gate não
+   * arme nada por acidente, como o follow-up determinístico, onde veto é drop
+   * silencioso.
+   */
+  pagamentos?: { active: boolean };
 }
 
 /**
@@ -534,6 +559,130 @@ export const agendaStallGate: Gate = {
 };
 
 /**
+ * Afirmação de RECEBIMENTO em primeira pessoa. O lookbehind mata a negação imediata —
+ * "não chegou nenhuma imagem aqui" é exatamente a frase CERTA, e vetá-la faria o gate
+ * proibir a única saída honesta que ele manda o modelo usar.
+ */
+const RECEBIMENTO = '(?<!\\b(?:nao|nunca|nem)\\s)\\b(?:recebi|recebemos|recebid[oa]s?|chegou|chegaram|consegui (?:ver|abrir|visualizar))\\b';
+const SUBSTANTIVO_DE_ANEXO =
+  '\\b(?:comprovantes?|fotos?|imagens?|imagem|prints?|arquivos?|anexos?|documentos?|pdfs?|recibos?)\\b';
+
+/**
+ * Recebimento a ≤60 chars de um substantivo de anexo, nas DUAS direções ("recebi o
+ * comprovante" e "o comprovante chegou"). Curto e ancorado nas frases MEDIDAS em produção
+ * (17/09/2026, agente financeiro "Paulo", `gpt-5.4`), não uma gramática geral.
+ */
+const COMPROVANTE_RECEBIDO_PATTERN = new RegExp(
+  `${RECEBIMENTO}[^\\n]{0,60}?${SUBSTANTIVO_DE_ANEXO}|${SUBSTANTIVO_DE_ANEXO}[^\\n]{0,60}?${RECEBIMENTO}`,
+  'i',
+);
+
+/**
+ * A metade sem substantivo: "Recebi sim por aqui." Só vale quando a ÚLTIMA inbound do
+ * cliente FALA de anexo — sem esse contexto, "recebi seu pedido" é frase legítima e o
+ * gate não tem o que dizer sobre ela.
+ */
+const RECEBIMENTO_ISOLADO_PATTERN = new RegExp(`${RECEBIMENTO}`, 'i');
+
+const ANEXO_PATTERN = new RegExp(SUBSTANTIVO_DE_ANEXO, 'i');
+
+/**
+ * O cliente falou de anexo? UM vocabulário, dois leitores: este gate e quem monta
+ * `GateContext.anexos` lendo a última inbound (`inbound-turn.ts`). Duas listas divergiriam
+ * em silêncio, como as sete leituras de "quem manda na conversa".
+ */
+export function mencionaAnexo(texto: string): boolean {
+  return ANEXO_PATTERN.test(semAcento(texto));
+}
+
+/**
+ * Gate de COMPROVANTE SEM ANEXO — o agente NUNCA diz que recebeu um arquivo que não
+ * existe. Medido em produção (17/09/2026): o cliente escreveu "mandei a foto do
+ * comprovante, recebeu?" SEM mandar imagem alguma e o agente respondeu "Recebi sim,
+ * querida. Deixo o comprovante registrado para o financeiro acompanhar". Numa segunda
+ * conversa, com o prompt JÁ proibindo isso com todas as letras, ele abriu com "Recebi sim
+ * por aqui." — a mesma lição do `agendaStallGate`: instrução em texto é ensino, não
+ * garantia.
+ *
+ * Sem fail-safe de N tentativas (como o `agendaStallGate`, ao contrário do vocabulário
+ * interno): não existe versão aceitável de "recebi o que não chegou", só a alternativa de
+ * dizer a verdade — e a `reason` diz qual é.
+ *
+ * Desarmado (`anexos` ausente) = no-op. Houve mídia inbound desde o último outbound = pass:
+ * aí o agente recebeu mesmo.
+ */
+export const comprovanteSemAnexoGate: Gate = {
+  name: 'comprovante_sem_anexo',
+  evaluate: (ctx) => {
+    if (ctx.anexos === undefined) return { pass: true };
+    if (ctx.anexos.inboundComMidiaDesdeUltimoOutbound) return { pass: true };
+    const corpo = semAcento(ctx.body);
+    const afirmou =
+      COMPROVANTE_RECEBIDO_PATTERN.test(corpo) ||
+      (ctx.anexos.ultimaInboundMencionaAnexo && RECEBIMENTO_ISOLADO_PATTERN.test(corpo));
+    if (!afirmou) return { pass: true };
+    return {
+      pass: false,
+      code: 'comprovante_sem_anexo',
+      reason:
+        'Nenhuma imagem ou arquivo chegou nesta conversa. Nunca diga que recebeu; diga que ' +
+        'não chegou nada e que o comprovante não é necessário — a confirmação do pagamento é ' +
+        'automática.',
+    };
+  },
+};
+
+/**
+ * Ação de pagamento afirmada em PRIMEIRA PESSOA. Quatro famílias, cada uma exigindo o
+ * OBJETO financeiro/de acesso por perto — sem isso, "deixo anotado seu horário" (frase
+ * legítima de um agente de clínica) cairia no mesmo veto.
+ */
+const ACAO_DE_PAGAMENTO_PATTERNS: readonly RegExp[] = [
+  // registrar/anotar pagamento ou comprovante
+  /\b(?:deixo|deixei|deixarei|vou deixar|registrei|anotei|vou registrar|vou anotar|(?:pra|para) eu (?:registrar|anotar))\b[^\n]{0,60}?\b(?:pagamentos?|comprovantes?|financeiro|pix|recibos?|boletos?|transferencias?|depositos?)\b/i,
+  // A mesma ação com o objeto ANTES: "pode me mandar o comprovante para eu registrar".
+  /\b(?:pagamentos?|comprovantes?|pix|recibos?|boletos?)\b[^\n]{0,60}?\b(?:(?:pra|para) eu (?:registrar|anotar)|vou registrar|vou anotar|deixo registrad[oa]|deixo anotad[oa])\b/i,
+  // liberar/desbloquear/reativar acesso
+  /\b(?:ja )?(?:liberei|liberamos|libero|desbloqueei|reativei|vou liberar|vou desbloquear|vou reativar|irei liberar)\b[^\n]{0,40}?\b(?:acessos?|contas?|plataforma|cursos?|area de membros|sistema|login|matricula)\b/i,
+  // confirmar pagamento — "for/seja/estiver confirmado" é condição futura, não afirmação
+  /\b(?:confirmei|confirmo|ja confirmei|vou confirmar)\b[^\n]{0,30}?\b(?:pagamentos?|pix|transferencias?|depositos?)\b/i,
+  /\bpagamentos?\b[^\n]{0,20}?(?<!\b(?:for|seja|estiver|fosse|forem)\s)\bconfirmad[oa]s?\b/i,
+  // dar baixa
+  /\b(?:dei|dou|vou dar|darei)\s+baixa\b/i,
+];
+
+/**
+ * Gate de AÇÃO DE PAGAMENTO QUE NÃO É DO AGENTE — regra do dono do produto: o agente não
+ * confirma pagamento, não registra, não libera acesso; a baixa e a liberação são
+ * automáticas, feitas pelo sistema de pagamentos. Medido em produção (17/09/2026): o
+ * agente financeiro afirmava "Deixo isso registrado para o financeiro" e "pode me mandar o
+ * comprovante para eu registrar" — duas ações que ele não executa e ninguém executa por
+ * ele. O cliente desliga achando que está resolvido.
+ *
+ * Determinístico e de custo zero, como o `stop`/`internal_vocabulary` — mas armado por
+ * `pagamentos.active` pelo mesmo motivo dos irmãos: caller que não conhece o campo (o
+ * follow-up determinístico) não arma nada, porque lá veto é drop silencioso.
+ *
+ * Posição: logo depois do `agendaStallGate`, antes do `disclosureGate` — este precisa ver
+ * o texto do MODELO, não o corpo já emendado pelo disclosure.
+ */
+export const acaoDePagamentoGate: Gate = {
+  name: 'acao_de_pagamento',
+  evaluate: (ctx) => {
+    if (ctx.pagamentos?.active !== true) return { pass: true };
+    const corpo = semAcento(ctx.body);
+    if (!ACAO_DE_PAGAMENTO_PATTERNS.some((p) => p.test(corpo))) return { pass: true };
+    return {
+      pass: false,
+      code: 'acao_de_pagamento_nao_e_do_agente',
+      reason:
+        'Você não confirma, não registra e não libera nada: a baixa e a liberação são ' +
+        'automáticas pelo sistema de pagamentos. Reescreva sem afirmar ação sua.',
+    };
+  },
+};
+
+/**
  * Gate de disclosure (F4-05; blueprint 5.7) — garante que a PRIMEIRA mensagem outbound a um
  * lead novo se apresenta como assistente virtual (template versionado por org). Decisão de
  * produto que blinda hoje (CDC) e amanhã (PL 2338), não exigência da Meta. Sem template
@@ -687,8 +836,14 @@ const spinningGate: Gate = {
  * `GateContext.agenda`): só o caminho do agente o arma quando o agente publicado tem
  * `crm_book_appointment` nas tools, então a v7 também não muda o destino de nenhum envio que
  * já existia fora desse caso — muda o TRACE e passa a medir/impedir a promessa vazia.
+ * v8 = insere `comprovante_sem_anexo` e `acao_de_pagamento` entre `agenda_stall` e
+ * `disclosure` — as duas curas determinísticas medidas em 17/09/2026 (agente financeiro
+ * afirmando ter recebido um comprovante que nunca chegou, e afirmando registrar/liberar o
+ * que o sistema de pagamentos faz sozinho). Os dois nascem DESARMADOS (ver
+ * `GateContext.anexos` e `GateContext.pagamentos`): só o caminho do agente os arma, então
+ * a v8, como a v6 e a v7, não muda o destino de nenhum envio que já existia fora desse caso.
  */
-export const BEFORE_SEND_CHAIN_VERSION = 7;
+export const BEFORE_SEND_CHAIN_VERSION = 8;
 
 /**
  * Ordem FINAL da cadeia (F4-08/F4-09; edge-contract §before_send / blueprint órgão 5) — DADO
@@ -705,6 +860,8 @@ export const BEFORE_SEND_CHAIN_VERSION = 7;
  *         `separacao-fala-e-operacao.md`); antes do disclosure porque ele pode emendar o corpo;
  *   (6.9) agenda_stall — "vou verificar/confirmar horário" sem ter chamado a ferramenta de
  *         agenda neste turno; antes do disclosure pelo mesmo motivo do internal_vocabulary;
+ *   (7.1) comprovante_sem_anexo — "recebi o comprovante" sem nenhuma mídia ter chegado;
+ *   (7.2) acao_de_pagamento — o agente afirmando confirmar/registrar/liberar pagamento;
  *   (8) disclosure — 1ª mensagem se apresenta como assistente virtual (F4-05).
  * (O anti-jailbreak F4-04 é INBOUND advisório, não gate de before_send — não entra aqui.)
  */
@@ -719,6 +876,8 @@ export const BEFORE_SEND_GATES: readonly Gate[] = [
   casePromiseGate,
   internalVocabularyGate,
   agendaStallGate,
+  comprovanteSemAnexoGate,
+  acaoDePagamentoGate,
   disclosureGate,
 ];
 
@@ -840,6 +999,16 @@ export interface RunBeforeSendArgs {
    * no-op (retrocompatível com todo caller que não conhece agenda, ex.: `followup-turn.ts`).
    */
   agenda?: GateContext['agenda'];
+  /**
+   * Arma o `comprovanteSemAnexoGate` para ESTA tentativa — ver `GateContext.anexos`.
+   * Ausente = gate no-op (todo caller que não conhece anexos segue idêntico).
+   */
+  anexos?: GateContext['anexos'];
+  /**
+   * Arma o `acaoDePagamentoGate` para ESTA tentativa — ver `GateContext.pagamentos`.
+   * Ausente = gate no-op.
+   */
+  pagamentos?: GateContext['pagamentos'];
   /**
    * Enviado SÓ se TODOS os gates passarem — ChannelAdapter (própria tx/idempotência). Recebe o
    * corpo FINAL (o disclosureGate F4-05 pode emendá-lo via `amendBody`): quem monta o send DEVE
@@ -1030,6 +1199,8 @@ export async function runBeforeSend(args: RunBeforeSendArgs): Promise<BeforeSend
         : {}),
       internalVocabularyEnforced: args.enforceInternalVocabulary ?? false,
       ...(args.agenda !== undefined ? { agenda: args.agenda } : {}),
+      ...(args.anexos !== undefined ? { anexos: args.anexos } : {}),
+      ...(args.pagamentos !== undefined ? { pagamentos: args.pagamentos } : {}),
     };
 
     const { body: evaluatedBody, trace, veto, throttleWaitMs } = evaluateBeforeSend(ctx, gates);

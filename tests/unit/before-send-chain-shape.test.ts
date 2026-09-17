@@ -34,6 +34,8 @@ const ORDEM_ESPERADA = [
   "case_promise",
   "internal_vocabulary",
   "agenda_stall",
+  "comprovante_sem_anexo",
+  "acao_de_pagamento",
   "disclosure",
 ] as const;
 
@@ -65,8 +67,8 @@ describe("forma da cadeia before_send", () => {
     // O par (tamanho, versão) é o que amarra os dois. Acrescentar um gate sem
     // bumpar deixa o trace de auditoria mentindo sobre qual cadeia rodou — e o
     // trace é justamente a prova que as Fases 0–2 usam para dizer "não regrediu".
-    expect(BEFORE_SEND_GATES).toHaveLength(11);
-    expect(BEFORE_SEND_CHAIN_VERSION).toBe(7);
+    expect(BEFORE_SEND_GATES).toHaveLength(13);
+    expect(BEFORE_SEND_CHAIN_VERSION).toBe(8);
   });
 
   it("internal_vocabulary roda ANTES do disclosure — inspeciona o texto do modelo, não o emendado", () => {
@@ -82,6 +84,13 @@ describe("forma da cadeia before_send", () => {
     const nomes = BEFORE_SEND_GATES.map((g) => g.name);
     expect(nomes.indexOf("agenda_stall")).toBeLessThan(nomes.indexOf("disclosure"));
     expect(nomes.indexOf("agenda_stall")).toBe(nomes.indexOf("internal_vocabulary") + 1);
+  });
+
+  it("os gates de pagamento rodam ANTES do disclosure — mesma razão dos irmãos: texto do modelo", () => {
+    const nomes = BEFORE_SEND_GATES.map((g) => g.name);
+    expect(nomes.indexOf("comprovante_sem_anexo")).toBe(nomes.indexOf("agenda_stall") + 1);
+    expect(nomes.indexOf("acao_de_pagamento")).toBe(nomes.indexOf("comprovante_sem_anexo") + 1);
+    expect(nomes.indexOf("acao_de_pagamento")).toBeLessThan(nomes.indexOf("disclosure"));
   });
 
   it("nenhum gate repetido — nome duplicado quebraria a leitura do trace", () => {
