@@ -47,13 +47,16 @@ export async function avisarFunilDeEntradaAusente(
       .maybeSingle();
     if (jaAberto) return;
 
-    const { data: canal } = await admin
+    const { data: channelSession } = await admin
       .from("channel_sessions")
       .select("display_name, phone_number")
       .eq("organization_id", input.organizationId)
       .eq("id", input.channelSessionId)
       .maybeSingle();
-    const numero = canal?.display_name || canal?.phone_number || "este número";
+    // Cadeia do CANAL, não do contato: `channel_sessions.display_name` é o apelido
+    // que o dono deu ao número, e a cadeia dele é própria e legítima (ver o gate em
+    // tests/unit/rotulo-do-contato.test.ts, que isenta sessão de canal).
+    const numero = channelSession?.display_name || channelSession?.phone_number || "este número";
 
     const body =
       input.motivo === "sem_funil_de_entrada"

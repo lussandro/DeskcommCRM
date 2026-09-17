@@ -6007,6 +6007,9 @@ export const DICIONARIO: Traducoes = {
   "Número deste funil": { es: "Número de este embudo" },
   "Entrada deste número": { es: "Entrada de este número" },
   "Entrada dos demais números": { es: "Entrada de los demás números" },
+  "Crie um funil para esse número, ou marque um funil existente como \"Todos os números\" na lista de funis.": { es: "Cree un embudo para ese número, o marque un embudo existente como \"Todos los números\" en la lista de embudos." },
+  "Abrir a lista de funis": { es: "Abrir la lista de embudos" },
+  "Conversas de um número não estão virando card": { es: "Las conversaciones de un número no se están convirtiendo en tarjeta" },
   "Ele sai desta lista e para de receber negócio novo. O histórico continua guardado, e nada é apagado.": {
     es: "Sale de esta lista y deja de recibir negocio nuevo. El historial se conserva, y nada se borra.",
   },

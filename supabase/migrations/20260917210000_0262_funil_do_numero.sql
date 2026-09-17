@@ -73,3 +73,31 @@ create index if not exists idx_crm_pipelines_channel
   where channel_session_id is not null;
 
 notify pgrst, 'reload schema';
+
+-- ── O card que NÃO nasceu precisa aparecer na tela ──────────────────────────
+--
+-- Com os funis amarrados a números, a conversa que chega por um número sem funil
+-- não vira card — é o comportamento pedido, mas o efeito é mudo: a conversa segue
+-- no Inbox e o agente responde, enquanto funil, Radar de Risco, follow-up e
+-- métricas simplesmente não existem para aquele contato. Sem este kind o único
+-- registro seria `logger.info`, que numa VPS é `docker logs`.
+--
+-- A constraint é RECONSTRUÍDA INTEIRA (regra #159: um bloco por constraint; N
+-- blocos quebram o `update.sh` de quem já tem vocabulário posterior).
+alter table public.agent_inbox_items drop constraint if exists agent_inbox_items_kind_check;
+alter table public.agent_inbox_items add constraint agent_inbox_items_kind_check
+  check (kind in (
+    'appointment_outcome_required','appointment_recovery_review','qr_rescan','routing_unassigned',
+    'job_dead','event_dead','budget_exceeded','handoff','promotion_review','judge_unaligned',
+    'followup_dead','snooze_expired','next_action_ambiguous','risk_backlog_seeded',
+    'reactivation_expired','capabilities_missing','message_send_stuck','midia_nao_lida',
+    'channel_template_review','channel_number_alert','promise_unfulfilled',
+    'contact_proposal_expired','budget_warning','conhecimento_nao_indexado','voice_call_missed',
+    'case_stale',
+    'charge_unmatched','charge_overdue_no_flow','charge_reissue_failed','charge_webhook_paused',
+    -- 0262: a mensagem chegou e não virou card (número sem funil, ou funil sem etapa aberta)
+    'lead_sem_funil',
+    'other'
+  ));
+
+notify pgrst, 'reload schema';
