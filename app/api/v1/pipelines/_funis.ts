@@ -94,6 +94,7 @@ export function corpo(funis: FunilEditavel[]): {
     description: string | null;
     position: number;
     is_default: boolean;
+    channel_session_id: string | null;
   }>;
 } {
   return {
@@ -106,6 +107,9 @@ export function corpo(funis: FunilEditavel[]): {
         description: f.description ?? null,
         position: f.position,
         is_default: f.is_default,
+        // Sem isto a tela volta a mostrar "Todos os números" logo após salvar: a
+        // resposta da mutação É a fonte da verdade do `FunisClient` (Codex review).
+        channel_session_id: f.channel_session_id ?? null,
       })),
   };
 }

@@ -32,6 +32,8 @@ export interface FunilEditavel {
   is_archived: boolean;
   /** Opcional porque NENHUMA regra daqui a usa — ela só existe para a tela. */
   description?: string | null;
+  /** De qual número é o funil (migration 0262); `null` = de todos. Só para a tela. */
+  channel_session_id?: string | null;
 }
 
 /** O que amarra o funil ao resto do sistema, contado ANTES de arquivar ou excluir. */

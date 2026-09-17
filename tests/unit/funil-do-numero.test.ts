@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { escolherFunilDeEntrada, type FunilCandidato } from '@/lib/leads/nascimento-do-lead';
+import { corpo } from '@/app/api/v1/pipelines/_funis';
 
 const BACCO = 'canal-2220';
 const CHATCORE = 'canal-7781';
@@ -75,5 +76,17 @@ describe('escolherFunilDeEntrada — o funil pertence a um número', () => {
       f({ id: 'primeiro', position: 10, channel_session_id: BACCO }),
     ];
     expect(escolherFunilDeEntrada(funis, BACCO)).toBe('primeiro');
+  });
+
+  it('a resposta da API leva o número do funil — senão a tela volta a "Todos" ao salvar', () => {
+    // Guarda do achado do Codex: `corpo()` descartava `channel_session_id`, e o
+    // `FunisClient` aplica a resposta da mutação como fonte da verdade — o select
+    // voltava para "Todos os números" logo depois de salvar.
+    const resposta = corpo([
+      { id: 'vendas', name: 'Vendas', slug: 'vendas', position: 1000, is_default: true, is_archived: false, channel_session_id: BACCO },
+      { id: 'clientes', name: 'Clientes', slug: 'clientes', position: 2000, is_default: false, is_archived: false },
+    ]);
+    expect(resposta.pipelines[0]!.channel_session_id).toBe(BACCO);
+    expect(resposta.pipelines[1]!.channel_session_id).toBeNull();
   });
 });

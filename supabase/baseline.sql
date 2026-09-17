@@ -25454,8 +25454,29 @@ notify pgrst, 'reload schema';
 alter table public.crm_pipelines
   add column if not exists channel_session_id uuid;
 
-create unique index if not exists uq_channel_sessions_org_id
-  on public.channel_sessions (organization_id, id);
+-- A 0228 já criou `channel_sessions_org_id_unique` nessas mesmas colunas, e o
+-- `if not exists` só olha o NOME: criar outro daria a toda instalação um segundo
+-- índice idêntico, pago em cada escrita. Cria só onde não houver nenhum.
+do $$
+begin
+  if not exists (
+    select 1
+      from pg_index i
+      join pg_class t on t.oid = i.indrelid
+     where t.relname = 'channel_sessions'
+       and t.relnamespace = 'public'::regnamespace
+       and i.indisunique
+       and i.indnatts = 2
+       and (
+         select array_agg(a.attname::text order by k.ord)
+           from unnest(i.indkey) with ordinality as k(attnum, ord)
+           join pg_attribute a on a.attrelid = t.oid and a.attnum = k.attnum
+       ) = array['organization_id', 'id']
+  ) then
+    create unique index uq_channel_sessions_org_id
+      on public.channel_sessions (organization_id, id);
+  end if;
+end $$;
 
 -- FK COMPOSTA: um funil não aponta para o número de OUTRA organização. O
 -- `set null (channel_session_id)` zera só a coluna — nunca o `organization_id`.
