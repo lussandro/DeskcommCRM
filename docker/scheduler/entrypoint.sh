@@ -64,6 +64,10 @@ CRONS="
 * * * * *|25|api/v1/cron/recover-stuck-messages
 */5 * * * *|25|api/v1/cron/storage-redaction?limit=50
 */5 * * * *|25|api/v1/cron/snooze-watcher
+# A CAMPANHA. Minuto a minuto, e a rodada manda no máximo uma mensagem por
+# número: é o cron que dá a cadência base, e o ritmo da campanha e do canal
+# (channel_knobs + pacing_ledger) só sabem torná-la mais lenta.
+* * * * *|45|api/v1/cron/campaign-worker
 */5 * * * *|25|api/v1/cron/attendant-heartbeat
 */5 * * * *|60|api/v1/cron/webhook-log-retention
 */5 * * * *|45|api/v1/cron/channel-health

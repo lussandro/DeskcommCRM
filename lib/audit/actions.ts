@@ -588,6 +588,22 @@ export const AUDIT_ACTIONS = [
   "mcp.integration_tested",
   "mcp.integration_enabled",
   "mcp.integration_disabled",
+  // Campanhas (migration 0264). Toda mudança de ESTADO da campanha audita: são
+  // as ações que fazem mensagem sair para gente que não pediu, e "quem mandou
+  // isso, e quando?" precisa de resposta. Edição de rascunho não audita — não
+  // saiu nada dela.
+  "campaign.created",
+  "campaign.prepared",
+  "campaign.test_sent",
+  "campaign.scheduled",
+  "campaign.started",
+  "campaign.paused",
+  "campaign.resumed",
+  "campaign.cancelled",
+  "campaign.duplicated",
+  // Rodada do cron que MEXEU em alguma campanha (enviou, pulou, concluiu,
+  // promoveu agendada). Rodada vazia não audita — o critério do `CLAUDE.md`.
+  "cron.campaign_worker",
 ] as const;
 
 /** Um código de auditoria. Derivado de `AUDIT_ACTIONS` — não redigite a lista. */

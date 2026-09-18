@@ -210,6 +210,26 @@ export interface VoiceCallRow {
   duration_ms: number | null;
 }
 
+/**
+ * Uma campanha que falou com este titular (migration 0264).
+ *
+ * O texto vai junto porque é o que foi DITO a ele; o telefone não, porque ele já
+ * está no bloco do contato e repeti-lo só multiplica PII no arquivo entregue.
+ */
+export interface CampaignRecipientRow {
+  id: string;
+  campaign_id: string;
+  status: string;
+  eligibility_status: string;
+  exclusion_reason: string | null;
+  rendered_body: string | null;
+  sent_at: string | null;
+  delivered_at: string | null;
+  read_at: string | null;
+  replied_at: string | null;
+  opted_out_at: string | null;
+}
+
 export interface ExportPayload {
   request_id: string;
   organization_id: string;
@@ -249,6 +269,16 @@ export interface ExportPayload {
    * próprio cascade.
    */
   voice_calls: VoiceCallRow[];
+  /**
+   * Campanhas que falaram com o titular (migration 0264).
+   *
+   * Entra pelo mesmo motivo de `voice_calls`: o trigger
+   * `trg_redigir_campanhas_anonimizado` APAGA o texto e o telefone destas linhas
+   * quando ele pede anonimização, e o que se apaga a pedido dele é o que se
+   * entrega a pedido dele (Art. 18 II). Sem este bloco, alguém que recebeu uma
+   * prospecção pediria acesso e não veria a mensagem que recebeu.
+   */
+  campaign_recipients: CampaignRecipientRow[];
   reply_drafts?: Array<{
     id: string;
     status: string;
@@ -632,6 +662,28 @@ export async function collectExportData(args: CollectArgs): Promise<ExportPayloa
     }
   }
 
+  // Campanhas — `contact_id` direto em `campaign_recipients` (migration 0264).
+  let campaign_recipients: CampaignRecipientRow[] = [];
+  if (contactId) {
+    const { data, error } = await admin
+      .from("campaign_recipients")
+      .select(
+        "id, campaign_id, status, eligibility_status, exclusion_reason, rendered_body, sent_at, delivered_at, read_at, replied_at, opted_out_at",
+      )
+      .eq("organization_id", organizationId)
+      .eq("contact_id", contactId)
+      .order("created_at", { ascending: false })
+      .limit(500);
+    if (error) {
+      logger.warn("[lgpd-export-worker] campaign recipients load failed", {
+        request_id: requestId,
+        error: error.message,
+      });
+    } else if (data) {
+      campaign_recipients = data as unknown as CampaignRecipientRow[];
+    }
+  }
+
   // Captação por webhook — a MESMA classe do bloco acima, achada pelo gate.
   let webhook_captures: CaptureRow[] = [];
   if (contactId) {
@@ -807,6 +859,7 @@ export async function collectExportData(args: CollectArgs): Promise<ExportPayloa
     meeting_deliveries,
     appointment_notices,
     voice_calls,
+    campaign_recipients,
   };
 }
 
@@ -838,5 +891,6 @@ function emptyPayload(
     meeting_deliveries: [],
     appointment_notices: [],
     voice_calls: [],
+    campaign_recipients: [],
   };
 }

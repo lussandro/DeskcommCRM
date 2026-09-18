@@ -173,6 +173,22 @@ export const NAV_CATALOG = [
     sidebar: true,
   },
   {
+    // A campanha vive no CRM e não em Conexões: quem a usa está pensando em
+    // QUEM vai falar, não no número que fala. O ritmo (que é de Conexões) ela
+    // herda, e só sabe deixar mais devagar.
+    href: "/app/campaigns",
+    label: "Campanhas",
+    description: "Fale com uma lista de contatos que você escolhe, no ritmo do número.",
+    icon: "Megaphone",
+    group: "crm",
+    section: "O dia a dia da venda",
+    // SEM `sidebar: true`, e a razão é medida, não estética: o sidebar do CRM
+    // tem quatro itens porque o quinto fez o menu rolar por 13px em 900px
+    // (e2e `navegacao.spec.ts`), e o conserto foi o hub. Campanha se cria de
+    // vez em quando e se acompanha pela própria tela — é uso de hub, não de
+    // toda hora. `tests/unit/navegacao-registry.test.ts` prende a lista exata.
+  },
+  {
     href: "/app/contacts",
     label: "Contatos",
     description: "As pessoas do outro lado da conversa e seu histórico.",

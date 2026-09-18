@@ -82,6 +82,7 @@ beforeAll(() => {
       v_agent uuid;
       v_version uuid;
       v_boundary jsonb;
+      v_campanha uuid;
     begin
       foreach v_org in array array['${ORG_A}'::uuid, '${ORG_B}'::uuid] loop
         select id into v_sess from public.channel_sessions where organization_id = v_org limit 1;
@@ -103,6 +104,19 @@ beforeAll(() => {
         if not exists (select 1 from public.messages where organization_id = v_org) then
           insert into public.messages (organization_id, conversation_id, channel_session_id, contact_id, type, direction, body)
             values (v_org, v_conv, v_sess, v_contact, 'text', 'inbound', 'rls invariant probe');
+        end if;
+
+        -- 0264: a campanha guarda a lista de QUEM vai receber prospecção e o
+        -- texto que vai ser disparado. Vazar entre organizações entregaria ao
+        -- vizinho a lista de prospects e a abordagem comercial inteira.
+        if not exists (select 1 from public.campaigns where organization_id = v_org) then
+          insert into public.campaigns
+            (organization_id, name, channel_session_id, message_body, base_legal, lia_ref)
+            values (v_org, 'RLS Invariant Campanha', v_sess, 'Oi, tudo bem?', 'legitimate_interest', 'LIA-RLS')
+            returning id into v_campanha;
+          insert into public.campaign_recipients
+            (organization_id, campaign_id, contact_id, recipient_address, content_version)
+            values (v_org, v_campanha, v_contact, '+5548999990000', 1);
         end if;
 
         -- 0227: sugestões contêm texto privado da conversa. Os dois tenants
@@ -307,6 +321,13 @@ export const TABLES = [
   // aceitou o risco do segundo aparelho vinculado: vazar entre organizacoes
   // diria a uma empresa quem, na outra, ligou a feature e quando.
   "org_voice_calls",
+  // migration 0264 — campanhas. A lista de destinatários é o ativo comercial
+  // mais sensível que existe aqui: quem vazasse leria a quem o vizinho está
+  // prospectando, com que texto e por qual número. A ESCRITA exige `manager` e
+  // NÃO é medida neste arquivo (o usuário semeado é `agent`); quem mede a
+  // escrita é `rbac-config-ia-canais.test.ts` e a rota.
+  "campaigns",
+  "campaign_recipients",
   // ⚠️ `webhook_lead_captures` (migration 0174) NÃO entra nesta lista, e a
   // ausência é deliberada: a policy dela exige `manager`, e o usuário semeado
   // aqui é `agent` — o controle positivo falharia por ACERTO, e a "correção"

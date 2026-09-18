@@ -1,0 +1,459 @@
+/**
+ * Uma RODADA de campanha: no máximo um envio por NÚMERO, e só se o ritmo
+ * permitir.
+ *
+ * ═══ Por que um por número, e não um lote ═══
+ *
+ * O ritmo é o produto. Quem dispara 500 de uma vez queima o número, e número
+ * queimado não volta em dias — volta em semanas de warm-up, com o cliente sem
+ * canal. A rodada pergunta ao motor de pacing (o MESMO do agente, não um espelho)
+ * se pode enviar AGORA, envia um, registra no `pacing_ledger`, e acabou. A
+ * cadência real é a do cron × a do throttle, o que for mais lento.
+ *
+ * Um por NÚMERO e não um por instalação: duas conexões diferentes não disputam
+ * ritmo entre si — o `pacing_ledger` é por `channel_session_id` —, e serializar
+ * tudo faria a campanha de um cliente esperar a do outro.
+ *
+ * ═══ Por que o motor de pacing do AGENTE ═══
+ *
+ * `lib/automation/throttle.ts` espaça por um `Map` de módulo (não sobrevive a
+ * restart nem a dois processos) e o cap diário dele lê `channel_session_warmup`,
+ * tabela sem escritor — o ramo nunca dispara (medido; está escrito no cabeçalho
+ * de lá). Campanha é exatamente o caso que estoura número: precisa do contador
+ * real (`pacing_ledger`) e do mesmo lock por número que a cadeia de envio usa,
+ * para campanha e agente não furarem o ritmo um do outro.
+ *
+ * ═══ Por que a rodada vazia não audita ═══
+ *
+ * Regra do `CLAUDE.md`: rodada de cron que não fez nada NÃO é mutação. Numa
+ * instalação sem campanha rodando, auditar cada tique encheria o audit log — foi
+ * o achado 17 do mapa de jornadas (95% do audit log de uma VPS era batida de
+ * cron vazia).
+ *
+ * Nunca lança para o cron: uma campanha quebrada não pode derrubar a rodada.
+ */
+import { randomUUID } from "node:crypto";
+
+import type { SupabaseClient } from "@supabase/supabase-js";
+
+import { sendMessageHandler } from "@/app/api/v1/messages/_handler";
+import { getRequestPool } from "@/lib/agent-engine/db/request-pool";
+import { decidePacing } from "@/lib/agent-engine/pacing/engine";
+import { loadChannelKnobs, loadPacingState, recordSend } from "@/lib/agent-engine/pacing/store";
+import { beginServiceAtOrigin } from "@/lib/atendimento/origem";
+import { logger } from "@/lib/logger";
+
+import { motivoParaExcluir, recusouMarketing } from "./elegibilidade";
+import { renderizar } from "./renderizador";
+import { podeMandarAgora, proximaTentativa, type RitmoDaCampanha } from "./ritmo";
+import { TEXTO_DA_EXCLUSAO } from "./tipos";
+
+export interface ResultadoDaRodada {
+  /** Mensagens que saíram de fato. */
+  enviadas: number;
+  /** Destinatários marcados como excluídos nesta rodada (veto revalidado). */
+  pulados: number;
+  /** Campanhas que terminaram. */
+  concluidas: number;
+  /** Campanhas agendadas que viraram `running` porque a hora chegou. */
+  promovidas: number;
+  detalhe: string;
+}
+
+const VAZIA: ResultadoDaRodada = {
+  enviadas: 0,
+  pulados: 0,
+  concluidas: 0,
+  promovidas: 0,
+  detalhe: "nada_a_fazer",
+};
+
+/** Teto de números atendidos por rodada — a rodada é de um minuto, não de um dia. */
+const NUMEROS_POR_RODADA = 10;
+
+interface CampanhaRow {
+  id: string;
+  organization_id: string;
+  channel_session_id: string;
+  name: string;
+  message_body: string | null;
+  content_version: number;
+  intervalo_segundos: number | null;
+  janela_inicio_hora: number | null;
+  janela_fim_hora: number | null;
+  teto_diario: number | null;
+  teto_horario: number | null;
+}
+
+const COLUNAS_DA_CAMPANHA =
+  "id, organization_id, channel_session_id, name, message_body, content_version, " +
+  "intervalo_segundos, janela_inicio_hora, janela_fim_hora, teto_diario, teto_horario";
+
+export async function rodarUmaRodadaDeCampanha(
+  admin: SupabaseClient,
+  agora: Date = new Date(),
+): Promise<ResultadoDaRodada> {
+  // Organização SUSPENSA não prospecta. A decisão é a mesma da fila do agente:
+  // `= 'suspended'` e não `<> 'active'`, porque o CHECK aceita também 'redacted'
+  // e 'archived', e desligá-los seria mudança que ninguém pediu.
+  const { data: suspensas } = await admin.from("organizations").select("id").eq("status", "suspended");
+  const idsSuspensas = (suspensas ?? []).map((o) => (o as { id: string }).id);
+
+  const promovidas = await promoverAgendadas(admin, idsSuspensas, agora);
+
+  let consulta = admin
+    .from("campaigns")
+    .select(COLUNAS_DA_CAMPANHA)
+    .eq("status", "running")
+    .order("started_at", { ascending: true })
+    .limit(NUMEROS_POR_RODADA * 3);
+  if (idsSuspensas.length > 0) {
+    consulta = consulta.not("organization_id", "in", `(${idsSuspensas.join(",")})`);
+  }
+  const { data: campanhas } = await consulta;
+  // `as unknown as`: a lista de colunas é montada por concatenação, e o tipo
+  // gerado do PostgREST só sabe inferir literal — o mesmo caminho que
+  // `lib/asaas/*` já usa para tabela que ainda não está em `database.types.ts`.
+  const emExecucao = (campanhas ?? []) as unknown as CampanhaRow[];
+  if (emExecucao.length === 0) {
+    return promovidas > 0 ? { ...VAZIA, promovidas, detalhe: "promovidas" } : VAZIA;
+  }
+
+  const numerosAtendidos = new Set<string>();
+  const total: ResultadoDaRodada = { ...VAZIA, promovidas, detalhe: "" };
+  const detalhes: string[] = [];
+
+  for (const campanha of emExecucao) {
+    // Um número, uma mensagem por rodada. A campanha mais antiga do número ganha
+    // a vez: sem isso, a última criada poderia monopolizar a fila para sempre.
+    if (numerosAtendidos.has(campanha.channel_session_id)) continue;
+    if (numerosAtendidos.size >= NUMEROS_POR_RODADA) break;
+
+    try {
+      const r = await rodarUmaCampanha(admin, campanha, agora);
+      total.enviadas += r.enviadas;
+      total.pulados += r.pulados;
+      total.concluidas += r.concluidas;
+      detalhes.push(`${campanha.id.slice(0, 8)}:${r.detalhe}`);
+      // Só ocupa o número quem de fato enviou: campanha parada por ritmo não
+      // pode impedir a campanha seguinte do mesmo número de ser avaliada... mas
+      // se o veto foi do CANAL, a seguinte receberia o mesmo veto. Ocupar em
+      // ambos os casos economiza a consulta; o que não pode é ocupar quando a
+      // campanha só CONCLUIU (aí o número está livre de verdade).
+      if (r.concluidas === 0) numerosAtendidos.add(campanha.channel_session_id);
+    } catch (err) {
+      const motivo = err instanceof Error ? err.message : String(err);
+      logger.warn("[campanha] rodada falhou", { campanha: campanha.id, motivo });
+      detalhes.push(`${campanha.id.slice(0, 8)}:erro`);
+      numerosAtendidos.add(campanha.channel_session_id);
+    }
+  }
+
+  total.detalhe = detalhes.join(" ") || "nada_a_fazer";
+  return total;
+}
+
+/** `scheduled` cuja hora chegou vira `running`. */
+async function promoverAgendadas(
+  admin: SupabaseClient,
+  idsSuspensas: string[],
+  agora: Date,
+): Promise<number> {
+  let consulta = admin
+    .from("campaigns")
+    .update({ status: "running", started_at: agora.toISOString() })
+    .eq("status", "scheduled")
+    .lte("scheduled_at", agora.toISOString());
+  if (idsSuspensas.length > 0) {
+    consulta = consulta.not("organization_id", "in", `(${idsSuspensas.join(",")})`);
+  }
+  const { data, error } = await consulta.select("id");
+  if (error) {
+    logger.warn("[campanha] promoção de agendadas falhou", { motivo: error.message });
+    return 0;
+  }
+  return (data ?? []).length;
+}
+
+interface DestinatarioRow {
+  id: string;
+  contact_id: string;
+  recipient_address: string | null;
+  rendered_body: string | null;
+  contacts: {
+    id: string;
+    name: string | null;
+    display_name: string | null;
+    phone_number: string | null;
+    is_blocked: boolean;
+    is_anonymized: boolean;
+    consent: unknown;
+  } | null;
+}
+
+async function rodarUmaCampanha(
+  admin: SupabaseClient,
+  campanha: CampanhaRow,
+  agora: Date,
+): Promise<{ enviadas: number; pulados: number; concluidas: number; detalhe: string }> {
+  const { data: fila } = await admin
+    .from("campaign_recipients")
+    .select(
+      "id, contact_id, recipient_address, rendered_body, " +
+        "contacts(id, name, display_name, phone_number, is_blocked, is_anonymized, consent)",
+    )
+    .eq("campaign_id", campanha.id)
+    .eq("status", "pending")
+    .or(`next_attempt_at.is.null,next_attempt_at.lte.${agora.toISOString()}`)
+    .order("created_at", { ascending: true })
+    .limit(1);
+  const alvo = (fila ?? [])[0] as DestinatarioRow | undefined;
+
+  if (!alvo) {
+    // Nada pendente AGORA não é o mesmo que nada pendente: pode haver gente
+    // esperando `next_attempt_at`. Só conclui quem não tem mais nenhum em voo.
+    const { count } = await admin
+      .from("campaign_recipients")
+      .select("id", { count: "exact", head: true })
+      .eq("campaign_id", campanha.id)
+      .in("status", ["pending", "queued", "sending"]);
+    if ((count ?? 0) > 0) return { enviadas: 0, pulados: 0, concluidas: 0, detalhe: "aguardando" };
+
+    const { data } = await admin
+      .from("campaigns")
+      .update({ status: "completed", completed_at: agora.toISOString() })
+      .eq("id", campanha.id)
+      .eq("status", "running")
+      .select("id");
+    return {
+      enviadas: 0,
+      pulados: 0,
+      concluidas: (data ?? []).length,
+      detalhe: (data ?? []).length > 0 ? "concluida" : "ja_concluida",
+    };
+  }
+
+  // ─── Os vetos por PESSOA, revalidados ───
+  // Vêm ANTES do ritmo de propósito: pular não gasta janela de envio, e uma fila
+  // cheia de bloqueados não pode consumir o teto diário do número. E são
+  // revalidados porque entre a preparação e agora a pessoa pode ter pedido para
+  // parar — honrar o pedido com um dia de atraso é o mesmo que não honrar.
+  const contato = alvo.contacts;
+  const motivo = motivoParaExcluir({
+    contactId: alvo.contact_id,
+    telefone: contato?.phone_number ?? alvo.recipient_address,
+    bloqueado: !!contato?.is_blocked,
+    anonimizado: !!contato?.is_anonymized,
+    recusouMarketing: recusouMarketing(contato?.consent),
+  });
+  if (motivo) {
+    await admin
+      .from("campaign_recipients")
+      .update({
+        status: motivo === "opt_out" ? "opted_out" : "skipped",
+        eligibility_status: "excluded",
+        exclusion_reason: motivo,
+        opted_out_at: motivo === "opt_out" ? agora.toISOString() : null,
+      })
+      .eq("id", alvo.id)
+      .eq("status", "pending");
+    return { enviadas: 0, pulados: 1, concluidas: 0, detalhe: `pulado:${motivo}` };
+  }
+
+  // ─── O ritmo ───
+  const pool = getRequestPool();
+  const { knobs, numberActivatedAt } = await loadChannelKnobs(
+    pool,
+    campanha.organization_id,
+    campanha.channel_session_id,
+  );
+
+  const ritmo: RitmoDaCampanha = {
+    intervaloSegundos: campanha.intervalo_segundos,
+    janelaInicioHora: campanha.janela_inicio_hora,
+    janelaFimHora: campanha.janela_fim_hora,
+    tetoDiario: campanha.teto_diario,
+    tetoHorario: campanha.teto_horario,
+  };
+  const estado = await estadoDeEnvio(admin, campanha.id, agora);
+  // O ritmo PRÓPRIO vem ANTES do ritmo do canal: ele é o mais restritivo por
+  // desenho, e perguntar ao canal primeiro gastaria a decisão do número numa
+  // mensagem que a campanha não deixaria sair.
+  const doRitmo = podeMandarAgora(ritmo, estado, agora, knobs.timezone);
+  if (!doRitmo.pode) {
+    // Espera não é falha: grava QUANDO tentar de novo para a fila não ser varrida
+    // a cada tique por uma campanha que só volta amanhã.
+    const proxima = proximaTentativa(doRitmo, agora);
+    if (proxima) {
+      await admin
+        .from("campaign_recipients")
+        .update({ next_attempt_at: proxima.toISOString() })
+        .eq("id", alvo.id)
+        .eq("status", "pending");
+    }
+    return { enviadas: 0, pulados: 0, concluidas: 0, detalhe: `ritmo:${doRitmo.motivo}` };
+  }
+
+  const { data: canal } = await admin
+    .from("channel_sessions")
+    .select("daily_message_limit")
+    .eq("id", campanha.channel_session_id)
+    .maybeSingle();
+  const doCanal = decidePacing({
+    now: agora,
+    knobs,
+    state: await loadPacingState(pool, campanha.organization_id, campanha.channel_session_id, {
+      now: agora,
+      timezone: knobs.timezone,
+      numberActivatedAt,
+    }),
+    crmDailyLimit: (canal as { daily_message_limit: number | null } | null)?.daily_message_limit ?? null,
+  });
+  if (!doCanal.allow) {
+    if (doCanal.nextAllowedAt) {
+      await admin
+        .from("campaign_recipients")
+        .update({ next_attempt_at: doCanal.nextAllowedAt.toISOString() })
+        .eq("id", alvo.id)
+        .eq("status", "pending");
+    }
+    return { enviadas: 0, pulados: 0, concluidas: 0, detalhe: `canal:${doCanal.code}` };
+  }
+
+  // ─── O envio ───
+  // O id da mensagem nasce AQUI, e não do insert: com ele, o destinatário já
+  // aponta para a mensagem antes de ela existir, e o trigger de ack sempre
+  // encontra a linha. É também a chave de idempotência do `sendMessageHandler` —
+  // uma repetição depois de queda relê a linha em vez de mandar de novo.
+  const messageId = randomUUID();
+  const { data: reservado } = await admin
+    .from("campaign_recipients")
+    .update({
+      status: "sending",
+      sending_at: agora.toISOString(),
+      last_attempt_at: agora.toISOString(),
+      attempt_count: 1,
+      message_id: messageId,
+    })
+    .eq("id", alvo.id)
+    .eq("status", "pending")
+    .select("id");
+  // Zero linhas: outra rodada ganhou a corrida por este destinatário.
+  if ((reservado ?? []).length === 0) {
+    return { enviadas: 0, pulados: 0, concluidas: 0, detalhe: "ja_reservado" };
+  }
+
+  // O corpo é montado DEPOIS do ritmo: a saudação ("bom dia" × "boa tarde") tem
+  // de ser a do instante em que a mensagem SAI, no fuso do canal. Montá-la na
+  // preparação produziria "bom dia" numa mensagem enviada à tarde — foi o
+  // defeito do primeiro piloto.
+  const congelado = alvo.rendered_body ?? campanha.message_body ?? "";
+  const corpo = renderizar(
+    congelado,
+    { nome: contato?.name ?? contato?.display_name ?? null, empresa: null },
+    { agora, fuso: knobs.timezone },
+  ).texto;
+
+  try {
+    const boundary = await beginServiceAtOrigin(
+      admin,
+      campanha.organization_id,
+      alvo.contact_id,
+      campanha.channel_session_id,
+    );
+    await admin
+      .from("campaign_recipients")
+      .update({ conversation_id: boundary.conversation_id })
+      .eq("id", alvo.id);
+
+    const mensagem = await sendMessageHandler(
+      admin,
+      {
+        organization_id: campanha.organization_id,
+        serviceBoundary: boundary,
+        proactiveContext: { organizationId: campanha.organization_id, contactId: alvo.contact_id },
+        actor: { type: "webhook_source", id: `campaign:${campanha.id}` },
+        requestId: `campaign:${campanha.id}:${alvo.id}`,
+        internalMessageId: messageId,
+      } as Parameters<typeof sendMessageHandler>[1],
+      {
+        conversation_id: boundary.conversation_id,
+        type: "text",
+        body: corpo,
+        metadata: {
+          source: "campaign",
+          campaign_id: campanha.id,
+          campaign_recipient_id: alvo.id,
+          campaign_content_version: campanha.content_version,
+          idempotency_key: `campaign:${alvo.id}`,
+        },
+      } as Parameters<typeof sendMessageHandler>[2],
+    );
+    await recordSend(pool, campanha.organization_id, campanha.channel_session_id, agora);
+
+    // O desfecho vem do ESTADO da mensagem, nunca da ausência de exceção — o
+    // handler marca `failed` e devolve normalmente.
+    const status = (mensagem as { status?: string }).status;
+    const falhou = status === "failed";
+    // `.eq("status","sending")` porque o ack pode ter chegado ANTES desta linha:
+    // o trigger já teria avançado o destinatário para `sent`/`delivered`, e
+    // escrever por cima o rebaixaria.
+    await admin
+      .from("campaign_recipients")
+      .update({
+        status: falhou ? "failed" : "sent",
+        sent_at: falhou ? null : agora.toISOString(),
+        last_error_code: falhou ? "send_failed" : null,
+      })
+      .eq("id", alvo.id)
+      .eq("status", "sending");
+
+    return {
+      enviadas: falhou ? 0 : 1,
+      pulados: 0,
+      concluidas: 0,
+      detalhe: `enviado:${status ?? "?"}`,
+    };
+  } catch (err) {
+    const motivoErro = err instanceof Error ? err.message : String(err);
+    logger.warn("[campanha] envio falhou", { campanha: campanha.id, destinatario: alvo.id });
+    await admin
+      .from("campaign_recipients")
+      .update({
+        status: "failed",
+        last_error_code: "send_exception",
+        last_error_detail: motivoErro.slice(0, 300),
+      })
+      .eq("id", alvo.id)
+      .eq("status", "sending");
+    return { enviadas: 0, pulados: 0, concluidas: 0, detalhe: "falhou" };
+  }
+}
+
+/** Quantas saíram hoje e na última hora, mais o último envio — o estado do ritmo. */
+async function estadoDeEnvio(
+  admin: SupabaseClient,
+  campanhaId: string,
+  agora: Date,
+): Promise<{ ultimoEnvio: Date | null; enviadasHoje: number; enviadasNaUltimaHora: number }> {
+  const inicioDoDia = new Date(agora);
+  inicioDoDia.setUTCHours(0, 0, 0, 0);
+  const { data } = await admin
+    .from("campaign_recipients")
+    .select("sent_at")
+    .eq("campaign_id", campanhaId)
+    .not("sent_at", "is", null)
+    .gte("sent_at", inicioDoDia.toISOString())
+    .order("sent_at", { ascending: false });
+
+  const enviados = (data ?? []).map((r) => new Date((r as { sent_at: string }).sent_at));
+  const umaHoraAtras = agora.getTime() - 3_600_000;
+  return {
+    ultimoEnvio: enviados[0] ?? null,
+    enviadasHoje: enviados.length,
+    enviadasNaUltimaHora: enviados.filter((d) => d.getTime() >= umaHoraAtras).length,
+  };
+}
+
+/** Exportado só para a tela e o teste lerem a mesma frase do motivo. */
+export { TEXTO_DA_EXCLUSAO };

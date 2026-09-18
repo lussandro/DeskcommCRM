@@ -51,34 +51,20 @@ const PADRAO_PII =
  * razão precisa dizer QUANDO sai, não só por que está.
  */
 const DIVIDA_LGPD_CONHECIDA: Record<string, string> = {
-  crm_companies:
-    "Pessoa jurídica: name/cnpj/notes são da empresa, não do titular. A FK " +
-    "billing_contact_id é solta pelo trigger trg_crm_companies_principal_anonimizado; " +
-    "não há dado pessoal a redigir aqui.",
-  calendar_appointments:
-    "Achado do levantamento 13 §2 (QAVivo/maestro). Guarda title e notes do compromisso. " +
-    "Conserto DESPACHADO ao Arquiteto — sai desta lista no mesmo commit que acrescentar a tabela à cascata.",
   lead_notes:
     "Anotação livre do atendente SOBRE o contato (coluna body). Dívida anterior à agenda; " +
-    "nenhum commit a declarou. Sai quando o cascade a alcançar.",
-  crm_tasks:
-    "Migration 0210 (extração do PR #418). A tabela guarda `title` — texto livre que " +
-    "na prática nomeia a pessoa (\"Ligar para Fulano confirmar o orçamento\"). " +
-    "⚠️ ELA JÁ ESTÁ PROTEGIDA: o trigger `trg_redigir_tarefas_ao_anonimizar` troca o " +
-    "título e apaga a descrição na transição `is_anonymized false → true`, e " +
-    "`tests/invariants/lgpd-tarefa-do-contato-anonimizado.test.ts` prova o efeito " +
-    "pelo comportamento, não pelo símbolo. A entrada existe só porque ESTE instrumento " +
-    "lê UMA função (`fn_lgpd_cascade_redact_contact`) e não enxerga trigger — a mesma " +
-    "razão pela qual `webhook_lead_captures` (0174) e `calendar_appointments` (0184) " +
-    "estão aqui, as duas também já cobertas por trigger. Sai no dia em que " +
-    "`tabelasNaCascata()` passar a derivar do catálogo também os triggers de " +
-    "`contacts`, ou no dia em que a função ganhar o passo.",
-  webhook_lead_captures:
-    "captured_name, captured_email e captured_phone — o payload cru de captação. " +
-    "A própria migration 0174 escreveu que 'o cascade de anonimização precisa alcançar esta tabela' " +
-    "e o passo nunca foi acrescentado. Sai quando for.",
+    "nenhum commit a declarou. Sai quando o cascade — ou um trigger de anonimização em " +
+    "`contacts`, que agora conta — a alcançar. É a ÚNICA entrada que sobrou depois de o " +
+    "instrumento passar a enxergar trigger: as outras quatro estavam protegidas e só " +
+    "pareciam dívida porque o gate lia uma lista de nomes de função.",
 };
 
+// O que saiu desta lista em 2026-09-18: `crm_companies`, `calendar_appointments`,
+// `crm_tasks` e `webhook_lead_captures`. As quatro SEMPRE estiveram protegidas por
+// trigger de anonimização em `contacts`, cada uma com prova de efeito própria —
+// estavam na dívida porque o instrumento lia uma lista de nomes de função e não
+// enxergava trigger, não porque o dado estivesse exposto. As razões congeladas de
+// cada uma estão no git, neste arquivo, até este commit.
 /** Tabelas no escopo: FK para contacts E coluna de conteúdo pessoal. */
 function tabelasComDadoDePessoa(): string[] {
   return sql(`
@@ -104,7 +90,26 @@ function tabelasComDadoDePessoa(): string[] {
 }
 
 /**
- * Tabelas tocadas pela cascata e pelo redator0227 instalado em contacts.
+ * Tabelas tocadas pela cascata E por QUALQUER trigger de anonimização instalado
+ * em `contacts` — não mais por uma lista de nomes de função.
+ *
+ * ─── Por que deixou de ser lista ────────────────────────────────────────────
+ *
+ * O instrumento lia UMA função (`fn_lgpd_cascade_redact_contact`) mais UM nome
+ * (`fn_reply_redact`). Só que o repositório já tinha decidido, desde a 0174, que
+ * tabela nova se protege por TRIGGER na transição `is_anonymized false → true` e
+ * não por um passo a mais naquela função de 180 linhas (duas cópias dela — dump e
+ * apêndice — divergiriam no primeiro conserto). O resultado é que toda tabela
+ * protegida do jeito certo caía na dívida, e a dívida virava o caminho normal:
+ * quatro entradas, três delas com trigger funcionando e prova de efeito própria.
+ *
+ * A condição de saída estava escrita na própria entrada de `crm_tasks`: "sai no
+ * dia em que `tabelasNaCascata()` passar a derivar do catálogo também os triggers
+ * de `contacts`". É este commit. A forma exigida é a mesma que o caso
+ * `fn_reply_redact` já cobrava — AFTER UPDATE FOR EACH ROW com `is_anonymized`
+ * entre as colunas vigiadas —, então nenhum trigger frouxo passa a contar: um
+ * BEFORE, um por STATEMENT ou um que não vigie a coluna continua invisível.
+ *
  * A cobertura do trigger vem do corpo REAL no banco, nunca de uma isenção da tabela.
  * Prova de efeito: autonomia-authority.test.ts, "redação limpa todos os corpos...".
  * A integração da RPC canônica e o controle de vizinho vivem em
@@ -121,12 +126,10 @@ function tabelasNaCascata(): string[] {
      where p.proname = 'fn_lgpd_cascade_redact_contact'
         or (
           p.pronamespace = 'public'::regnamespace
-          and p.proname = 'fn_reply_redact'
           and exists (
             select 1 from pg_trigger t
              where t.tgfoid = p.oid
                and t.tgrelid = 'public.contacts'::regclass
-               and t.tgname = 'trg_reply_redact'
                and not t.tgisinternal
                and t.tgenabled in ('O', 'A')
                and t.tgtype = 17 -- AFTER UPDATE FOR EACH ROW
