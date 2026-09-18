@@ -177,21 +177,42 @@ function nomesDoCatalogo(result: unknown): string[] {
 
 export type TestarResult = { ok: true; ferramentas: number } | { ok: false; mensagem: string };
 
-export async function testarConexaoMcp(): Promise<TestarResult> {
-  const guarda = await guardaAdmin();
-  if (!guarda.ok) return { ok: false, mensagem: "Sem permissão para testar esta integração." };
-  const { userId, orgId } = guarda;
+/**
+ * Fala com o servidor e grava o que foi medido. **Não LIGA nada por conta
+ * própria.**
+ *
+ * Testar era ativar: o sucesso gravava `status='healthy'`, e `healthy` é
+ * exatamente o que liga as cinco ferramentas no agente — quem tinha desativado
+ * e depois clicava em "Testar conexão" para diagnosticar reativava a
+ * integração sem pedir, e `ativarMcp` era decoração (só chamava o testar).
+ * Diagnosticar e ligar são intenções diferentes e agora são botões diferentes:
+ * `ativar:true` só vem de `ativarMcp`.
+ *
+ * Integração DESATIVADA que passa no teste continua desativada: o carimbo, o
+ * catálogo e o contador são atualizados (é o que o admin foi ver), o status
+ * não.
+ */
+async function conferirConexao(userId: string, orgId: string, opts: { ativar: boolean }): Promise<TestarResult> {
   const admin = createAdminClient();
 
+  const busca = await linhaDaOrg(admin, orgId);
+  if (!busca.ok) return { ok: false, mensagem: "Não consegui ler a configuração desta integração." };
   const integ = await carregarIntegracaoErpMcp(admin, orgId, { exigirHealthy: false });
-  if (!integ) return { ok: false, mensagem: "Informe o endereço e a chave do servidor antes de testar." };
+  if (!integ || !busca.linha) return { ok: false, mensagem: "Informe o endereço e a chave do servidor antes de testar." };
+  const desativada = busca.linha.status === "disconnected";
 
   const r = await chamarRpc({ url: integ.url, chave: integ.chave }, "tools/list", {});
   if (!r.ok) {
     const mensagem = motivoDaFalha(r.falha);
     await admin
       .from("tenant_integrations")
-      .update({ status: "error", status_reason: mensagem, last_health_check_at: new Date().toISOString() })
+      .update({
+        // Desativada que falha no teste continua DESATIVADA: `error` diria que
+        // ela caiu, quando quem a desligou foi uma pessoa.
+        ...(desativada ? {} : { status: "error" }),
+        status_reason: mensagem,
+        last_health_check_at: new Date().toISOString(),
+      })
       .eq("id", integ.id)
       .eq("organization_id", orgId);
     revalidatePath(ROTA);
@@ -199,15 +220,17 @@ export async function testarConexaoMcp(): Promise<TestarResult> {
   }
 
   const catalogo = nomesDoCatalogo(r.dados);
+  const anterior = (busca.linha.store_metadata ?? {}) as Record<string, unknown>;
+  const ligar = opts.ativar || !desativada;
   await admin
     .from("tenant_integrations")
     .update({
-      status: "healthy",
-      status_reason: null,
+      ...(ligar ? { status: "healthy", status_reason: null } : { status_reason: null }),
       last_health_check_at: new Date().toISOString(),
       // O catálogo é o que a tela mostra ao admin — e zerar as falhas aqui é o
       // mesmo zeramento do aviso: uma chamada que funciona apaga a contagem.
-      store_metadata: { url: integ.url, catalogo, falhas_consecutivas: 0 },
+      // O resto do `store_metadata` é preservado: este write não é o dono dele.
+      store_metadata: { ...anterior, url: integ.url, catalogo, falhas_consecutivas: 0 },
     })
     .eq("id", integ.id)
     .eq("organization_id", orgId);
@@ -218,10 +241,16 @@ export async function testarConexaoMcp(): Promise<TestarResult> {
     organizationId: orgId,
     resourceType: "tenant_integration",
     resourceId: integ.id,
-    metadata: { ferramentas: catalogo.length },
+    metadata: { ferramentas: catalogo.length, ativou: ligar && desativada },
   });
   revalidatePath(ROTA);
   return { ok: true, ferramentas: catalogo.length };
+}
+
+export async function testarConexaoMcp(): Promise<TestarResult> {
+  const guarda = await guardaAdmin();
+  if (!guarda.ok) return { ok: false, mensagem: "Sem permissão para testar esta integração." };
+  return conferirConexao(guarda.userId, guarda.orgId, { ativar: false });
 }
 
 export type AtivarResult = { ok: true } | { ok: false; error: ErroComum | "nao_configurado" | "conexao_falhou"; mensagem?: string };
@@ -236,8 +265,9 @@ export async function ativarMcp(): Promise<AtivarResult> {
   if (!integ) return { ok: false, error: "nao_configurado" };
 
   // Ativar sem provar que fala com o servidor ligaria as cinco ferramentas no
-  // agente para falhar na primeira pergunta do cliente.
-  const teste = await testarConexaoMcp();
+  // agente para falhar na primeira pergunta do cliente. Este é o ÚNICO caminho
+  // que passa `ativar:true` — o botão de testar não liga nada.
+  const teste = await conferirConexao(userId, orgId, { ativar: true });
   if (!teste.ok) return { ok: false, error: "conexao_falhou", mensagem: teste.mensagem };
 
   await audit({

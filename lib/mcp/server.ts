@@ -16,6 +16,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { auditMcpToolCall } from "./audit";
 import { ensureRole, ensureScope, type McpAuthResult } from "./auth";
 import { allTools } from "./tools";
+import { FERRAMENTAS_SO_DO_AGENTE } from "./tools/erp";
 import { higienizarUuidsDeAterro } from "./uuid-de-aterro";
 import type { McpContext } from "./types";
 
@@ -41,6 +42,13 @@ export function createMcpServer(auth: McpAuthResult, requestId: string): McpServ
   const supabase = createAdminClient();
 
   for (const tool of allTools) {
+    // As consultas ao ERP externo do cliente NÃO são servidas aqui: o teto de
+    // 4 por turno é por `requestId`, que no HTTP é um UUID por requisição —
+    // servi-las seria dar a qualquer token com `mcp:read` um proxy sem limite
+    // para o ERP do cliente, com a nossa chave. Ver `FERRAMENTAS_SO_DO_AGENTE`
+    // em `lib/mcp/tools/erp.ts`.
+    if (FERRAMENTAS_SO_DO_AGENTE.has(tool.name)) continue;
+
     server.registerTool(
       tool.name,
       {
