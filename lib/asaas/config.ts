@@ -2,6 +2,7 @@ import { z } from "zod";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { decryptWebhookSecret } from "@/lib/webhooks/secrets";
 import { logger } from "@/lib/logger";
+import { CONSULTAS_DO_ERP, capacidadeDaConsulta } from "@/lib/erp-mcp/config";
 import { AsaasCliente } from "./cliente";
 
 /**
@@ -80,15 +81,26 @@ export async function carregarIntegracaoAsaas(admin: SupabaseClient, orgId: stri
 /**
  * Capacidades de integração da org, para o filtro de ferramentas do turno. Sem decifrar chave.
  * "asaas" = ler cobranças; "asaas:reemitir" = também prorrogar (só com a cerca preenchida).
- * "mcp" = consultar o ERP externo (as cinco de `lib/mcp/tools/erp.ts`) — entra pelo ramo
- * genérico abaixo, que usa o próprio `provider` como nome da capacidade, e só com
- * `status='healthy'`: é assim que as cinco ferramentas somem do turno quando a integração cai.
+ * "mcp" = consultar o ERP externo (as cinco de `lib/mcp/tools/erp.ts`), só com `status='healthy'`:
+ * é assim que as cinco ferramentas somem do turno quando a integração cai. E `mcp:<método>` =
+ * ESTA consulta existe no servidor daquele cliente, lido do `catalogo` que o último
+ * `tools/list` descobriu — sem isso, a tela media o catálogo e dizia "Não encontrada no
+ * servidor" enquanto o runtime montava a ferramenta assim mesmo, para falhar na conversa.
+ * Catálogo VAZIO degrada para conceder as cinco: é a linha salva antes desta mudança, e
+ * fail-closed ali deixaria quem já está no ar sem ferramenta nenhuma sem nunca ter mudado nada.
  * Set vazio = nada de integração chega ao modelo (direção segura).
  */
 export async function carregarCapacidadesDeIntegracao(admin: SupabaseClient, orgId: string): Promise<ReadonlySet<string>> {
   const { data } = await admin.from("tenant_integrations").select("provider, store_metadata").eq("organization_id", orgId).eq("status", "healthy");
   const caps = new Set<string>();
   for (const r of data ?? []) {
+    if (r.provider === "mcp") {
+      caps.add("mcp");
+      const descoberto = (r.store_metadata as { catalogo?: unknown } | null)?.catalogo;
+      const metodos = Array.isArray(descoberto) ? descoberto.filter((n): n is string => typeof n === "string") : [];
+      for (const m of metodos.length > 0 ? metodos : CONSULTAS_DO_ERP.map((c) => c.metodo)) caps.add(capacidadeDaConsulta(m));
+      continue;
+    }
     if (r.provider !== "asaas") { caps.add(r.provider as string); continue; }
     const cfg = configSchema.safeParse(r.store_metadata ?? {});
     if (!cfg.success) continue;

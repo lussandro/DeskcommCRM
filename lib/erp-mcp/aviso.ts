@@ -174,7 +174,29 @@ export interface RevisaoMcp {
   erros: number;
   /** Quantas voltaram de `error` para `healthy` agora. */
   recuperadas: number;
+  /** Quantas ficaram para a próxima rodada porque o orçamento de tempo acabou. */
+  adiadas: number;
 }
+
+/**
+ * Orçamento de tempo da varredura INTEIRA.
+ *
+ * Ela pega carona no cron da reconciliação do Asaas, que é outro assunto: o
+ * laço é sequencial e cada `tools/list` pode levar até 10s (o timeout do
+ * transporte), então três integrações lentas bastariam para estourar o tempo do
+ * cron compartilhado e fazer a reconciliação do Asaas **deixar de rodar**. Num
+ * self-host, comportamento instalado é comportamento do produto: quem hospeda
+ * não vai depurar por que a cobrança parou.
+ *
+ * O que não couber fica para a próxima rodada — e a ordem por
+ * `last_health_check_at` (mais antigo primeiro) garante que a fila gire, em vez
+ * de as mesmas primeiras integrações consumirem o orçamento todo dia.
+ *
+ * ponytail: teto de tempo e fila giratória, não concorrência. Paralelizar
+ * pediria pool e um teto de conexões de saída para um laço que, dentro do
+ * orçamento, atende a ordem de grandeza de integrações de uma instalação.
+ */
+const ORCAMENTO_DA_VARREDURA_MS = 30_000;
 
 /**
  * ANTI-MORTE (D9): uma vez por dia, cada integração saudável prova que ainda
@@ -199,15 +221,28 @@ export interface RevisaoMcp {
  * Um laço que só aperta não é laço.
  */
 export async function revisarSaudeDasIntegracoesMcp(admin: SupabaseClient): Promise<RevisaoMcp> {
-  const revisao: RevisaoMcp = { verificadas: 0, erros: 0, recuperadas: 0 };
+  const revisao: RevisaoMcp = { verificadas: 0, erros: 0, recuperadas: 0, adiadas: 0 };
   const { data, error } = await admin
     .from("tenant_integrations")
     .select("id, organization_id, status")
     .eq("provider", "mcp")
-    .in("status", ["healthy", "error"]);
+    .in("status", ["healthy", "error"])
+    // A menos conferida primeiro: é o que faz a fila girar quando o orçamento
+    // não alcança todo mundo.
+    .order("last_health_check_at", { ascending: true, nullsFirst: true });
   if (error || !data) return revisao;
 
-  for (const linha of data as Array<{ id: string; organization_id: string; status: string }>) {
+  const ate = Date.now() + ORCAMENTO_DA_VARREDURA_MS;
+  const fila = data as Array<{ id: string; organization_id: string; status: string }>;
+  for (const [i, linha] of fila.entries()) {
+    if (Date.now() >= ate) {
+      revisao.adiadas = fila.length - i;
+      logger.warn("[erp-mcp] orçamento da conferência diária esgotado; o resto fica para a próxima rodada", {
+        adiadas: revisao.adiadas,
+        verificadas: revisao.verificadas,
+      });
+      break;
+    }
     const orgId = linha.organization_id;
     const estavaEmErro = linha.status === "error";
     try {

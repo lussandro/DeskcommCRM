@@ -1,11 +1,17 @@
 /**
  * Capacidades de CONSULTA ao sistema de gestão do cliente (o ERP externo).
  *
- * As cinco declaram `requerIntegracao: "mcp"`: mesmo marcadas na tela, não são
- * montadas no turno enquanto a organização não tiver a integração ligada e
- * saudável (`lib/asaas/config.ts` → `carregarCapacidadesDeIntegracao`, aplicado
- * em `lib/ai/runtime/tools.ts`). Quando o sistema de gestão cai, elas somem —
+ * Cada uma declara `requerIntegracao: "mcp:<método do ERP>"`: mesmo marcadas na
+ * tela, não são montadas no turno enquanto a organização não tiver a integração
+ * ligada, saudável E com AQUELE método no catálogo que o último `tools/list`
+ * descobriu (`lib/asaas/config.ts` → `carregarCapacidadesDeIntegracao`, aplicado
+ * em `lib/ai/runtime/tools.ts`). Quando o sistema de gestão cai, as cinco somem;
+ * quando o servidor daquele cliente não expõe uma das consultas, some só ela —
  * em vez de o assistente tentar, falhar e inventar.
+ *
+ * O `"mcp"` sozinho não bastava: a tela media o catálogo e dizia "Não encontrada
+ * no servidor", e o runtime montava a ferramenta assim mesmo. Medir e ignorar a
+ * medição é pior que não medir — promete ao cliente o que vai falhar na conversa.
  *
  * ESTE ARQUIVO FALA COM O HUMANO que configura o agente. O texto que vai ao
  * MODELO é a `description` do handler (`lib/mcp/tools/erp.ts`).
@@ -32,7 +38,7 @@ export const TOOLS_ERP = declararTools([
     oQueToca: "Sistema de gestão da empresa",
     risco: "seguro",
     pacotes: ["reter"],
-    requerIntegracao: "mcp",
+    requerIntegracao: "mcp:customer.status",
   },
   {
     name: "crm_erp_faturas_do_cliente",
@@ -43,7 +49,7 @@ export const TOOLS_ERP = declararTools([
     oQueToca: "Sistema de gestão da empresa",
     risco: "seguro",
     pacotes: ["reter"],
-    requerIntegracao: "mcp",
+    requerIntegracao: "mcp:invoice.list",
   },
   {
     name: "crm_erp_fatura",
@@ -54,7 +60,7 @@ export const TOOLS_ERP = declararTools([
     oQueToca: "Sistema de gestão da empresa",
     risco: "seguro",
     pacotes: ["reter"],
-    requerIntegracao: "mcp",
+    requerIntegracao: "mcp:invoice.list",
   },
   {
     name: "crm_erp_contrato",
@@ -65,7 +71,7 @@ export const TOOLS_ERP = declararTools([
     oQueToca: "Sistema de gestão da empresa",
     risco: "seguro",
     pacotes: ["reter"],
-    requerIntegracao: "mcp",
+    requerIntegracao: "mcp:contract.get",
   },
   {
     name: "crm_erp_instancia",
@@ -76,6 +82,6 @@ export const TOOLS_ERP = declararTools([
     oQueToca: "Sistema de gestão da empresa",
     risco: "seguro",
     pacotes: ["reter"],
-    requerIntegracao: "mcp",
+    requerIntegracao: "mcp:customer.status",
   },
 ]);

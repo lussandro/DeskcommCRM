@@ -13,7 +13,8 @@ vi.mock("@/lib/webhooks/secrets", () => ({
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 
-import { carregarIntegracaoErpMcp } from "./config";
+import { CONSULTAS_DO_ERP, capacidadeDaConsulta, carregarIntegracaoErpMcp } from "./config";
+import { catalogEntry } from "@/lib/mcp/tools/catalog";
 import { carregarCapacidadesDeIntegracao } from "@/lib/asaas/config";
 
 const ORG = "aaaaaaaa-1111-4111-8111-111111111111";
@@ -124,5 +125,45 @@ describe("carregarCapacidadesDeIntegracao", () => {
   it("sem linha nenhuma, nenhuma capacidade — as cinco consultas não são montadas", async () => {
     const caps = await carregarCapacidadesDeIntegracao(fakeSupabaseLista([]), ORG);
     expect(caps.size).toBe(0);
+  });
+
+  /**
+   * A TELA MEDE E O RUNTIME OBEDECE.
+   *
+   * `"mcp"` sozinho era concedido a qualquer integração saudável, sem olhar o
+   * catálogo que o `tools/list` descobriu: a tela dizia "Não encontrada no
+   * servidor" e o agente montava a ferramenta assim mesmo, para falhar na
+   * conversa. A capacidade por consulta é a mesma medição, agora com efeito.
+   */
+  it("concede só as consultas que o servidor daquele cliente expõe", async () => {
+    const caps = await carregarCapacidadesDeIntegracao(
+      fakeSupabaseLista([{ provider: "mcp", store_metadata: { ...META_OK, catalogo: ["customer.status", "customer.find"] } }]),
+      ORG,
+    );
+    expect(caps.has("mcp")).toBe(true);
+    expect(caps.has(capacidadeDaConsulta("customer.status"))).toBe(true);
+    // O servidor não expõe estas: as ferramentas que dependem delas não são montadas.
+    expect(caps.has(capacidadeDaConsulta("invoice.list"))).toBe(false);
+    expect(caps.has(capacidadeDaConsulta("contract.get"))).toBe(false);
+  });
+
+  it("catálogo VAZIO (linha salva antes desta mudança) degrada para conceder as cinco", async () => {
+    // Fail-closed aqui deixaria sem ferramenta nenhuma quem já está no ar e
+    // nunca mudou nada. Um "Testar conexão" preenche o catálogo e a medição
+    // passa a valer.
+    const caps = await carregarCapacidadesDeIntegracao(
+      fakeSupabaseLista([{ provider: "mcp", store_metadata: { ...META_OK, catalogo: [] } }]),
+      ORG,
+    );
+    for (const c of CONSULTAS_DO_ERP) expect(caps.has(capacidadeDaConsulta(c.metodo))).toBe(true);
+  });
+
+  it("cada uma das cinco declara no catálogo a capacidade do método que ela chama", () => {
+    // O elo que impede a divergência: a tela compara `catalogo.includes(metodo)`,
+    // o runtime compara `caps.has("mcp:" + metodo)`, e a entrada do catálogo
+    // escreve a string à mão (o arquivo é client-safe e não importa daqui).
+    for (const c of CONSULTAS_DO_ERP) {
+      expect(catalogEntry(c.ferramenta)?.requerIntegracao, c.ferramenta).toBe(capacidadeDaConsulta(c.metodo));
+    }
   });
 });

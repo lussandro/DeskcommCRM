@@ -44,8 +44,13 @@ export interface McpToolCatalogEntry {
    * Só chega ao modelo quando a organização tem essa capacidade de
    * integração (`lib/asaas/config.ts` → `carregarCapacidadesDeIntegracao`).
    * Nunca entra por pacote — ver `selecao-por-pacote.ts`.
+   *
+   * `mcp:<método>` é a capacidade POR CONSULTA do ERP externo: ela só é
+   * concedida quando aquele método aparece no catálogo que o `tools/list`
+   * daquele cliente descobriu. O nome do método é o mesmo string que a tela da
+   * integração compara — ver `capacidadeDaConsulta` em `lib/erp-mcp/config.ts`.
    */
-  requerIntegracao?: "asaas" | "asaas:reemitir" | "mcp";
+  requerIntegracao?: "asaas" | "asaas:reemitir" | "mcp" | `mcp:${string}`;
 }
 
 /**

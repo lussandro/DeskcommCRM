@@ -45,7 +45,13 @@ chegue ao modelo sem passar por uma projeção que declaramos campo a campo.
 | `crm_erp_contrato` | `customer.status` (prova de posse) + `contract.get` | "o que tem no meu contrato?" |
 | `crm_erp_instancia` | `customer.status` + escolha pelo nome | "minha instância está bloqueada?" |
 
-Todas `category: "read"`, `requiresScope: "mcp:read"`, `requerIntegracao: "mcp"`.
+Todas `category: "read"`, `requiresScope: "mcp:read"`, e `requerIntegracao: "mcp:<método>"` —
+a capacidade é **por consulta**, concedida só quando aquele método aparece no `catalogo` que o
+último `tools/list` daquele cliente descobriu. `"mcp"` sozinho era grosso demais: a tela media
+o catálogo e dizia "Não encontrada no servidor" enquanto o runtime montava a ferramenta assim
+mesmo, para falhar na conversa — medir e ignorar a medição é pior que não medir. Catálogo
+vazio (linha salva antes disso) degrada para conceder as cinco; fail-closed ali deixaria sem
+ferramenta nenhuma quem já está no ar e nunca mudou nada.
 Cinco vagas do teto de 25, **no pacote `reter`** — um pacote conta contra o teto mesmo para
 quem não tem ERP, e em `atender` as cinco tornavam aquele pacote inatingível para toda
 instalação.
@@ -166,7 +172,17 @@ consulta voltava a rodar, logo nada voltava a testar — uma queda de dois minut
 desligava a capacidade até alguém clicar "Testar conexão". Quando o servidor volta a
 responder, a integração volta sozinha para `healthy` e o aviso da Central se retrata.
 Integração `disconnected` (desligada por uma pessoa) fica fora: ninguém a religa pelas costas
-— e é pela mesma razão que **"Testar conexão" não ativa nada**; só `ativarMcp` liga.
+— e é pela mesma razão que **"Testar conexão" não ativa nada**: `healthy` é decidido por quem
+clicou em Ativar, e por mais nada. (A primeira versão dessa separação perguntava "a linha não
+está `disconnected`?", que é verdade justamente em `connecting` e em `error`, os dois estados
+em que se testa de verdade — o diagnóstico continuava ligando, só que escondido.)
+
+**A varredura tem orçamento de 30s e a fila gira.** Ela pega carona no cron da reconciliação
+do Asaas, o laço é sequencial e cada `tools/list` pode levar 10s: sem teto, três integrações
+lentas fariam a COBRANÇA do cliente deixar de rodar — e num self-host comportamento instalado
+é comportamento do produto. O que não coube fica para a próxima rodada (`adiadas`, com log), e
+a ordem é por `last_health_check_at` para que a mesma ponta da fila não consuma o orçamento
+todo dia.
 
 ### D10 — O que o servidor devolve é dado, e o mecanismo é a projeção
 

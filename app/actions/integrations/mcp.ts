@@ -188,9 +188,13 @@ export type TestarResult = { ok: true; ferramentas: number } | { ok: false; mens
  * Diagnosticar e ligar são intenções diferentes e agora são botões diferentes:
  * `ativar:true` só vem de `ativarMcp`.
  *
- * Integração DESATIVADA que passa no teste continua desativada: o carimbo, o
- * catálogo e o contador são atualizados (é o que o admin foi ver), o status
- * não.
+ * **`healthy` é decidido POR `opts.ativar`, e por mais nada.** A primeira
+ * versão desta separação perguntava "a linha não está `disconnected`?", e isso
+ * era `true` nos dois estados em que se testa de verdade: `connecting` (logo
+ * depois do primeiro salvamento) e `error` (depois de uma falha). Ou seja, o
+ * diagnóstico continuava ligando as consultas financeiras — só tinha ficado
+ * mais difícil de ver. Um teste bem-sucedido atualiza o carimbo, o catálogo e o
+ * contador, que é o que a pessoa foi ver; quem liga é o botão Ativar.
  */
 async function conferirConexao(userId: string, orgId: string, opts: { ativar: boolean }): Promise<TestarResult> {
   const admin = createAdminClient();
@@ -221,11 +225,14 @@ async function conferirConexao(userId: string, orgId: string, opts: { ativar: bo
 
   const catalogo = nomesDoCatalogo(r.dados);
   const anterior = (busca.linha.store_metadata ?? {}) as Record<string, unknown>;
-  const ligar = opts.ativar || !desativada;
+  const ligar = opts.ativar;
   await admin
     .from("tenant_integrations")
     .update({
-      ...(ligar ? { status: "healthy", status_reason: null } : { status_reason: null }),
+      // Sem `ativar`, nem o status nem o motivo são tocados: o motivo descreve
+      // a última FALHA, e apagá-lo deixaria a tela dizendo `error` sem dizer
+      // por quê.
+      ...(ligar ? { status: "healthy", status_reason: null } : {}),
       last_health_check_at: new Date().toISOString(),
       // O catálogo é o que a tela mostra ao admin — e zerar as falhas aqui é o
       // mesmo zeramento do aviso: uma chamada que funciona apaga a contagem.
@@ -241,7 +248,7 @@ async function conferirConexao(userId: string, orgId: string, opts: { ativar: bo
     organizationId: orgId,
     resourceType: "tenant_integration",
     resourceId: integ.id,
-    metadata: { ferramentas: catalogo.length, ativou: ligar && desativada },
+    metadata: { ferramentas: catalogo.length, ativou: ligar },
   });
   revalidatePath(ROTA);
   return { ok: true, ferramentas: catalogo.length };

@@ -17,7 +17,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { audit } from "@/lib/audit";
 import { chamarRpc } from "@/lib/erp-mcp/transporte";
 
-import { salvarConfigMcp, testarConexaoMcp, desativarMcp, esquecerChaveMcp } from "./mcp";
+import { salvarConfigMcp, testarConexaoMcp, ativarMcp, desativarMcp, esquecerChaveMcp } from "./mcp";
 
 const ORG = "11111111-1111-1111-1111-111111111111";
 const USER = "22222222-2222-2222-2222-222222222222";
@@ -150,7 +150,7 @@ describe("salvarConfigMcp", () => {
 });
 
 describe("testarConexaoMcp", () => {
-  it("sucesso → grava o catálogo do tools/list, status healthy e zera as falhas", async () => {
+  it("sucesso → grava o catálogo do tools/list e zera as falhas, SEM mexer no status", async () => {
     const { admin, db } = bancoFalso();
     db.tenant_integrations.push(
       linhaConfigurada("error", { store_metadata: { url: URL, catalogo: [], falhas_consecutivas: 3 } }),
@@ -165,9 +165,53 @@ describe("testarConexaoMcp", () => {
     expect(vi.mocked(chamarRpc).mock.calls[0]![1]).toBe("tools/list");
 
     const linha = db.tenant_integrations[0]!;
-    expect(linha.status).toBe("healthy");
+    expect(linha.status).toBe("error");
     expect(linha.last_health_check_at).toBeDefined();
     expect(linha.store_metadata).toEqual({ url: URL, catalogo: ["customer.status", "invoice.list"], falhas_consecutivas: 0 });
+  });
+
+  /**
+   * O diagnóstico NÃO liga as consultas financeiras. A primeira versão desta
+   * separação perguntava "a linha não está desativada?", e isso é verdade
+   * justamente nos dois estados em que se testa: `connecting` (logo após o
+   * primeiro salvamento) e `error` (após uma falha) — então testar continuava
+   * ativando, só que mais escondido.
+   */
+  it.each(["connecting", "error", "disconnected"])(
+    "teste bem-sucedido numa linha %s NÃO liga a integração",
+    async (status) => {
+      const { admin, db } = bancoFalso();
+      db.tenant_integrations.push(linhaConfigurada(status));
+      vi.mocked(createAdminClient).mockReturnValue(admin);
+      vi.mocked(chamarRpc).mockResolvedValue({ ok: true, dados: { tools: [{ name: "customer.status" }] } });
+
+      expect(await testarConexaoMcp()).toEqual({ ok: true, ferramentas: 1 });
+      expect(db.tenant_integrations[0]!.status).toBe(status);
+      expect(audit).toHaveBeenCalledWith(
+        expect.objectContaining({ action: "mcp.integration_tested", metadata: expect.objectContaining({ ativou: false }) }),
+      );
+    },
+  );
+
+  it("só ativarMcp chega a healthy — e a integração desativada que passa no teste NÃO volta sozinha", async () => {
+    const { admin, db } = bancoFalso();
+    db.tenant_integrations.push(linhaConfigurada("connecting"));
+    vi.mocked(createAdminClient).mockReturnValue(admin);
+    vi.mocked(chamarRpc).mockResolvedValue({ ok: true, dados: { tools: [{ name: "customer.status" }] } });
+
+    expect(await ativarMcp()).toEqual({ ok: true });
+    expect(db.tenant_integrations[0]!.status).toBe("healthy");
+    expect(db.tenant_integrations[0]!.status_reason).toBeNull();
+  });
+
+  it("teste que FALHA numa linha desativada não a marca como error — quem a desligou foi uma pessoa", async () => {
+    const { admin, db } = bancoFalso();
+    db.tenant_integrations.push(linhaConfigurada("disconnected"));
+    vi.mocked(createAdminClient).mockReturnValue(admin);
+    vi.mocked(chamarRpc).mockResolvedValue({ ok: false, falha: { tipo: "timeout" } });
+
+    expect((await testarConexaoMcp()).ok).toBe(false);
+    expect(db.tenant_integrations[0]!.status).toBe("disconnected");
   });
 
   it("falha → status error com o motivo do operador, sem vazar chave nem URL", async () => {

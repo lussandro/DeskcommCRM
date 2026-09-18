@@ -63,6 +63,9 @@ export async function GET(req: NextRequest): Promise<Response> {
         mcp_verificadas: mcp.verificadas,
         mcp_erros: mcp.erros,
         mcp_recuperadas: mcp.recuperadas,
+        // Adiada não é efeito (nada mudou), mas é o número que explica uma
+        // varredura que não alcançou todo mundo.
+        mcp_adiadas: mcp.adiadas,
       },
     });
   }

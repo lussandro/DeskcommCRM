@@ -417,7 +417,9 @@ describe("registro no catálogo", () => {
     expect(handler?.requiresScope).toBe("mcp:read");
 
     const entrada = catalogEntry(nome);
-    expect(entrada?.requerIntegracao).toBe("mcp");
+    // A capacidade é POR CONSULTA: `mcp:<método>`, concedida só quando o
+    // servidor daquele cliente expõe o método (ver `lib/erp-mcp/config.test.ts`).
+    expect(entrada?.requerIntegracao).toMatch(/^mcp:/);
     expect(entrada?.category).toBe("read");
   });
 

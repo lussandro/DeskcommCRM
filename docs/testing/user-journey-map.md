@@ -2178,7 +2178,8 @@ chega ao modelo sem passar pela projeção (`lib/erp-mcp/projecao.ts`).
 | J25.6 | Voltar o servidor e perguntar de novo | o aviso é retratado e o contador de falhas volta a zero, sem intervenção |
 | J25.7 | Deixar a conferência diária rodar com o servidor fora | integração cai para `error` com motivo, as cinco consultas somem do agente, e o aviso abre na hora (não espera três) |
 | J25.8 | Desativar a integração | as cinco consultas somem do turno; "Esquecer chave" é recusado enquanto a integração está ativa |
-| J25.9 | Com a integração DESATIVADA, clicar em "Testar conexão" | o teste roda e mostra o resultado, e a integração **continua desativada** — diagnosticar não é ligar |
+| J25.9 | Clicar em "Testar conexão" com a integração em qualquer estado (recém-salva, com erro, desativada) | o teste roda e mostra o resultado, e o estado **não muda** — só o botão Ativar chega a "ligada" |
+| J25.12 | Servidor que não expõe `contract.get` no `tools/list` | a tela marca essa consulta como "Não encontrada no servidor" **e** a ferramenta do contrato não aparece nas capacidades do agente; as outras continuam |
 | J25.10 | Servidor volta depois de a conferência diária o ter derrubado; deixar a conferência rodar de novo | a integração volta sozinha para `healthy`, o aviso se retrata e as cinco consultas reaparecem, sem ninguém clicar em nada |
 | J25.11 | Perguntar pelo contrato/fatura/instância de OUTRO cliente (número vizinho, `CT-2026-00NN`) | recusa ("não é deste cliente"); nada do outro cliente aparece na conversa, e a tentativa fica no log |
 

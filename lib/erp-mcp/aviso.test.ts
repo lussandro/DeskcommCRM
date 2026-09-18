@@ -55,6 +55,7 @@ function bancoFalso(falhas = 0, status = "healthy") {
       update: (p: Linha) => ((op = "update"), (payload = p), api),
       eq: (c: string, v: unknown) => (eq.push([c, v]), api),
       in: (c: string, vs: unknown[]) => (dentro.push([c, vs]), api),
+      order: () => api,
       limit: () => api,
       maybeSingle: async () => {
         const r = await exec();
@@ -137,7 +138,7 @@ describe("conferência diária (anti-morte D9)", () => {
     const db = bancoFalso(2);
     vi.mocked(chamarRpc).mockResolvedValue({ ok: true, dados: { tools: [] } });
 
-    expect(await revisarSaudeDasIntegracoesMcp(db.admin)).toEqual({ verificadas: 1, erros: 0, recuperadas: 0 });
+    expect(await revisarSaudeDasIntegracoesMcp(db.admin)).toEqual({ verificadas: 1, erros: 0, recuperadas: 0, adiadas: 0 });
     expect(db.tenant_integrations[0]!.status).toBe("healthy");
     expect(db.tenant_integrations[0]!.last_health_check_at).toBeDefined();
     // Uma conferência que funciona também zera o contador.
@@ -148,7 +149,7 @@ describe("conferência diária (anti-morte D9)", () => {
     const db = bancoFalso();
     vi.mocked(chamarRpc).mockResolvedValue({ ok: false, falha: { tipo: "http", status: 401 } });
 
-    expect(await revisarSaudeDasIntegracoesMcp(db.admin)).toEqual({ verificadas: 1, erros: 1, recuperadas: 0 });
+    expect(await revisarSaudeDasIntegracoesMcp(db.admin)).toEqual({ verificadas: 1, erros: 1, recuperadas: 0, adiadas: 0 });
     expect(db.tenant_integrations[0]!.status).toBe("error");
     expect(String(db.tenant_integrations[0]!.status_reason)).toContain("401");
     expect(db.agent_inbox_items).toHaveLength(1);
@@ -157,7 +158,7 @@ describe("conferência diária (anti-morte D9)", () => {
 
   it("integração DESATIVADA pela pessoa não é conferida", async () => {
     const db = bancoFalso(0, "disconnected");
-    expect(await revisarSaudeDasIntegracoesMcp(db.admin)).toEqual({ verificadas: 0, erros: 0, recuperadas: 0 });
+    expect(await revisarSaudeDasIntegracoesMcp(db.admin)).toEqual({ verificadas: 0, erros: 0, recuperadas: 0, adiadas: 0 });
     expect(vi.mocked(chamarRpc)).not.toHaveBeenCalled();
   });
 
@@ -172,7 +173,7 @@ describe("conferência diária (anti-morte D9)", () => {
     db.agent_inbox_items.push({ id: "aviso-1", organization_id: ORG, kind: "mcp_externo_falhou", ref_id: INTEG, status: "open" });
     vi.mocked(chamarRpc).mockResolvedValue({ ok: true, dados: { tools: [] } });
 
-    expect(await revisarSaudeDasIntegracoesMcp(db.admin)).toEqual({ verificadas: 1, erros: 0, recuperadas: 1 });
+    expect(await revisarSaudeDasIntegracoesMcp(db.admin)).toEqual({ verificadas: 1, erros: 0, recuperadas: 1, adiadas: 0 });
     expect(db.tenant_integrations[0]!.status).toBe("healthy");
     expect(db.tenant_integrations[0]!.status_reason).toBeNull();
     expect(metadataDe(db.tenant_integrations[0]!).falhas_consecutivas).toBe(0);
@@ -187,8 +188,39 @@ describe("conferência diária (anti-morte D9)", () => {
 
     // `erros:0` é o que impede a rodada diária de virar mutação auditável todo
     // dia enquanto o ERP do cliente estiver caído.
-    expect(await revisarSaudeDasIntegracoesMcp(db.admin)).toEqual({ verificadas: 1, erros: 0, recuperadas: 0 });
+    expect(await revisarSaudeDasIntegracoesMcp(db.admin)).toEqual({ verificadas: 1, erros: 0, recuperadas: 0, adiadas: 0 });
     expect(db.tenant_integrations[0]!.status).toBe("error");
     expect(db.agent_inbox_items).toHaveLength(1);
+  });
+});
+
+/**
+ * A varredura pega carona no cron da reconciliação do Asaas, que é outro
+ * assunto. Cada `tools/list` pode levar 10s; sem orçamento, algumas
+ * integrações lentas fariam a COBRANÇA do cliente deixar de rodar. Num
+ * self-host, comportamento instalado é comportamento do produto.
+ */
+describe("orçamento de tempo da varredura", () => {
+  it("o que não coube fica para a próxima rodada, e o cron devolve o controle", async () => {
+    vi.useFakeTimers();
+    try {
+      const db = bancoFalso();
+      // Cinco integrações, cada `tools/list` gastando 12s de relógio.
+      for (let i = 2; i <= 5; i++) {
+        db.tenant_integrations.push({ ...db.tenant_integrations[0]!, id: `ti-${i}`, organization_id: `org-${i}` });
+      }
+      vi.mocked(chamarRpc).mockImplementation(async () => {
+        vi.advanceTimersByTime(12_000);
+        return { ok: true, dados: { tools: [] } };
+      });
+
+      const r = await revisarSaudeDasIntegracoesMcp(db.admin);
+      // Três chamadas cabem em 30s (0s, 12s, 24s); na quarta o orçamento acabou.
+      expect(r.verificadas).toBe(3);
+      expect(r.adiadas).toBe(2);
+      expect(vi.mocked(chamarRpc)).toHaveBeenCalledTimes(3);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });

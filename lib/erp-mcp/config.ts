@@ -52,6 +52,25 @@ export const CONSULTAS_DO_ERP = [
   { ferramenta: "crm_erp_instancia", metodo: "customer.status", rotulo: "Instância" },
 ] as const;
 
+/**
+ * A capacidade de integração de UMA consulta — o que liga (ou não) cada
+ * ferramenta no turno do agente.
+ *
+ * Existe porque `"mcp"` sozinho era grosso demais: a tela media o catálogo
+ * descoberto e dizia "Não encontrada no servidor", e o runtime montava as cinco
+ * assim mesmo, porque a capacidade era concedida a qualquer integração
+ * `healthy`. O agente prometia ao cliente uma consulta que ia falhar na
+ * conversa — exatamente o que `requerIntegracao` existe para evitar.
+ *
+ * É o NOME DO MÉTODO que entra na capacidade, não um apelido: a tela compara
+ * `catalogo.includes(metodo)` e o runtime compara `caps.has("mcp:" + metodo)`.
+ * Dois nomes diferentes para a mesma coisa voltariam a divergir no dia em que
+ * o ERP renomear uma ferramenta.
+ */
+export function capacidadeDaConsulta(metodo: string): string {
+  return `mcp:${metodo}`;
+}
+
 export interface IntegracaoErpMcp {
   id: string;
   url: string;

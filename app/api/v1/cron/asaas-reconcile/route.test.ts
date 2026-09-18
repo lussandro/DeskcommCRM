@@ -14,7 +14,7 @@ import { audit } from "@/lib/audit";
 import { reconciliarTudo } from "@/lib/asaas/reconcile";
 import { revisarSaudeDasIntegracoesMcp } from "@/lib/erp-mcp/aviso";
 
-const SEM_MCP = { verificadas: 0, erros: 0, recuperadas: 0 };
+const SEM_MCP = { verificadas: 0, erros: 0, recuperadas: 0, adiadas: 0 };
 
 const req = () => new NextRequest("http://localhost/x", { headers: { authorization: "Bearer segredo" } });
 
@@ -50,7 +50,7 @@ describe("GET /api/v1/cron/asaas-reconcile", () => {
     expect(audit).toHaveBeenCalledWith(
       expect.objectContaining({
         action: "cron.asaas_reconcile",
-        metadata: { ...totais, mcp_verificadas: 0, mcp_erros: 0, mcp_recuperadas: 0 },
+        metadata: { ...totais, mcp_verificadas: 0, mcp_erros: 0, mcp_recuperadas: 0, mcp_adiadas: 0 },
       }),
     );
   });
@@ -61,8 +61,8 @@ describe("GET /api/v1/cron/asaas-reconcile", () => {
    * não deixa rastro nenhum na auditoria.
    */
   it.each([
-    ["uma integração caiu", { verificadas: 1, erros: 1, recuperadas: 0 }],
-    ["uma integração voltou sozinha", { verificadas: 1, erros: 0, recuperadas: 1 }],
+    ["uma integração caiu", { verificadas: 1, erros: 1, recuperadas: 0, adiadas: 0 }],
+    ["uma integração voltou sozinha", { verificadas: 1, erros: 0, recuperadas: 1, adiadas: 0 }],
   ])("efeito só do MCP (%s) audita", async (_rotulo, mcp) => {
     vi.mocked(reconciliarTudo).mockResolvedValue({ overdue_emitidos: 0, received_emitidos: 0, webhooks_religados: 0, avisos: 0 });
     vi.mocked(revisarSaudeDasIntegracoesMcp).mockResolvedValue(mcp);
@@ -74,7 +74,7 @@ describe("GET /api/v1/cron/asaas-reconcile", () => {
   it("conferência do MCP que não mudou nada NÃO transforma rodada vazia em rodada auditada", async () => {
     vi.mocked(reconciliarTudo).mockResolvedValue({ overdue_emitidos: 0, received_emitidos: 0, webhooks_religados: 0, avisos: 0 });
     // Conferiu três integrações e todas continuam como estavam: não é mutação.
-    vi.mocked(revisarSaudeDasIntegracoesMcp).mockResolvedValue({ verificadas: 3, erros: 0, recuperadas: 0 });
+    vi.mocked(revisarSaudeDasIntegracoesMcp).mockResolvedValue({ verificadas: 3, erros: 0, recuperadas: 0, adiadas: 0 });
     const { GET } = await import("./route");
     await GET(req());
     expect(audit).not.toHaveBeenCalled();
