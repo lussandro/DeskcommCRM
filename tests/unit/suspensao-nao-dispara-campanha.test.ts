@@ -1,0 +1,71 @@
+/**
+ * A linha "campanhas" da matriz de suspensão (§6a), agora que a superfície
+ * EXISTE (migration 0264).
+ *
+ * Este arquivo substitui `suspensao-campanha-nao-existe.test.ts`, que era o
+ * congelamento: ele ficava vermelho no dia em que alguém criasse disparo em
+ * massa, justamente para obrigar esta decisão em vez de deixar a linha
+ * "coberta" num documento. O dia chegou; a decisão é a mesma da fila do agente
+ * — organização suspensa não fala com ninguém, e prospecção ativa é a última
+ * coisa que ela deveria continuar fazendo.
+ *
+ * Mede pelo COMPORTAMENTO (a rodada não escolhe a campanha da org suspensa),
+ * não pela presença do filtro no código: um teste que procurasse a string
+ * `suspended` ficaria verde com o filtro aplicado à consulta errada.
+ */
+import { describe, expect, it, vi } from "vitest";
+
+import { rodarUmaRodadaDeCampanha } from "@/lib/campanha/rodada";
+
+const ORG_SUSPENSA = "11111111-1111-4111-8111-111111111111";
+
+/** Supabase falso: registra o que foi perguntado e devolve o que o teste manda. */
+function fakeAdmin(opts: { suspensas: string[]; campanhas: unknown[] }) {
+  const filtros: Array<{ tabela: string; not?: [string, string, string] }> = [];
+  const builder = (tabela: string) => {
+    const estado: { not?: [string, string, string] } = {};
+    const b: Record<string, unknown> = {
+      select: () => b,
+      eq: () => b,
+      order: () => b,
+      limit: () => b,
+      not: (coluna: string, op: string, valor: string) => {
+        estado.not = [coluna, op, valor];
+        return b;
+      },
+      maybeSingle: async () => ({ data: null, error: null }),
+      then: (resolve: (v: unknown) => unknown) => {
+        filtros.push({ tabela, not: estado.not });
+        const data = tabela === "organizations" ? opts.suspensas.map((id) => ({ id })) : opts.campanhas;
+        return Promise.resolve({ data, error: null }).then(resolve);
+      },
+    };
+    return b;
+  };
+  return { admin: { from: (t: string) => builder(t) }, filtros };
+}
+
+describe("suspensão × campanha", () => {
+  it("a rodada EXCLUI as campanhas de organização suspensa da escolha", async () => {
+    const { admin, filtros } = fakeAdmin({ suspensas: [ORG_SUSPENSA], campanhas: [] });
+    const r = await rodarUmaRodadaDeCampanha(admin as never);
+
+    expect(r).toEqual({ enviadas: 0, pulados: 0, concluidas: 0, detalhe: "nada_a_fazer" });
+    const consultaDeCampanha = filtros.find((f) => f.tabela === "campaigns");
+    expect(consultaDeCampanha?.not).toEqual(["organization_id", "in", `(${ORG_SUSPENSA})`]);
+  });
+
+  it("sem nenhuma organização suspensa, a consulta NÃO ganha filtro — `in ()` vazio derrubaria a query", async () => {
+    const { admin, filtros } = fakeAdmin({ suspensas: [], campanhas: [] });
+    await rodarUmaRodadaDeCampanha(admin as never);
+    expect(filtros.find((f) => f.tabela === "campaigns")?.not).toBeUndefined();
+  });
+
+  it("a organização suspensa é perguntada ANTES da campanha — não adianta filtrar depois de escolher", async () => {
+    const { admin, filtros } = fakeAdmin({ suspensas: [ORG_SUSPENSA], campanhas: [] });
+    await rodarUmaRodadaDeCampanha(admin as never);
+    expect(filtros.map((f) => f.tabela)).toEqual(["organizations", "campaigns"]);
+  });
+});
+
+vi.mock("@/lib/agent-engine/db/request-pool", () => ({ getRequestPool: () => ({ query: async () => ({ rows: [] }) }) }));

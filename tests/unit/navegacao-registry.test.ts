@@ -112,8 +112,13 @@ describe("sidebarGroups", () => {
     // A lista é EXATA de propósito. `toContain` deixaria um sexto item entrar
     // calado no sidebar e reabrir a mesma corrida por pixel.
     // Empresas (0260): uso diário, ao lado de Contatos — mesma seção, mesmo grupo.
+    // Campanhas (0264): prospecção ativa é trabalho de venda diário e entra no
+    // sidebar por DECISÃO, não por acidente — esta lista exata existe para
+    // obrigar exatamente esta frase. Fica em primeiro porque a campanha ALIMENTA
+    // o funil: é o passo anterior ao card existir.
     const crm = sidebarGroups(true, null).find((g) => g.group.id === "crm");
     expect(crm?.items.map((i) => i.href)).toEqual([
+      "/app/campanhas",
       "/app/kanban",
       "/app/contacts",
       "/app/companies",
@@ -144,14 +149,19 @@ describe("sidebarGroups", () => {
 });
 
 describe("hubSections", () => {
-  it("o hub do CRM é inventário: as seis telas do grupo, nas duas seções", () => {
+  it("o hub do CRM é inventário: as sete telas do grupo, nas duas seções", () => {
     // As seções são a régua do sidebar escrita por extenso — o que se abre todo
     // dia contra o que se define uma vez. Lista EXATA: `toContain` deixaria uma
     // tela nova entrar sem que ninguém decidisse de que lado dela ela cai.
     // Empresas (0260): uso diário, ao lado de Contatos — mesma seção, mesmo grupo.
+    // Campanhas (0264): prospecção ativa é trabalho de venda diário e entra no
+    // sidebar por DECISÃO, não por acidente — esta lista exata existe para
+    // obrigar exatamente esta frase. Fica em primeiro porque a campanha ALIMENTA
+    // o funil: é o passo anterior ao card existir.
     const secoes = hubSections("crm", true, null);
     expect(secoes.map((s) => s.section)).toEqual(["O dia a dia da venda", "Preparar a venda"]);
     expect(secoes.flatMap((s) => s.items.map((i) => i.href))).toEqual([
+      "/app/campanhas",
       "/app/kanban",
       "/app/contacts",
       "/app/companies",

@@ -164,6 +164,15 @@ export const NAV_CATALOG = [
     // Ficou "Funis" porque é o que esta tela É: a lista dos funis, de onde se
     // abre o quadro de cada um. "Pipeline" é palavra de quem construiu o
     // sistema; "funil de vendas" é palavra de quem vende.
+    href: "/app/campanhas",
+    label: "Campanhas",
+    description: "Prospecção ativa: escolha o número, escreva a mensagem e acompanhe quem recebeu.",
+    icon: "Megaphone",
+    group: "crm",
+    section: "O dia a dia da venda",
+    sidebar: true,
+  },
+  {
     href: "/app/kanban",
     label: "Funis",
     description: "Seus funis de venda — clique em um para abrir o quadro de clientes.",

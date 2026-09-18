@@ -25711,3 +25711,110 @@ drop trigger if exists trg_platform_meta_app_updated_at on public.platform_meta_
 create trigger trg_platform_meta_app_updated_at
   before update on public.platform_meta_app
   for each row execute function public.fn_set_updated_at();
+
+-- ---- campanhas de prospecção (migration 0264) ----
+create table if not exists public.campaigns (
+  id uuid primary key default uuid_generate_v4(),
+  organization_id uuid not null references public.organizations(id) on delete cascade,
+  name text not null,
+  channel_session_id uuid not null references public.channel_sessions(id) on delete restrict,
+  status text not null default 'draft',
+  template_body text not null,
+  base_legal text not null,
+  lia_ref text,
+  created_by uuid references auth.users(id) on delete set null,
+  started_at timestamptz,
+  finished_at timestamptz,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+do $$ begin
+  alter table public.campaigns add constraint campaigns_status_check check (status in ('draft','running','paused','done','cancelled'));
+exception when duplicate_object then null; end $$;
+do $$ begin
+  alter table public.campaigns add constraint campaigns_base_legal_check check (base_legal in ('consent','legitimate_interest'));
+exception when duplicate_object then null; end $$;
+do $$ begin
+  alter table public.campaigns add constraint campaigns_lia_exige_ref check (base_legal <> 'legitimate_interest' or coalesce(trim(lia_ref), '') <> '');
+exception when duplicate_object then null; end $$;
+create index if not exists idx_campaigns_org_status on public.campaigns (organization_id, status);
+
+create table if not exists public.campaign_recipients (
+  id uuid primary key default uuid_generate_v4(),
+  organization_id uuid not null references public.organizations(id) on delete cascade,
+  campaign_id uuid not null references public.campaigns(id) on delete cascade,
+  contact_id uuid not null references public.contacts(id) on delete cascade,
+  status text not null default 'pending',
+  skip_reason text,
+  message_id uuid references public.messages(id) on delete set null,
+  sent_at timestamptz,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+do $$ begin
+  alter table public.campaign_recipients add constraint campaign_recipients_status_check check (status in ('pending','sent','failed','skipped'));
+exception when duplicate_object then null; end $$;
+-- `add constraint ... unique` cria um ÍNDICE por baixo, e reaplicar levanta
+-- `duplicate_table` (o índice), não `duplicate_object` (a constraint) — foi o
+-- que reprovou o modo update do `test:db` na primeira tentativa.
+do $$ begin
+  alter table public.campaign_recipients add constraint campaign_recipients_unicos unique (campaign_id, contact_id);
+exception when duplicate_object or duplicate_table then null; end $$;
+create index if not exists idx_campaign_recipients_fila on public.campaign_recipients (campaign_id, status, created_at);
+
+-- RLS no padrão da 0261: SELECT aberto ao tenant, ESCRITA só a partir de `admin`.
+-- Policy `ALL` só-tenancy em tabela nova é reprovada por
+-- `tests/invariants/rbac-config-ia-canais.test.ts` — e com razão: disparar para
+-- uma lista de gente é gesto de administrador, não de qualquer membro.
+alter table public.campaigns enable row level security;
+drop policy if exists tenant_isolation_campaigns_all on public.campaigns;
+drop policy if exists campaigns_select on public.campaigns;
+create policy campaigns_select on public.campaigns
+  for select using (
+    (organization_id in (select public.fn_user_org_ids())) or public.fn_is_platform_admin()
+  );
+drop policy if exists campaigns_write on public.campaigns;
+create policy campaigns_write on public.campaigns
+  using (
+    public.fn_is_platform_admin()
+    or ((organization_id in (select public.fn_user_org_ids()))
+        and public.fn_role_at_least(organization_id, 'admin'))
+  )
+  with check (
+    public.fn_is_platform_admin()
+    or ((organization_id in (select public.fn_user_org_ids()))
+        and public.fn_role_at_least(organization_id, 'admin'))
+  );
+revoke all on public.campaigns from anon, authenticated;
+grant select on public.campaigns to authenticated;   -- a tela lê; só o servidor escreve
+grant all on public.campaigns to service_role;
+
+alter table public.campaign_recipients enable row level security;
+drop policy if exists tenant_isolation_campaign_recipients_all on public.campaign_recipients;
+drop policy if exists campaign_recipients_select on public.campaign_recipients;
+create policy campaign_recipients_select on public.campaign_recipients
+  for select using (
+    (organization_id in (select public.fn_user_org_ids())) or public.fn_is_platform_admin()
+  );
+drop policy if exists campaign_recipients_write on public.campaign_recipients;
+create policy campaign_recipients_write on public.campaign_recipients
+  using (
+    public.fn_is_platform_admin()
+    or ((organization_id in (select public.fn_user_org_ids()))
+        and public.fn_role_at_least(organization_id, 'admin'))
+  )
+  with check (
+    public.fn_is_platform_admin()
+    or ((organization_id in (select public.fn_user_org_ids()))
+        and public.fn_role_at_least(organization_id, 'admin'))
+  );
+revoke all on public.campaign_recipients from anon, authenticated;
+grant select on public.campaign_recipients to authenticated;   -- a tela lê; só o servidor escreve
+grant all on public.campaign_recipients to service_role;
+
+drop trigger if exists trg_campaigns_updated_at on public.campaigns;
+create trigger trg_campaigns_updated_at before update on public.campaigns
+  for each row execute function public.fn_set_updated_at();
+drop trigger if exists trg_campaign_recipients_updated_at on public.campaign_recipients;
+create trigger trg_campaign_recipients_updated_at before update on public.campaign_recipients
+  for each row execute function public.fn_set_updated_at();
