@@ -10129,6 +10129,13 @@ alter table public.agent_inbox_items
     -- aviso o efeito só existe no `docker logs` da VPS — e o que some é o funil,
     -- o Radar de Risco, o follow-up e as métricas, tudo calado.
     'lead_sem_funil',
+    -- (migration 0263) Três chamadas consecutivas ao ERP externo por MCP
+    -- falharam. Um aberto por organização; fecha no primeiro sucesso. É só para
+    -- falha de COMUNICAÇÃO — quando o motivo é capacidade ausente quem avisa
+    -- continua sendo `capabilities_missing`. Entra NESTA lista e no FIM dela,
+    -- pelas duas razões escritas acima (bloco único por constraint, #159, e a
+    -- janela de 2000 caracteres que `midia-nao-lida.test.ts` mede).
+    'mcp_externo_falhou',
     'other'
   ));
 
@@ -25335,7 +25342,7 @@ grant execute on function public.fn_mesclar_contatos(uuid, uuid, uuid[]) to auth
 -- 1. providers novos. Os CHECKs são recriados inteiros (add constraint não é idempotente).
 alter table public.tenant_integrations drop constraint if exists tenant_integrations_provider_check;
 alter table public.tenant_integrations add constraint tenant_integrations_provider_check
-  check (provider in ('nuvemshop','vtex','shopify','asaas'));
+  check (provider in ('nuvemshop','vtex','shopify','asaas','mcp'));
 
 -- `webhook_events_log_provider_check` NÃO é reconstruída aqui: é o BLOCO ÚNICO
 -- desta constraint (migration 0151, regra #159) que ganha 'asaas' — ver acima,
@@ -25504,6 +25511,37 @@ end $$;
 create index if not exists idx_crm_pipelines_channel
   on public.crm_pipelines (organization_id, channel_session_id)
   where channel_session_id is not null;
+
+notify pgrst, 'reload schema';
+
+-- ---- consulta ao ERP externo por MCP (migration 0263, bacco) ----
+--
+-- O CRM passa a CONSUMIR um servidor MCP externo (o ERP do cliente) por cinco
+-- ferramentas locais de leitura, opt-in por organização. A integração vive em
+-- `tenant_integrations` com `provider = 'mcp'` — chave cifrada em
+-- `oauth_access_token_encrypted`, URL e catálogo em `store_metadata`.
+--
+-- Os dois CHECKs desta migration ('mcp' em `tenant_integrations_provider_check`
+-- e 'mcp_externo_falhou' em `agent_inbox_items_kind_check`) NÃO são reconstruídos
+-- aqui: cada um ganhou o valor novo dentro do seu BLOCO ÚNICO, acima neste mesmo
+-- arquivo (regra #159). Um segundo `drop`+`add` aqui faria
+-- `tests/unit/baseline-constraint-reconstruida.test.ts` reprovar e quebraria o
+-- `update.sh` de quem já tem vocabulário posterior.
+--
+-- O que sobra para este bloco é a coluna. `webhook_secret_encrypted` nasceu
+-- `NOT NULL` quando todo provider tinha webhook; o Asaas já não tem, e para
+-- satisfazer a coluna `app/actions/integrations/asaas.ts` FABRICA um segredo que
+-- nunca assina nada. Segredo inventado é pior que coluna vazia: parece
+-- credencial em uso, entra em backup e auditoria, e o dia em que alguém tentar
+-- verificar uma assinatura com ele o erro não vai apontar para aqui.
+--
+-- Aditivo e idempotente: `drop not null` sobre coluna que já é nullable é
+-- no-op, e quem já grava o valor continua gravando.
+alter table public.tenant_integrations
+  alter column webhook_secret_encrypted drop not null;
+
+comment on column public.tenant_integrations.webhook_secret_encrypted is
+  'Segredo do webhook do provider, cifrado. NULLABLE desde a 0263: provider sem webhook (asaas, mcp) grava NULL em vez de fabricar um segredo que nunca assina nada.';
 
 notify pgrst, 'reload schema';
 

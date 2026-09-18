@@ -81,6 +81,8 @@ export type InboxKind =
   | 'charge_webhook_paused'
   /** (0262) A mensagem chegou e não virou card: o número não tem funil, ou o funil não tem etapa aberta. */
   | 'lead_sem_funil'
+  /** (0263) Três chamadas consecutivas ao ERP externo por MCP falharam. Só falha de COMUNICAÇÃO — capacidade ausente segue em `capabilities_missing`. */
+  | 'mcp_externo_falhou'
   | 'other';
 
 export interface InboxItemRow {

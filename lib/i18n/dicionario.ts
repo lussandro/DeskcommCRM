@@ -6010,6 +6010,12 @@ export const DICIONARIO: Traducoes = {
   "Crie um funil para esse número, ou marque um funil existente como \"Todos os números\" na lista de funis.": { es: "Cree un embudo para ese número, o marque un embudo existente como \"Todos los números\" en la lista de embudos." },
   "Abrir a lista de funis": { es: "Abrir la lista de embudos" },
   "Conversas de um número não estão virando card": { es: "Las conversaciones de un número no se están convirtiendo en tarjeta" },
+  "O assistente não está conseguindo consultar o sistema externo": {
+    es: "El asistente no está logrando consultar el sistema externo",
+  },
+  "Peça a quem administra para conferir o endereço e a chave da integração com o sistema externo.": {
+    es: "Pida a quien administra que revise la dirección y la clave de la integración con el sistema externo.",
+  },
   "Ele sai desta lista e para de receber negócio novo. O histórico continua guardado, e nada é apagado.": {
     es: "Sale de esta lista y deja de recibir negocio nuevo. El historial se conserva, y nada se borra.",
   },

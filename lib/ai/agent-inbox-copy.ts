@@ -75,6 +75,9 @@ export const KIND_LABEL = {
   // chega à tela — vira frase de gente no corpo do aviso, escrito pelo worker.
   voice_call_missed: "Alguém ligou e ninguém atendeu",
   lead_sem_funil: "Conversas de um número não estão virando card",
+  // (migration 0263) Falha de COMUNICAÇÃO com o ERP externo por MCP, três vezes
+  // seguidas. Capacidade ausente continua sendo `capabilities_missing`.
+  mcp_externo_falhou: "O assistente não está conseguindo consultar o sistema externo",
   charge_unmatched: "Uma cobrança venceu e o cliente não está no CRM",
   charge_overdue_no_flow: "Uma cobrança venceu e ninguém foi avisado",
   charge_reissue_failed: "O Asaas recusou a prorrogação de um boleto",
