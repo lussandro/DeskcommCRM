@@ -16,6 +16,8 @@ import { traduzir } from "@/lib/i18n/dicionario";
 import { rotuloDoContato } from "@/lib/contacts/rotulo-do-contato";
 import { enviosPorDia, funilDaCampanha, motivosDePulo, taxa } from "@/lib/campanha/desempenho";
 import { GraficosDaCampanha } from "./_components/GraficosDaCampanha";
+import { BotoesDaCampanha } from "./_components/BotoesDaCampanha";
+import { listSelectableChannels } from "@/lib/channels/selectable";
 
 export const dynamic = "force-dynamic";
 
@@ -38,7 +40,7 @@ export default async function CampanhaPage({ params }: { params: Promise<{ id: s
 
   const { data: campanha } = await admin
     .from("campaigns")
-    .select("id, name, status, template_body, base_legal, lia_ref, started_at, finished_at")
+    .select("id, name, status, template_body, base_legal, lia_ref, started_at, finished_at, channel_session_id")
     .eq("organization_id", activeOrg.orgId)
     .eq("id", id)
     .maybeSingle();
@@ -82,6 +84,9 @@ export default async function CampanhaPage({ params }: { params: Promise<{ id: s
   const funil = funilDaCampanha(paraODesempenho);
   const porDia = enviosPorDia(paraODesempenho);
   const pulos = motivosDePulo(paraODesempenho);
+  const canais = await listSelectableChannels(admin, activeOrg.orgId);
+  const numeroDaCampanha =
+    canais.find((c) => c.id === campanha.channel_session_id)?.phone_number ?? t("número removido");
   const pct = (parte: number) => {
     const v = taxa(parte, funil.enviadas);
     return v === null ? "—" : `${v}%`;
@@ -89,13 +94,21 @@ export default async function CampanhaPage({ params }: { params: Promise<{ id: s
 
   return (
     <div className="mx-auto max-w-4xl space-y-6 p-6">
-      <header>
-        <h1 className="text-xl font-semibold">{campanha.name as string}</h1>
-        <p className="mt-1 text-sm text-muted-foreground">
-          {campanha.base_legal === "consent"
-            ? t("Com consentimento")
-            : `${t("Interesse legítimo")} · ${(campanha.lia_ref as string | null) ?? t("sem referência")}`}
-        </p>
+      <header className="flex flex-wrap items-start justify-between gap-4">
+        <div>
+          <h1 className="text-xl font-semibold">{campanha.name as string}</h1>
+          <p className="mt-1 text-sm text-muted-foreground">
+            {campanha.base_legal === "consent"
+              ? t("Com consentimento")
+              : `${t("Interesse legítimo")} · ${(campanha.lia_ref as string | null) ?? t("sem referência")}`}
+          </p>
+        </div>
+        <BotoesDaCampanha
+          campanhaId={id}
+          status={campanha.status as string}
+          pendentes={funil.naFila}
+          numero={numeroDaCampanha}
+        />
       </header>
 
       <dl className="grid grid-cols-2 gap-3 sm:grid-cols-4">
