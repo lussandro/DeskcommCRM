@@ -190,6 +190,32 @@ describe("salvarConfigAsaas", () => {
     expect(r).toEqual({ ok: false, error: "fluxo_invalido", detalhe: "Este fluxo de retorno está desativado." });
     expect(db.tenant_integrations).toHaveLength(0);
   });
+
+  it("dois fluxos em números diferentes salvam a LISTA, e o espelho singular é o primeiro", async () => {
+    const { admin, db } = bancoFalso();
+    vi.mocked(createAdminClient).mockReturnValue(admin);
+    const A = "33333333-3333-4333-8333-333333333333";
+    const B = "44444444-4444-4444-8444-444444444444";
+    vi.mocked(validarFluxoDeCobranca)
+      .mockResolvedValueOnce({ ok: true, agentId: "a1", channelSessionId: "canal-a", avisoTextoFixo: false })
+      .mockResolvedValueOnce({ ok: true, agentId: "a2", channelSessionId: "canal-b", avisoTextoFixo: false });
+    const r = await salvarConfigAsaas({ apiKey: "asaas_key_123", ambiente: "sandbox", followup_pointer_ids: [A, B] });
+    expect(r.ok).toBe(true);
+    const meta = db.tenant_integrations[0]!.store_metadata as { followup_pointer_ids: string[]; followup_pointer_id: string };
+    expect(meta.followup_pointer_ids).toEqual([A, B]);
+    expect(meta.followup_pointer_id).toBe(A);
+  });
+
+  it("dois fluxos no MESMO número → recusa (o disparo viraria empate e ninguém seria cobrado)", async () => {
+    const { admin, db } = bancoFalso();
+    vi.mocked(createAdminClient).mockReturnValue(admin);
+    const A = "33333333-3333-4333-8333-333333333333";
+    const B = "44444444-4444-4444-8444-444444444444";
+    vi.mocked(validarFluxoDeCobranca).mockResolvedValue({ ok: true, agentId: "a1", channelSessionId: "canal-a", avisoTextoFixo: false });
+    const r = await salvarConfigAsaas({ apiKey: "asaas_key_123", ambiente: "sandbox", followup_pointer_ids: [A, B] });
+    expect(r.ok).toBe(false);
+    expect(db.tenant_integrations).toHaveLength(0);
+  });
 });
 
 describe("desativarAsaas", () => {

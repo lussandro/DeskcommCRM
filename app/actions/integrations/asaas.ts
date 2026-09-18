@@ -40,7 +40,10 @@ type ErroComum = "auth_required" | "no_active_org" | "forbidden" | "db_error";
 interface SalvarInput {
   apiKey?: string;
   ambiente: "sandbox" | "producao";
+  /** Forma antiga, aceita para não quebrar chamador que ainda manda um só. */
   followup_pointer_id?: string | null;
+  /** Um fluxo de cobrança por número — a forma nova. */
+  followup_pointer_ids?: string[];
   reemissao?: { dias?: number; max_por_cobranca?: number } | null;
 }
 
@@ -68,9 +71,14 @@ export async function salvarConfigAsaas(input: SalvarInput): Promise<SalvarResul
   const { userId, orgId } = guarda;
   const admin = createAdminClient();
 
+  const pointersPedidos = input.followup_pointer_ids ?? (input.followup_pointer_id ? [input.followup_pointer_id] : []);
   const parsedConfig = configSchema.safeParse({
     ambiente: input.ambiente,
-    followup_pointer_id: input.followup_pointer_id ?? null,
+    // O espelho singular é gravado junto por um ciclo: rollback de imagem não
+    // reverte banco, e imagem antiga que só saiba ler a chave antiga precisa
+    // achar alguma coisa lá — senão a cobrança morre em silêncio.
+    followup_pointer_id: pointersPedidos[0] ?? null,
+    followup_pointer_ids: pointersPedidos,
     reemissao: input.reemissao ?? null,
   });
   if (!parsedConfig.success) {
@@ -78,9 +86,16 @@ export async function salvarConfigAsaas(input: SalvarInput): Promise<SalvarResul
   }
   const config = parsedConfig.data;
 
-  if (config.followup_pointer_id) {
-    const validacao = await validarFluxoDeCobranca(admin, orgId, config.followup_pointer_id);
+  const numeros = new Set<string>();
+  for (const pointerId of config.followup_pointer_ids) {
+    const validacao = await validarFluxoDeCobranca(admin, orgId, pointerId);
     if (!validacao.ok) return { ok: false, error: "fluxo_invalido", detalhe: validacao.detalhe };
+    // Dois fluxos no MESMO número: a escolha do disparo viraria empate, e empate
+    // vira aviso na Central em vez de cobrança. Recusar aqui é mais barato.
+    if (numeros.has(validacao.channelSessionId)) {
+      return { ok: false, error: "fluxo_invalido", detalhe: "Dois fluxos de cobrança estão no mesmo número — deixe um por número." };
+    }
+    numeros.add(validacao.channelSessionId);
   }
 
   const { data: existente, error: lookupErr } = await admin

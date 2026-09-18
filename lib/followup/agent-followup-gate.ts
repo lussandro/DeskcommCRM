@@ -33,6 +33,23 @@ export interface FollowupGateDb {
   loadEnabledPublishedFollowupAgents(orgId: string): Promise<EnabledFollowupAgent[]>;
 }
 
+/**
+ * TODOS os agentes que armam este pointer — não só o escolhido.
+ *
+ * `resolveAgentForAutomaticTrigger` devolve o menor uuid de propósito, e quem
+ * precisa saber se o pointer tem DOIS donos (a cobrança por número: dois
+ * financeiros de números diferentes armando o mesmo fluxo) não consegue
+ * perguntar isso ao resolvedor — ele já escolheu.
+ */
+export async function agentesQueArmamOPointer(
+  db: FollowupGateDb,
+  orgId: string,
+  pointerId: string,
+): Promise<string[]> {
+  const agents = await db.loadEnabledPublishedFollowupAgents(orgId);
+  return agentsEnablingPointer(agents, pointerId);
+}
+
 /** Puro: agent_ids que armam este pointer, em ordem determinística (menor uuid primeiro). */
 function agentsEnablingPointer(agents: EnabledFollowupAgent[], pointerId: string): string[] {
   return agents

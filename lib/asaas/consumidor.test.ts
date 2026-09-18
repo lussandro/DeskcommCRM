@@ -15,6 +15,9 @@ import {
 
 const ORG = "11111111-1111-1111-1111-111111111111";
 const POINTER = "22222222-2222-2222-2222-222222222222";
+const POINTER_B = "2222222b-2222-2222-2222-222222222222";
+const CANAL_A = "aaaaaaaa-0000-0000-0000-000000000000";
+const CANAL_B = "bbbbbbbb-0000-0000-0000-000000000000";
 const CONTATO = "33333333-3333-3333-3333-333333333333";
 const EMPRESA = "44444444-4444-4444-4444-444444444444";
 const BILLING_CONTATO = "55555555-5555-5555-5555-555555555555";
@@ -39,7 +42,7 @@ interface Registro {
   charges: Array<Record<string, unknown>>;
   avisos: Array<{ kind: string; refKind: string | null; refId: string; title: string; body: string }>;
   atividades: Array<{ contactId: string; type: string; reason: string; payload: Record<string, unknown> }>;
-  enrolls: Array<{ pointerId: string; contactId: string }>;
+  enrolls: Array<{ pointerId: string; contactId: string; channelSessionId: string }>;
   cancelamentos: Array<{ id: string; reason: string; outcome: string }>;
   gravacoes: Array<{ paymentId: string; enrollmentId: string | null }>;
 }
@@ -57,6 +60,9 @@ function fakeDb(opts: {
   enrollmentViva?: boolean;
   enrollmentVivoDoCustomerResultado?: { paymentId: string; enrollmentId: string; contactId: string } | null;
   pointerId?: string | null;
+  fluxos?: string[];
+  canalDoFluxo?: Record<string, string>;
+  canaisDoContato?: string[];
   validarFluxo?: ResultadoValidacaoFluxo;
   enrollResultado?: EnrollFollowupResult;
   enrollLanca?: Error;
@@ -91,8 +97,8 @@ function fakeDb(opts: {
     async enrollmentVivoDoCustomer() {
       return opts.enrollmentVivoDoCustomerResultado ?? null;
     },
-    async enroll(pointerId, contactId) {
-      opts.reg.enrolls.push({ pointerId, contactId });
+    async enroll(pointerId, contactId, channelSessionId) {
+      opts.reg.enrolls.push({ pointerId, contactId, channelSessionId });
       if (opts.enrollLanca) throw opts.enrollLanca;
       return opts.enrollResultado ?? { ok: true, enrollment: { id: ENROLLMENT } };
     },
@@ -113,11 +119,16 @@ function fakeDb(opts: {
       if (sequencia.length > 0) return sequencia.shift()!;
       return opts.vencidasAoVivo ?? 0;
     },
-    async validarFluxo() {
-      return opts.validarFluxo ?? { ok: true, agentId: "agent-1", avisoTextoFixo: false };
+    async validarFluxo(pointerId) {
+      if (opts.validarFluxo) return opts.validarFluxo;
+      return { ok: true, agentId: "agent-1", channelSessionId: opts.canalDoFluxo?.[pointerId] ?? CANAL_A, avisoTextoFixo: false };
     },
-    async followupPointerId() {
-      return opts.pointerId === undefined ? POINTER : opts.pointerId;
+    async fluxosDeCobranca() {
+      if (opts.fluxos) return opts.fluxos;
+      return opts.pointerId === undefined ? [POINTER] : opts.pointerId ? [opts.pointerId] : [];
+    },
+    async canaisDoContato() {
+      return opts.canaisDoContato ?? [CANAL_A];
     },
     async diaLocalDaOrg() {
       return "2026-09-17";
@@ -137,7 +148,7 @@ describe("processarEvento — asaas.payment_overdue", () => {
     const db = fakeDb({ reg, titular });
     const r = await processarEvento(deps(db), evento(EVENTO_OVERDUE, {}));
     expect(r.status).toBe("ok");
-    expect(reg.enrolls).toEqual([{ pointerId: POINTER, contactId: BILLING_CONTATO }]);
+    expect(reg.enrolls).toEqual([{ pointerId: POINTER, contactId: BILLING_CONTATO, channelSessionId: CANAL_A }]);
     expect(reg.gravacoes).toEqual([{ paymentId: "pay_1", enrollmentId: ENROLLMENT }]);
     expect(reg.atividades.map((a) => a.type)).toEqual(["charge_overdue"]);
   });
@@ -176,7 +187,7 @@ describe("processarEvento — asaas.payment_overdue", () => {
     expect(reg.avisos[0]!.body).toContain("Fulano de Tal");
   });
 
-  it("config sem followup_pointer_id → charge_overdue_no_flow 1x por dia (ref_id = data)", async () => {
+  it("config sem nenhum fluxo de cobrança → charge_overdue_no_flow 1x por dia (ref_id = data)", async () => {
     const reg = registro();
     const titular: Titular = { kind: "contact", id: CONTATO, customerId: CUSTOMER };
     const db = fakeDb({ reg, titular, pointerId: null });
@@ -216,7 +227,65 @@ describe("processarEvento — asaas.payment_overdue", () => {
     expect(reg.avisos[0]!.kind).toBe("charge_overdue_no_flow");
     expect(reg.avisos[0]!.body).toBe("service_channel_not_found");
   });
+
+  it("um fluxo só e contato que NUNCA escreveu → matricula mesmo assim (instalação de um número)", async () => {
+    const reg = registro();
+    const titular: Titular = { kind: "contact", id: CONTATO, customerId: CUSTOMER };
+    const db = fakeDb({ reg, titular, canaisDoContato: [] });
+    const r = await processarEvento(deps(db), evento(EVENTO_OVERDUE, {}));
+    expect(r.status).toBe("ok");
+    expect(reg.enrolls).toEqual([{ pointerId: POINTER, contactId: CONTATO, channelSessionId: CANAL_A }]);
+  });
+
+  it("dois fluxos e o contato só conversa no número do segundo → matricula no fluxo DAQUELE número", async () => {
+    const reg = registro();
+    const titular: Titular = { kind: "contact", id: CONTATO, customerId: CUSTOMER };
+    const db = fakeDb({
+      reg,
+      titular,
+      fluxos: [POINTER, POINTER_B],
+      canalDoFluxo: { [POINTER]: CANAL_A, [POINTER_B]: CANAL_B },
+      canaisDoContato: [CANAL_B],
+    });
+    const r = await processarEvento(deps(db), evento(EVENTO_OVERDUE, {}));
+    expect(r.status).toBe("ok");
+    expect(reg.enrolls).toEqual([{ pointerId: POINTER_B, contactId: CONTATO, channelSessionId: CANAL_B }]);
+  });
+
+  it("dois fluxos e nenhum no número do contato → não dispara, aviso apontando o contato", async () => {
+    const reg = registro();
+    const titular: Titular = { kind: "contact", id: CONTATO, customerId: CUSTOMER };
+    const db = fakeDb({
+      reg,
+      titular,
+      fluxos: [POINTER, POINTER_B],
+      canalDoFluxo: { [POINTER]: CANAL_A, [POINTER_B]: CANAL_A },
+      canaisDoContato: [CANAL_B],
+    });
+    const r = await processarEvento(deps(db), evento(EVENTO_OVERDUE, {}));
+    expect(r).toEqual({ status: "skipped", detail: "sem_fluxo_para_o_numero" });
+    expect(reg.enrolls).toEqual([]);
+    expect(reg.avisos[0]!.refKind).toBe("contact");
+    expect(reg.avisos[0]!.refId).toBe(CONTATO);
+  });
+
+  it("contato conversa nos DOIS números e há fluxo nos dois → não adivinha, abre aviso", async () => {
+    const reg = registro();
+    const titular: Titular = { kind: "contact", id: CONTATO, customerId: CUSTOMER };
+    const db = fakeDb({
+      reg,
+      titular,
+      fluxos: [POINTER, POINTER_B],
+      canalDoFluxo: { [POINTER]: CANAL_A, [POINTER_B]: CANAL_B },
+      canaisDoContato: [CANAL_A, CANAL_B],
+    });
+    const r = await processarEvento(deps(db), evento(EVENTO_OVERDUE, {}));
+    expect(r).toEqual({ status: "skipped", detail: "fluxo_ambiguo" });
+    expect(reg.enrolls).toEqual([]);
+  });
+
 });
+
 
 describe("processarEvento — asaas.payment_received / payment_deleted", () => {
   it("enrollment viva e vencidasAoVivo=0 → cancela converted/charge_settled + atividade charge_paid", async () => {

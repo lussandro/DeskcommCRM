@@ -106,8 +106,8 @@ export function createSupabaseConsumidorDb(admin: SupabaseClient, orgId: string,
       return { paymentId: charge?.payment_id as string, enrollmentId: vivo.id as string, contactId: vivo.contact_id as string };
     },
 
-    async enroll(pointerId, contactId) {
-      return enrollFollowupFlow(admin, { organizationId: orgId, pointerId, contactId, actorUserId: null, requestId: `asaas-consumidor:${orgId}:${pointerId}:${contactId}` });
+    async enroll(pointerId, contactId, channelSessionId) {
+      return enrollFollowupFlow(admin, { organizationId: orgId, pointerId, contactId, channelSessionId, actorUserId: null, requestId: `asaas-consumidor:${orgId}:${pointerId}:${contactId}` });
     },
 
     async cancelaEnrollment(id, reason, outcome) {
@@ -182,8 +182,19 @@ export function createSupabaseConsumidorDb(admin: SupabaseClient, orgId: string,
       return validarFluxoDeCobranca(admin, orgId, pointerId);
     },
 
-    async followupPointerId() {
-      return integ.config.followup_pointer_id;
+    async fluxosDeCobranca() {
+      return integ.config.followup_pointer_ids;
+    },
+
+    async canaisDoContato(contactId) {
+      const { data, error } = await admin
+        .from("conversations")
+        .select("channel_session_id")
+        .eq("organization_id", orgId)
+        .eq("contact_id", contactId)
+        .eq("is_group", false);
+      if (error) throw new Error(error.message);
+      return [...new Set((data ?? []).map((c) => (c as { channel_session_id: string | null }).channel_session_id).filter((c): c is string => !!c))];
     },
 
     async diaLocalDaOrg(organizationId) {

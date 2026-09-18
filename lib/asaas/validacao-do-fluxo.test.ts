@@ -7,6 +7,7 @@ import { TOOLS_COBRANCA } from "@/lib/mcp/tools/catalogo/cobranca";
 const ORG = "11111111-1111-1111-1111-111111111111";
 const POINTER = "22222222-2222-2222-2222-222222222222";
 const AGENT = "33333333-3333-3333-3333-333333333333";
+const CANAL = "55555555-5555-5555-5555-555555555555";
 const TODAS_AS_TOOLS = TOOLS_COBRANCA.map((t) => t.name);
 
 /** Postgrest-like chainable: .select().eq()...eq().maybeSingle(), ou awaited direto (thenable). */
@@ -16,6 +17,12 @@ class FakeQuery {
     return this;
   }
   eq() {
+    return this;
+  }
+  in() {
+    return this;
+  }
+  is() {
     return this;
   }
   maybeSingle() {
@@ -30,6 +37,9 @@ interface Cenario {
   pointer: { id: string; status: string; trigger_config: unknown; active_version_id: string | null } | null;
   agentesPublicados: Array<{ agent_id: string; followup: { enabled: boolean; flow_pointer_ids: string[] } | null }>;
   toolIds: string[] | null;
+  canal?: string | null;
+  canalVivo?: boolean;
+  canaisDosArmadores?: Array<{ channel_session_id: string | null }>;
   graph: { nodes: Array<{ type: string; config?: { mode?: string } }> } | null;
 }
 
@@ -42,8 +52,15 @@ function fakeAdmin(c: Cenario): SupabaseClient {
           if (table === "ai_agent_versions" && cols.includes("followup")) {
             return new FakeQuery({ data: c.agentesPublicados, error: null });
           }
+          if (table === "ai_agent_versions" && cols.includes("channel_session_id") && !cols.includes("tool_ids")) {
+            // a consulta dos NÚMEROS dos agentes que armam o mesmo pointer
+            return new FakeQuery({ data: c.canaisDosArmadores ?? [], error: null });
+          }
           if (table === "ai_agent_versions") {
-            return new FakeQuery({ data: c.toolIds ? { tool_ids: c.toolIds } : null, error: null });
+            return new FakeQuery({ data: c.toolIds ? { tool_ids: c.toolIds, channel_session_id: c.canal === undefined ? CANAL : c.canal } : null, error: null });
+          }
+          if (table === "channel_sessions") {
+            return new FakeQuery({ data: (c.canalVivo ?? true) ? { id: CANAL } : null, error: null });
           }
           if (table === "followup_flow_versions") return new FakeQuery({ data: c.graph ? { graph: c.graph } : null, error: null });
           throw new Error(`tabela inesperada no teste: ${table}`);
@@ -110,6 +127,38 @@ describe("validarFluxoDeCobranca", () => {
     expect(r.detalhe).toContain(TOOLS_COBRANCA[1]!.rotulo);
   });
 
+  it("número do fluxo foi EXCLUÍDO → canal_arquivado, com texto legível", async () => {
+    // Sem esta recusa o erro só aparece lá na frente, como
+    // `service_channel_not_found` dentro de um aviso na Central.
+    const admin = fakeAdmin({
+      pointer: pointerAtivoWebhook,
+      agentesPublicados: agenteArmaOPointer,
+      toolIds: TODAS_AS_TOOLS,
+      canalVivo: false,
+      graph: { nodes: [] },
+    });
+    const r = await validarFluxoDeCobranca(admin, ORG, POINTER);
+    expect(r).toMatchObject({ ok: false, motivo: "canal_arquivado" });
+  });
+
+  it("mesmo fluxo armado por agentes de números diferentes → fluxo_de_dois_numeros", async () => {
+    // O resolvedor escolheria o menor uuid e a cobrança sairia pela linha errada
+    // em silêncio — por isso a recusa olha TODOS os armadores, não o escolhido.
+    const OUTRO_AGENTE = "3333333b-3333-3333-3333-333333333333";
+    const admin = fakeAdmin({
+      pointer: pointerAtivoWebhook,
+      agentesPublicados: [
+        ...agenteArmaOPointer,
+        { agent_id: OUTRO_AGENTE, followup: { enabled: true, flow_pointer_ids: [POINTER] } },
+      ],
+      toolIds: TODAS_AS_TOOLS,
+      canaisDosArmadores: [{ channel_session_id: CANAL }, { channel_session_id: "66666666-6666-6666-6666-666666666666" }],
+      graph: { nodes: [] },
+    });
+    const r = await validarFluxoDeCobranca(admin, ORG, POINTER);
+    expect(r).toMatchObject({ ok: false, motivo: "fluxo_de_dois_numeros" });
+  });
+
   it("fluxo com nó action mode=text → ok com avisoTextoFixo=true", async () => {
     const admin = fakeAdmin({
       pointer: pointerAtivoWebhook,
@@ -118,6 +167,6 @@ describe("validarFluxoDeCobranca", () => {
       graph: { nodes: [{ type: "trigger" }, { type: "action", config: { mode: "text" } }] },
     });
     const r = await validarFluxoDeCobranca(admin, ORG, POINTER);
-    expect(r).toMatchObject({ ok: true, agentId: AGENT, avisoTextoFixo: true });
+    expect(r).toMatchObject({ ok: true, agentId: AGENT, channelSessionId: CANAL, avisoTextoFixo: true });
   });
 });

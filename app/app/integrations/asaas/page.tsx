@@ -17,6 +17,7 @@ import { loadAuthUser, resolveActiveOrg } from "@/lib/auth/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { configSchema, type AsaasConfig } from "@/lib/asaas/config";
 import { validarFluxoDeCobranca } from "@/lib/asaas/validacao-do-fluxo";
+import { listSelectableChannels } from "@/lib/channels/selectable";
 import { env } from "@/lib/env";
 import { normalizarIdioma } from "@/lib/i18n/idiomas";
 import { traduzir } from "@/lib/i18n/dicionario";
@@ -34,6 +35,10 @@ interface IntegrationRow {
 interface PointerOpcao {
   id: string;
   name: string;
+  /** O número em que este fluxo fala — quem cobra é o agente publicado nele. */
+  numero?: string | null;
+  /** Por que este fluxo não serve, quando não serve. */
+  problema?: string | null;
 }
 
 const STATUS_VIVOS = ["active", "waiting_reply", "paused_handoff", "paused_manual"] as const;
@@ -56,7 +61,21 @@ async function carregarPointers(admin: ReturnType<typeof createAdminClient>, org
     .eq("status", "active")
     .eq("trigger_config->>kind", "webhook")
     .order("name");
-  return (data as PointerOpcao[] | null) ?? [];
+  const pointers = (data as PointerOpcao[] | null) ?? [];
+
+  // O número de cada fluxo, ao lado do nome: é o que torna "o financeiro errado
+  // vai cobrar" visível ANTES de acontecer, em vez de depois, na conversa.
+  const canais = await listSelectableChannels(admin, orgId);
+  const telefone = new Map(canais.map((c) => [c.id, c.phone_number]));
+
+  return Promise.all(
+    pointers.map(async (p) => {
+      const v = await validarFluxoDeCobranca(admin, orgId, p.id);
+      return v.ok
+        ? { ...p, numero: telefone.get(v.channelSessionId) ?? null, problema: null }
+        : { ...p, numero: null, problema: v.detalhe };
+    }),
+  );
 }
 
 async function contarMatriculasVivas(admin: ReturnType<typeof createAdminClient>, orgId: string): Promise<number> {
@@ -95,9 +114,6 @@ export default async function AsaasIntegrationPage() {
         ? configSchema.parse(integration.store_metadata ?? {})
         : null)
     : null;
-
-  const validacaoFluxo =
-    config?.followup_pointer_id ? await validarFluxoDeCobranca(admin, activeOrg.orgId, config.followup_pointer_id) : null;
 
   const enrollmentsVivos = integration ? await contarMatriculasVivas(admin, activeOrg.orgId) : 0;
 
@@ -172,7 +188,6 @@ export default async function AsaasIntegrationPage() {
             precisaDeChave={estado === "sem_linha"}
             configAtual={config}
             pointers={pointers}
-            validacaoFluxo={validacaoFluxo}
             webhookUrl={webhookUrl}
           />
         </CardContent>

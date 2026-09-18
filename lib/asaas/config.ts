@@ -14,7 +14,13 @@ import { AsaasCliente } from "./cliente";
 export const configSchema = z
   .object({
     ambiente: z.enum(["sandbox", "producao"]),
+    // `followup_pointer_id` (singular) é a forma ANTIGA, lida aqui só para
+    // retrocompatibilidade: ela não é schema, é forma de um jsonb, então não há
+    // migration — a linha se normaliza sozinha no primeiro save. A action segue
+    // gravando as duas por um ciclo (espelho), porque rollback de imagem não
+    // reverte banco: imagem antiga lendo a chave apagada é cobrança morta.
     followup_pointer_id: z.string().uuid().nullable().optional().default(null),
+    followup_pointer_ids: z.array(z.string().uuid()).optional(),
     reemissao: z.object({ dias: z.number().int().min(1).max(90).optional(), max_por_cobranca: z.number().int().min(1).max(10).optional() }).nullable().optional(),
   })
   .superRefine((v, ctx) => {
@@ -38,6 +44,7 @@ export const configSchema = z
   .transform((v) => ({
     ambiente: v.ambiente,
     followup_pointer_id: v.followup_pointer_id ?? null,
+    followup_pointer_ids: v.followup_pointer_ids ?? (v.followup_pointer_id ? [v.followup_pointer_id] : []),
     reemissao:
       v.reemissao && v.reemissao.dias !== undefined && v.reemissao.max_por_cobranca !== undefined
         ? { dias: v.reemissao.dias, max_por_cobranca: v.reemissao.max_por_cobranca }

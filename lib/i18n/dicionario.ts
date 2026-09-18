@@ -8843,6 +8843,15 @@ export const DICIONARIO: Traducoes = {
   "Sandbox (teste)": { es: "Sandbox (prueba)" },
   Produção: { es: "Producción" },
   "Fluxo de retorno para cobrança vencida": { es: "Flujo de retorno para cobro vencido" },
+  "Fluxos de retorno para cobrança vencida": { es: "Flujos de retorno para cobro vencido" },
+  "Fluxo removido ou desativado": { es: "Flujo eliminado o desactivado" },
+  "Desmarque para poder salvar.": { es: "Desmárquelo para poder guardar." },
+  "Um por número. Quem cobra é o agente publicado naquele número — a cobrança de um negócio não sai pela linha do outro.": {
+    es: "Uno por número. Quien cobra es el agente publicado en ese número — el cobro de un negocio no sale por la línea del otro.",
+  },
+  "Nenhum fluxo com gatilho de sistema externo. Crie um em Follow-ups.": {
+    es: "Ningún flujo con disparador de sistema externo. Cree uno en Seguimientos.",
+  },
   "Este fluxo tem mensagem fixa; recomendamos mensagem do assistente.": {
     es: "Este flujo tiene mensaje fijo; recomendamos mensaje del asistente.",
   },

@@ -25,6 +25,14 @@ export type EnrollFollowupInput = {
   pointerId: string;
   contactId: string;
   agentId?: string;
+  /**
+   * Em QUAL número a matrícula nasce. Sem ele, `fn_service_begin` pega a conversa
+   * de `last_message_at` mais recente — de qualquer canal — e cria uma no primeiro
+   * canal WORKING quando não há nenhuma. Numa organização com dois números isso é
+   * "quem cobra é o último que falou": a cobrança do fluxo A sai pela linha de B.
+   * Quem sabe o número certo é quem escolheu o fluxo (a cobrança por número).
+   */
+  channelSessionId?: string;
   actorUserId: string | null;
   requestId: string;
 };
@@ -111,7 +119,9 @@ export async function enrollFollowupFlow(
     );
   }
 
-  const boundary = input.resolveServiceBoundary ? await input.resolveServiceBoundary() : await beginServiceAtOrigin(supabase, organizationId, contactId);
+  const boundary = input.resolveServiceBoundary
+    ? await input.resolveServiceBoundary()
+    : await beginServiceAtOrigin(supabase, organizationId, contactId, input.channelSessionId);
   if (input.resolveServiceBoundary) await assertServiceBoundarySupabase(supabase, boundary);
   const { data: created, error: insErr } = await supabase
     .from("followup_enrollments")

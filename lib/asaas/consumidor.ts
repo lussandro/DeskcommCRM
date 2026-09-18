@@ -36,7 +36,7 @@ export type Titular =
   | { kind: "contact"; id: string; customerId: string };
 
 export type ResultadoValidacaoFluxo =
-  | { ok: true; agentId: string; avisoTextoFixo: boolean }
+  | { ok: true; agentId: string; channelSessionId: string; avisoTextoFixo: boolean }
   | { ok: false; motivo: string; detalhe: string };
 
 export interface ConsumidorDb {
@@ -64,7 +64,8 @@ export interface ConsumidorDb {
    * cobrança "órfã" ainda encerrar o retorno certo. `null` quando não há nenhuma.
    */
   enrollmentVivoDoCustomer(customerId: string): Promise<{ paymentId: string; enrollmentId: string; contactId: string } | null>;
-  enroll(pointerId: string, contactId: string): Promise<EnrollFollowupResult>;
+  /** `channelSessionId` é o número do FLUXO — ver `EnrollFollowupInput.channelSessionId`. */
+  enroll(pointerId: string, contactId: string, channelSessionId: string): Promise<EnrollFollowupResult>;
   cancelaEnrollment(id: string, reason: string, outcome: "converted" | "exhausted"): Promise<boolean>;
   gravaEnrollmentNaCharge(organizationId: string, paymentId: string, enrollmentId: string | null): Promise<void>;
   /** Dedup por `(organization_id, kind, ref_id)` aberto — não insere de novo se já existe. */
@@ -73,7 +74,10 @@ export interface ConsumidorDb {
   /** `"falhou"` quando a consulta ao vivo ao Asaas deu erro. */
   vencidasAoVivo(customerId: string): Promise<number | "falhou">;
   validarFluxo(pointerId: string): Promise<ResultadoValidacaoFluxo>;
-  followupPointerId(organizationId: string): Promise<string | null>;
+  /** Os fluxos de cobrança configurados, na ordem da config. */
+  fluxosDeCobranca(organizationId: string): Promise<string[]>;
+  /** Números em que este contato TEM conversa (não-grupo). Vazio = nunca escreveu. */
+  canaisDoContato(contactId: string): Promise<string[]>;
   diaLocalDaOrg(organizationId: string): Promise<string>;
   existeAcaoComVencimento(organizationId: string, paymentId: string, newDueDate: string): Promise<boolean>;
 }
@@ -137,21 +141,57 @@ async function tratarOverdue(deps: ConsumidorDeps, row: EventRow, p: z.infer<typ
     return { status: "ok", detail: "enrollment_ja_vivo" };
   }
 
-  const pointerId = await db.followupPointerId(orgId);
+  const configurados = await db.fluxosDeCobranca(orgId);
   const diaOrg = await db.diaLocalDaOrg(orgId);
-  if (!pointerId) {
+  if (configurados.length === 0) {
     await db.abrirAviso("charge_overdue_no_flow", null, chaveDeAviso("charge_overdue_no_flow", diaOrg), "Sem fluxo de retorno configurado", "A integração Asaas está ativa, mas nenhum fluxo de retorno foi escolhido para cobrança vencida.");
     return { status: "skipped", detail: "sem_pointer_configurado" };
   }
 
-  const validado = await db.validarFluxo(pointerId);
-  if (!validado.ok) {
-    await db.abrirAviso("charge_overdue_no_flow", null, chaveDeAviso("charge_overdue_no_flow", diaOrg), "Fluxo de retorno não está pronto", validado.detalhe);
-    return { status: "skipped", detail: `fluxo_invalido:${validado.motivo}` };
+  // Revalida AGORA, nunca pelo número guardado na config: publicar outro agente
+  // que arme o mesmo fluxo troca o dono dele sem ninguém abrir a tela do Asaas.
+  const validos: Array<{ pointerId: string; channelSessionId: string }> = [];
+  let ultimoInvalido: ResultadoValidacaoFluxo | null = null;
+  for (const id of configurados) {
+    const v = await db.validarFluxo(id);
+    if (v.ok) validos.push({ pointerId: id, channelSessionId: v.channelSessionId });
+    else ultimoInvalido = v;
+  }
+  if (validos.length === 0) {
+    const detalhe = ultimoInvalido && !ultimoInvalido.ok ? ultimoInvalido.detalhe : "Nenhum fluxo de cobrança está pronto.";
+    await db.abrirAviso("charge_overdue_no_flow", null, chaveDeAviso("charge_overdue_no_flow", diaOrg), "Fluxo de retorno não está pronto", detalhe);
+    return { status: "skipped", detail: `fluxo_invalido:${ultimoInvalido && !ultimoInvalido.ok ? ultimoInvalido.motivo : "nenhum"}` };
   }
 
+  // A escolha por NÚMERO. Um fluxo só: ele atende — inclusive contato que ainda
+  // não escreveu (não há outro financeiro para errar, e barrar aqui desligaria a
+  // cobrança de cliente novo na instalação de um número, que é o self-host comum).
+  // Dois ou mais: só dispara quando o contato amarra a exatamente um; senão a
+  // Central decide, porque adivinhar quem cobra é o defeito que se conserta.
+  const canais = await db.canaisDoContato(contactId);
+  const candidatos = validos.filter((f) => canais.includes(f.channelSessionId));
+  let escolhido: { pointerId: string; channelSessionId: string };
+  if (candidatos.length === 1) {
+    escolhido = candidatos[0]!;
+  } else if (candidatos.length === 0 && validos.length === 1) {
+    escolhido = validos[0]!;
+  } else {
+    const ambiguo = candidatos.length > 1;
+    await db.abrirAviso(
+      "charge_overdue_no_flow",
+      "contact",
+      contactId,
+      ambiguo ? "Mais de um fluxo de cobrança serve este cliente" : "Nenhum fluxo de cobrança atende o número deste cliente",
+      ambiguo
+        ? `Este cliente tem cobrança vencida (${p.id}) e conversa em mais de um número com fluxo de cobrança. Escolha por qual número ele deve ser cobrado.`
+        : `Este cliente tem cobrança vencida (${p.id}), mas nenhum fluxo de cobrança está no número em que ele conversa. Crie um fluxo para esse número, ou fale com ele manualmente.`,
+    );
+    return { status: "skipped", detail: ambiguo ? "fluxo_ambiguo" : "sem_fluxo_para_o_numero" };
+  }
+  const { pointerId, channelSessionId } = escolhido;
+
   try {
-    const resultado = await db.enroll(pointerId, contactId);
+    const resultado = await db.enroll(pointerId, contactId, channelSessionId);
     if (!resultado.ok) {
       if (resultado.code === "conflict") {
         // Zera o enrollment_id da charge: sem isto o estado aponta para uma
