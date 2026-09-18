@@ -41,7 +41,14 @@ export function ehFalhaDeComunicacao(falha: FalhaExterna): boolean {
   return falha.tipo !== "rpc" && falha.tipo !== "tool_error";
 }
 
+/**
+ * O `store_metadata` inteiro, não só as três chaves que este módulo conhece.
+ *
+ * O contador é read-modify-write do objeto todo: reescrevê-lo com três chaves
+ * apagaria em silêncio qualquer chave que outra feature grave ali depois.
+ */
 interface Metadata {
+  [chave: string]: unknown;
   url: string;
   catalogo: string[];
   falhas_consecutivas: number;
@@ -61,6 +68,7 @@ async function lerMetadata(
   const m = (data as { store_metadata?: unknown } | null)?.store_metadata as Partial<Metadata> | undefined;
   if (!m || typeof m.url !== "string") return null;
   return {
+    ...m,
     url: m.url,
     catalogo: Array.isArray(m.catalogo) ? m.catalogo : [],
     falhas_consecutivas: typeof m.falhas_consecutivas === "number" ? m.falhas_consecutivas : 0,
@@ -160,10 +168,12 @@ export async function registrarFalha(
 }
 
 export interface RevisaoMcp {
-  /** Integrações `healthy` que o cron conferiu nesta rodada. */
+  /** Integrações que o cron conferiu nesta rodada (as ligadas e as caídas). */
   verificadas: number;
-  /** Quantas caíram para `error` agora. É o número que decide se a rodada auditou. */
+  /** Quantas caíram para `error` agora. */
   erros: number;
+  /** Quantas voltaram de `error` para `healthy` agora. */
+  recuperadas: number;
 }
 
 /**
@@ -180,20 +190,30 @@ export interface RevisaoMcp {
  * no `vercel.ts`, e todo clone já instalado teria de ganhar o agendamento — a
  * doutrina de packaging cobra que a mudança chegue a quem já instalou, e
  * pendurar é o caminho que chega sozinho.
+ *
+ * **Confere `error` também, e é isso que fecha o laço.** Enquanto só olhava
+ * `healthy`, a conferência era uma catraca: quem ela mesma derrubava perdia as
+ * cinco ferramentas (`carregarIntegracaoErpMcp` exige `healthy`), logo nenhuma
+ * consulta voltava a rodar, logo nada voltava a testar — uma queda de dois
+ * minutos às 6h desligava a capacidade até um admin clicar "Testar conexão".
+ * Um laço que só aperta não é laço.
  */
 export async function revisarSaudeDasIntegracoesMcp(admin: SupabaseClient): Promise<RevisaoMcp> {
-  const revisao: RevisaoMcp = { verificadas: 0, erros: 0 };
+  const revisao: RevisaoMcp = { verificadas: 0, erros: 0, recuperadas: 0 };
   const { data, error } = await admin
     .from("tenant_integrations")
-    .select("id, organization_id")
+    .select("id, organization_id, status")
     .eq("provider", "mcp")
-    .eq("status", "healthy");
+    .in("status", ["healthy", "error"]);
   if (error || !data) return revisao;
 
-  for (const linha of data as Array<{ id: string; organization_id: string }>) {
+  for (const linha of data as Array<{ id: string; organization_id: string; status: string }>) {
     const orgId = linha.organization_id;
+    const estavaEmErro = linha.status === "error";
     try {
-      const integ = await carregarIntegracaoErpMcp(admin, orgId, { exigirHealthy: true });
+      // `exigirHealthy:false`: a integração caída é justamente a que precisa ser
+      // reconferida.
+      const integ = await carregarIntegracaoErpMcp(admin, orgId, { exigirHealthy: false });
       if (!integ) continue;
 
       const r = await chamarRpc({ url: integ.url, chave: integ.chave }, "tools/list", {});
@@ -203,10 +223,27 @@ export async function revisarSaudeDasIntegracoesMcp(admin: SupabaseClient): Prom
       if (r.ok) {
         await admin
           .from("tenant_integrations")
-          .update({ last_health_check_at: agora })
+          .update(
+            estavaEmErro
+              ? { status: "healthy", status_reason: null, last_health_check_at: agora }
+              : { last_health_check_at: agora },
+          )
           .eq("organization_id", orgId)
           .eq("id", integ.id);
         await registrarSucesso(admin, orgId, integ.id);
+        if (estavaEmErro) revisao.recuperadas += 1;
+        continue;
+      }
+
+      if (estavaEmErro) {
+        // Continua fora do ar: atualiza o carimbo e o motivo, não abre aviso
+        // de novo (já há um aberto) e não conta como efeito novo — senão toda
+        // rodada diária viraria mutação enquanto o ERP estivesse caído.
+        await admin
+          .from("tenant_integrations")
+          .update({ status_reason: motivoDaFalha(r.falha), last_health_check_at: agora })
+          .eq("organization_id", orgId)
+          .eq("id", integ.id);
         continue;
       }
 

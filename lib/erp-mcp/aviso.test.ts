@@ -33,9 +33,10 @@ function bancoFalso(falhas = 0, status = "healthy") {
 
   function builder(tabela: string) {
     const eq: Array<[string, unknown]> = [];
+    const dentro: Array<[string, unknown[]]> = [];
     let op: "select" | "insert" | "update" | "delete" = "select";
     let payload: Linha | null = null;
-    const casa = (r: Linha) => eq.every(([c, v]) => r[c] === v);
+    const casa = (r: Linha) => eq.every(([c, v]) => r[c] === v) && dentro.every(([c, vs]) => vs.includes(r[c]));
 
     async function exec(): Promise<{ data: unknown; error: null }> {
       const linhas = tabelas[tabela] ?? (tabelas[tabela] = []);
@@ -53,6 +54,7 @@ function bancoFalso(falhas = 0, status = "healthy") {
       insert: (p: Linha) => ((op = "insert"), (payload = p), api),
       update: (p: Linha) => ((op = "update"), (payload = p), api),
       eq: (c: string, v: unknown) => (eq.push([c, v]), api),
+      in: (c: string, vs: unknown[]) => (dentro.push([c, vs]), api),
       limit: () => api,
       maybeSingle: async () => {
         const r = await exec();
@@ -103,6 +105,22 @@ describe("contador de falhas consecutivas", () => {
     expect(db.agent_inbox_items).toHaveLength(0);
   });
 
+  it("gravar o contador PRESERVA o resto do store_metadata", async () => {
+    const db = bancoFalso();
+    // Uma chave que este módulo não conhece — de outra feature, de uma versão
+    // futura. O contador é read-modify-write do objeto inteiro: reescrevê-lo
+    // com as três chaves conhecidas a apagaria em silêncio.
+    (db.tenant_integrations[0]!.store_metadata as Record<string, unknown>).preferencia_futura = { x: 1 };
+
+    await registrarFalha(db.admin, ORG, INTEG, { tipo: "timeout" });
+    expect(db.tenant_integrations[0]!.store_metadata).toMatchObject({
+      url: URL,
+      catalogo: ["customer.status"],
+      falhas_consecutivas: 1,
+      preferencia_futura: { x: 1 },
+    });
+  });
+
   it("sucesso zera o contador e retrata o aviso aberto", async () => {
     const db = bancoFalso(FALHAS_ATE_AVISAR - 1);
     await registrarFalha(db.admin, ORG, INTEG, { tipo: "timeout" });
@@ -119,7 +137,7 @@ describe("conferência diária (anti-morte D9)", () => {
     const db = bancoFalso(2);
     vi.mocked(chamarRpc).mockResolvedValue({ ok: true, dados: { tools: [] } });
 
-    expect(await revisarSaudeDasIntegracoesMcp(db.admin)).toEqual({ verificadas: 1, erros: 0 });
+    expect(await revisarSaudeDasIntegracoesMcp(db.admin)).toEqual({ verificadas: 1, erros: 0, recuperadas: 0 });
     expect(db.tenant_integrations[0]!.status).toBe("healthy");
     expect(db.tenant_integrations[0]!.last_health_check_at).toBeDefined();
     // Uma conferência que funciona também zera o contador.
@@ -130,16 +148,47 @@ describe("conferência diária (anti-morte D9)", () => {
     const db = bancoFalso();
     vi.mocked(chamarRpc).mockResolvedValue({ ok: false, falha: { tipo: "http", status: 401 } });
 
-    expect(await revisarSaudeDasIntegracoesMcp(db.admin)).toEqual({ verificadas: 1, erros: 1 });
+    expect(await revisarSaudeDasIntegracoesMcp(db.admin)).toEqual({ verificadas: 1, erros: 1, recuperadas: 0 });
     expect(db.tenant_integrations[0]!.status).toBe("error");
     expect(String(db.tenant_integrations[0]!.status_reason)).toContain("401");
     expect(db.agent_inbox_items).toHaveLength(1);
     expect(String(db.agent_inbox_items[0]!.body)).toContain("conferência diária");
   });
 
-  it("integração que não está healthy não é conferida", async () => {
+  it("integração DESATIVADA pela pessoa não é conferida", async () => {
     const db = bancoFalso(0, "disconnected");
-    expect(await revisarSaudeDasIntegracoesMcp(db.admin)).toEqual({ verificadas: 0, erros: 0 });
+    expect(await revisarSaudeDasIntegracoesMcp(db.admin)).toEqual({ verificadas: 0, erros: 0, recuperadas: 0 });
     expect(vi.mocked(chamarRpc)).not.toHaveBeenCalled();
+  });
+
+  /**
+   * O laço que faltava: enquanto a conferência só olhava `healthy`, quem ela
+   * derrubava sumia do agente e nunca mais era reconferido — a capacidade
+   * ficava desligada até um admin clicar num botão que ninguém mandou clicar.
+   */
+  it("integração em ERRO é reconferida, e volta sozinha para healthy quando o servidor responde", async () => {
+    const db = bancoFalso(3, "error");
+    db.tenant_integrations[0]!.status_reason = "O servidor recusou a chave (401/403). Confira a chave.";
+    db.agent_inbox_items.push({ id: "aviso-1", organization_id: ORG, kind: "mcp_externo_falhou", ref_id: INTEG, status: "open" });
+    vi.mocked(chamarRpc).mockResolvedValue({ ok: true, dados: { tools: [] } });
+
+    expect(await revisarSaudeDasIntegracoesMcp(db.admin)).toEqual({ verificadas: 1, erros: 0, recuperadas: 1 });
+    expect(db.tenant_integrations[0]!.status).toBe("healthy");
+    expect(db.tenant_integrations[0]!.status_reason).toBeNull();
+    expect(metadataDe(db.tenant_integrations[0]!).falhas_consecutivas).toBe(0);
+    // E o aviso da Central se retrata: a parada acabou.
+    expect(db.agent_inbox_items[0]!.status).toBe("resolved");
+  });
+
+  it("integração em erro que CONTINUA fora do ar não abre segundo aviso nem conta como efeito", async () => {
+    const db = bancoFalso(3, "error");
+    db.agent_inbox_items.push({ id: "aviso-1", organization_id: ORG, kind: "mcp_externo_falhou", ref_id: INTEG, status: "open" });
+    vi.mocked(chamarRpc).mockResolvedValue({ ok: false, falha: { tipo: "timeout" } });
+
+    // `erros:0` é o que impede a rodada diária de virar mutação auditável todo
+    // dia enquanto o ERP do cliente estiver caído.
+    expect(await revisarSaudeDasIntegracoesMcp(db.admin)).toEqual({ verificadas: 1, erros: 0, recuperadas: 0 });
+    expect(db.tenant_integrations[0]!.status).toBe("error");
+    expect(db.agent_inbox_items).toHaveLength(1);
   });
 });

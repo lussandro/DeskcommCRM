@@ -44,7 +44,12 @@ export async function GET(req: NextRequest): Promise<Response> {
   const mcp = await revisarSaudeDasIntegracoesMcp(admin);
 
   const total =
-    totais.overdue_emitidos + totais.received_emitidos + totais.webhooks_religados + totais.avisos + mcp.erros;
+    totais.overdue_emitidos +
+    totais.received_emitidos +
+    totais.webhooks_religados +
+    totais.avisos +
+    mcp.erros +
+    mcp.recuperadas;
   // Rodada que não achou nada para consertar não é mutação e não ocupa linha
   // de auditoria (mesmo critério de `attendant-heartbeat`/`snooze-watcher`) —
   // a que achou, audita sempre.
@@ -53,7 +58,12 @@ export async function GET(req: NextRequest): Promise<Response> {
       action: "cron.asaas_reconcile",
       requestId,
       bypassedRls: true,
-      metadata: { ...totais, mcp_verificadas: mcp.verificadas, mcp_erros: mcp.erros },
+      metadata: {
+        ...totais,
+        mcp_verificadas: mcp.verificadas,
+        mcp_erros: mcp.erros,
+        mcp_recuperadas: mcp.recuperadas,
+      },
     });
   }
 

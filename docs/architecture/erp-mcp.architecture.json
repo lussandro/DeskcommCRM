@@ -197,13 +197,13 @@
       "id": "cron-confere",
       "from": "cron-diario",
       "to": "aviso",
-      "label": "revisarSaudeDasIntegracoesMcp — tools/list por organização healthy"
+      "label": "revisarSaudeDasIntegracoesMcp — tools/list por organização healthy OU error"
     },
     {
       "id": "cron-marca-erro",
       "from": "aviso",
       "to": "servidor-mcp",
-      "label": "falhou → status='error' com motivo e aviso na hora"
+      "label": "falhou → status='error' com motivo e aviso na hora; respondeu → volta a 'healthy' e retrata o aviso"
     },
     {
       "id": "capacidades-lê-status",

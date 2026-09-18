@@ -41,12 +41,26 @@ chegue ao modelo sem passar por uma projeção que declaramos campo a campo.
 |---|---|---|
 | `crm_erp_situacao_do_cliente` | `customer.status` | "estou em atraso?", "por que bloqueou?" |
 | `crm_erp_faturas_do_cliente` | `invoice.list` | "quais faturas estão abertas?" |
-| `crm_erp_fatura` | `invoice.get` | "detalhe e link da fatura X" |
-| `crm_erp_contrato` | `contract.get` | "o que tem no meu contrato?" |
-| `crm_erp_instancia` | `chatcore.instance.get` | "minha instância está bloqueada?" |
+| `crm_erp_fatura` | `invoice.list` + escolha pelo número | "detalhe e link da fatura X" |
+| `crm_erp_contrato` | `customer.status` (prova de posse) + `contract.get` | "o que tem no meu contrato?" |
+| `crm_erp_instancia` | `customer.status` + escolha pelo nome | "minha instância está bloqueada?" |
 
 Todas `category: "read"`, `requiresScope: "mcp:read"`, `requerIntegracao: "mcp"`.
-Cinco vagas do teto de 25 — sem teto paralelo, sem contador novo na tela.
+Cinco vagas do teto de 25, **no pacote `reter`** — um pacote conta contra o teto mesmo para
+quem não tem ERP, e em `atender` as cinco tornavam aquele pacote inatingível para toda
+instalação.
+
+**As três últimas exigem PROVA DE POSSE (D11).** `numero` e `nome` vêm do modelo e no ERP
+medido são sequenciais (`CT-2026-00NN`) ou derivados do CNPJ (`inst<cnpj>`): a versão da
+revisão adversarial devolvia contrato, itens e link de pagamento de OUTRO cliente. Hoje o
+identificador só é atendido se aparecer numa consulta feita pelo DOCUMENTO DO CADASTRO — e é
+por isso que `invoice.get` e `chatcore.instance.get` saíram: a consulta que prova já traz o
+registro pedido dentro, e chamar o método específico depois seria uma segunda ida à rede
+(com um nome de parâmetro que nunca foi medido) para receber o que já está na mão.
+
+**As cinco NÃO são servidas pelo servidor MCP do próprio CRM.** O teto de 4 por turno é por
+`requestId`, que no HTTP é um UUID por requisição: lá elas seriam um proxy sem limite para o
+ERP do cliente, com a nossa chave. Ver `FERRAMENTAS_SO_DO_AGENTE` em `lib/mcp/tools/erp.ts`.
 
 ## 4. Decisões
 
@@ -142,15 +156,40 @@ vocabulário banco × TypeScript.
 ### D9 — Anti-morte ativo
 
 O cron diário de reconciliação (o mesmo lugar onde o Asaas já se re-testa) chama `tools/list`
-uma vez por dia por organização com integração `healthy`, atualiza `last_health_check_at` e,
-falhando, marca `status='error'` com motivo. Sem isso o D8 seria passivo e o operador só
-descobriria pelo cliente reclamando.
+uma vez por dia por organização com integração `healthy` **ou `error`**, atualiza
+`last_health_check_at` e, falhando, marca `status='error'` com motivo. Sem isso o D8 seria
+passivo e o operador só descobriria pelo cliente reclamando.
+
+**Confere as `error` também, e é isso que fecha o laço.** Olhando só as `healthy`, a
+conferência era uma catraca: quem ela derrubava perdia as cinco ferramentas, logo nenhuma
+consulta voltava a rodar, logo nada voltava a testar — uma queda de dois minutos às 6h
+desligava a capacidade até alguém clicar "Testar conexão". Quando o servidor volta a
+responder, a integração volta sozinha para `healthy` e o aviso da Central se retrata.
+Integração `disconnected` (desligada por uma pessoa) fica fora: ninguém a religa pelas costas
+— e é pela mesma razão que **"Testar conexão" não ativa nada**; só `ativarMcp` liga.
 
 ### D10 — O que o servidor devolve é dado, e o mecanismo é a projeção
 
 Não é frase de boa intenção: o texto livre do ERP não chega ao modelo porque **nenhuma das
-cinco ferramentas devolve texto livre** — todas devolvem campos tipados. `support.docs`, que
-devolve documento inteiro, **fica fora do v1** exatamente por isso.
+cinco ferramentas devolve texto livre**. `support.docs`, que devolve documento inteiro, **fica
+fora do v1** exatamente por isso.
+
+**Campo TIPADO não é campo FECHADO, e esta linha já foi falsa.** A revisão adversarial provou
+rodando que `instancias[].motivo` saía verbatim — com `"JOAO DA SILVA, CPF 123.456.789-09, tel
+11999998888"` dentro —, e o mesmo valia para `status`, `ciclo`, `itens[].produto` e
+`link_pagamento`, todos `string` tipada. Hoje cada um tem uma das três saídas: valor do nosso
+vocabulário, `"outro"`, ou `null`. `itens[].produto` é a única exceção (o cliente precisa ler
+o nome do que contratou) e é **saneada**: uma linha, 80 caracteres, e recusada inteira se
+carregar cara de documento, telefone ou e-mail. `link_pagamento` só sai em `https` de host
+permitido. O texto original vai para o log, truncado e com documento mascarado — inclusive o
+`mensagem` de `rpc`/`tool_error`, que é onde vive o `{"erro":…}` de negócio do ERP.
+
+### D11 — Identificador vindo do modelo não é prova de posse
+
+Ver §3. A regra: nenhuma das cinco devolve um recurso que o titular da conversa não tenha, e
+quem decide isso é sempre uma consulta feita pelo documento do CADASTRO, nunca o parâmetro que
+o modelo digitou. Tentativa recusada vira linha de log (`identificador recusado`) — uma
+enumeração aparece ali como uma sequência delas.
 
 ## 5. Migration 0263
 
@@ -201,7 +240,8 @@ o limite de 4 por turno; `ok:false` alimentando o breaker.
 | URL interna (SSRF) | Bearer para destino interno | D6, com janela residual declarada |
 | dado pessoal no prompt | vazamento fora do cascade LGPD | D3, projeção — não redação |
 | modelo executa ação destrutiva | contrato cancelado | D2, allowlist de cinco leituras |
-| texto do ERP vira instrução | injeção | D3 + D10, nenhuma ferramenta devolve texto livre |
+| texto do ERP vira instrução | injeção | D3 + D10, vocabulário fechado (nada verbatim) |
+| identificador de outro cliente | dado de terceiro na conversa | D11, prova de posse pelo cadastro |
 | ferramenta some do ERP | capacidade morta | D4 (erro com log) + D9 |
 
 ## 9. Definition of Done
@@ -212,6 +252,9 @@ toda string nova, e a prova de produção da §7.
 ## 10. NÃO MEDIDO
 
 - `tools/list` paginado ou com mais de 24 ferramentas.
+- `invoice.get` e `chatcore.instance.get` **nunca foram chamados** — e agora não são mais
+  usados por ferramenta nenhuma. A forma da fatura e da instância que chega ao cliente é a de
+  `invoice.list` e `customer.status`, essas sim medidas.
 - Servidor que exija `initialize` antes de `tools/list` (o da ChatCore não exigiu).
 - Custo em tokens dos cinco schemas no prompt.
 - Comportamento sob `Content-Type` errado ou stream truncado no meio de um `data:`.
