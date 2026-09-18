@@ -12,11 +12,17 @@
  */
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-vi.mock("@/lib/erp-mcp/config", () => ({ carregarIntegracaoErpMcp: vi.fn() }));
+// `CONSULTAS_DO_ERP` é a lista real de propósito: é ela que dá o nome do método
+// do ERP aos handlers, e mocá-la mediria uma tabela de mentira.
+vi.mock("@/lib/erp-mcp/config", async (importOriginal) => ({
+  ...(await importOriginal<typeof ConfigModuleNs>()),
+  carregarIntegracaoErpMcp: vi.fn(),
+}));
 vi.mock("@/lib/erp-mcp/transporte", () => ({ chamarRpc: vi.fn() }));
 vi.mock("@/lib/logger", () => ({ logger: { error: vi.fn(), warn: vi.fn(), info: vi.fn(), debug: vi.fn() } }));
 
 import { carregarIntegracaoErpMcp } from "@/lib/erp-mcp/config";
+import type * as ConfigModuleNs from "@/lib/erp-mcp/config";
 import { chamarRpc } from "@/lib/erp-mcp/transporte";
 import { logger } from "@/lib/logger";
 import {
@@ -123,7 +129,12 @@ describe("porta fechada", () => {
   it("contato sem CPF nem CNPJ → needs_document, sem sair para a rede", async () => {
     const { ctx } = ctxCom({ companyId: null });
     const r = await crmErpSituacaoDoCliente.handler({ contact_id: CONTATO }, ctx);
-    expect(r).toEqual({ needs_document: true, message: expect.stringContaining("Peça o documento") });
+    // O texto manda fazer as DUAS coisas: pedir o documento e abrir caso humano
+    // — sem o caso, o documento dito na conversa nunca entra no cadastro.
+    expect(r).toEqual({
+      needs_document: true,
+      message: expect.stringMatching(/Peça o CPF ou CNPJ.*open_human_case/s),
+    });
     expect(mockRpc).not.toHaveBeenCalled();
   });
 

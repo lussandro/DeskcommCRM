@@ -697,6 +697,21 @@ export const NAV_CATALOG = [
     // hub, e se chega às telas dele por "Configurações".
   },
   {
+    // Consulta ao ERP do cliente por MCP (migration 0263). Vizinha do Asaas
+    // pelo mesmo motivo: não é canal de conversa, é configuração da
+    // organização — endereço, chave e o que o assistente passa a poder
+    // consultar.
+    href: "/app/integrations/mcp",
+    label: "Sistema de gestão (MCP)",
+    description: "Deixar o assistente consultar contrato, fatura e situação do cliente no seu sistema de gestão.",
+    icon: "PlugsConnected",
+    group: "organizacao",
+    section: "Sua empresa",
+    // A página recusa quem não é admin com `notFound()` (D7) — `minRole` aqui
+    // evita mostrar o link para quem a página vai recusar.
+    minRole: "admin",
+  },
+  {
     href: "/app/settings/billing",
     label: "Billing",
     description: "Plano e cobrança.",

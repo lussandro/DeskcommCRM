@@ -8913,6 +8913,64 @@ export const DICIONARIO: Traducoes = {
   "Encontre a empresa ou o contato dono desta cobrança no Asaas.": {
     es: "Encuentra la empresa o el contacto dueño de este cobro en Asaas.",
   },
+
+  // Integração com o sistema de gestão (ERP) por MCP — migration 0263
+  "Sistema de gestão (MCP)": { es: "Sistema de gestión (MCP)" },
+  "Deixe o assistente consultar contrato, fatura e situação do cliente direto no seu sistema de gestão. Só consulta — nada é alterado lá.": {
+    es: "Deja que el asistente consulte contrato, factura y situación del cliente directo en tu sistema de gestión. Solo consulta — nada se modifica allí.",
+  },
+  "A conexão com o sistema de gestão está com erro": { es: "La conexión con el sistema de gestión está con error" },
+  "Informe o endereço do servidor MCP e a chave de acesso para começar.": {
+    es: "Ingresa la dirección del servidor MCP y la clave de acceso para empezar.",
+  },
+  "Troque o endereço ou a chave. A chave em branco mantém a atual.": {
+    es: "Cambia la dirección o la clave. La clave en blanco mantiene la actual.",
+  },
+  "Endereço do servidor MCP": { es: "Dirección del servidor MCP" },
+  "Informe a chave de acesso do servidor.": { es: "Ingresa la clave de acceso del servidor." },
+  "Endereço inválido — informe a URL completa do servidor MCP.": {
+    es: "Dirección inválida — ingresa la URL completa del servidor MCP.",
+  },
+  "Não foi possível cifrar a chave agora. Tente de novo em instantes.": {
+    es: "No fue posible cifrar la clave ahora. Inténtalo de nuevo en instantes.",
+  },
+  "Configuração salva. Teste a conexão para ver o que o servidor oferece.": {
+    es: "Configuración guardada. Prueba la conexión para ver lo que el servidor ofrece.",
+  },
+  "O que o assistente ganhou": { es: "Lo que el asistente ganó" },
+  "Ainda não testamos a conexão — teste para ver o que este servidor oferece.": {
+    es: "Aún no probamos la conexión — pruébala para ver lo que este servidor ofrece.",
+  },
+  "O servidor expõe {n} ferramentas.": { es: "El servidor expone {n} herramientas." },
+  "Último teste:": { es: "Última prueba:" },
+  "Situação do cliente": { es: "Situación del cliente" },
+  "Faturas do cliente": { es: "Facturas del cliente" },
+  "Detalhe da fatura": { es: "Detalle de la factura" },
+  Contrato: { es: "Contrato" },
+  Instância: { es: "Instancia" },
+  "Não encontrada no servidor": { es: "No encontrada en el servidor" },
+  "O servidor respondeu, mas nenhuma das cinco consultas foi encontrada nele. Confira se é o servidor certo.": {
+    es: "El servidor respondió, pero ninguna de las cinco consultas fue encontrada en él. Revisa si es el servidor correcto.",
+  },
+  "As consultas partem do CPF ou CNPJ do cadastro do cliente. Sem documento na ficha, o assistente pede o documento e abre um atendimento para alguém completar o cadastro.": {
+    es: "Las consultas parten del CPF o CNPJ del registro del cliente. Sin documento en la ficha, el asistente pide el documento y abre una atención para que alguien complete el registro.",
+  },
+  "Marque as consultas nas ferramentas do agente para ele poder usá-las.": {
+    es: "Marca las consultas en las herramientas del agente para que pueda usarlas.",
+  },
+  "Informe o endereço e a chave do servidor primeiro.": { es: "Ingresa primero la dirección y la clave del servidor." },
+  "Não foi possível falar com o servidor.": { es: "No fue posible hablar con el servidor." },
+  "O servidor respondeu com {n} ferramentas.": { es: "El servidor respondió con {n} herramientas." },
+  "Consulta ao sistema de gestão ativada.": { es: "Consulta al sistema de gestión activada." },
+  "Consulta ao sistema de gestão desativada.": { es: "Consulta al sistema de gestión desactivada." },
+  "Não foi possível ativar.": { es: "No fue posible activar." },
+  "Não foi possível desativar.": { es: "No fue posible desactivar." },
+  "Não foi possível remover.": { es: "No fue posible eliminar." },
+  "Desativar a consulta ao sistema de gestão?": { es: "¿Desactivar la consulta al sistema de gestión?" },
+  "O assistente perde as cinco consultas na hora: pergunta sobre fatura, contrato ou bloqueio volta a virar atendimento humano.": {
+    es: "El asistente pierde las cinco consultas al instante: una pregunta sobre factura, contrato o bloqueo vuelve a convertirse en atención humana.",
+  },
+  "Abrir integração com o sistema de gestão": { es: "Abrir integración con el sistema de gestión" },
 };
 
 /**

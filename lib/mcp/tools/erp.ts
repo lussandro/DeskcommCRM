@@ -20,7 +20,7 @@
  */
 import { z } from "zod";
 
-import { carregarIntegracaoErpMcp, type IntegracaoErpMcp } from "@/lib/erp-mcp/config";
+import { CONSULTAS_DO_ERP, carregarIntegracaoErpMcp, type IntegracaoErpMcp } from "@/lib/erp-mcp/config";
 import {
   projetarContrato,
   projetarFatura,
@@ -35,9 +35,36 @@ import { logger } from "@/lib/logger";
 import type { McpContext, McpToolDefinition } from "../types";
 
 const SEM_MODULO = "A consulta ao sistema de gestão não está ativa nesta organização.";
+/**
+ * O laço do documento que falta, fechado pelo caminho mais barato que existe.
+ *
+ * Sem CPF/CNPJ no cadastro nenhuma das cinco consultas sai, e não há tela do
+ * agente que grave documento: quem grava é uma PESSOA, na ficha do contato (que
+ * já aceita CNPJ na empresa e CPF cifrado no contato). Então o texto manda o
+ * modelo fazer as duas coisas que ele PODE fazer: pedir o documento ao cliente e
+ * abrir caso humano (`open_human_case`, tool nativa do engine) para alguém
+ * completar o cadastro. Sem o caso, o documento dito na conversa morre ali e a
+ * próxima consulta volta a falhar pelo mesmo motivo — o modo de morte que o
+ * Sistema Vivo proíbe.
+ *
+ * NÃO é o handler que abre o caso: `McpContext` não carrega `conversation_id`
+ * (só `turnContactId`), e abrir caso exige a conversa. Fazer o handler abrir
+ * caso exigiria mudar o contexto do MCP inteiro — caro, e para um efeito que a
+ * instrução já alcança.
+ */
 const SEM_DOCUMENTO =
-  "Este cliente ainda não tem CPF nem CNPJ no cadastro. Peça o documento ao cliente e diga que a equipe vai completar o cadastro.";
+  "Este cliente ainda não tem CPF nem CNPJ no cadastro, e sem documento o sistema de gestão não responde. " +
+  "Peça o CPF ou CNPJ ao cliente e ABRA UM CASO HUMANO (open_human_case) pedindo que alguém complete o cadastro dele com esse documento.";
 const LIMITE_POR_TURNO = 4;
+
+/**
+ * O método do ERP de cada ferramenta vem de `CONSULTAS_DO_ERP` — a MESMA lista
+ * que a tela da integração usa para dizer quais consultas o servidor expõe.
+ * Repetir o nome do método aqui faria a tela prometer o que o handler não
+ * chama.
+ */
+type FerramentaErp = (typeof CONSULTAS_DO_ERP)[number]["ferramenta"];
+const METODO_DO_ERP = Object.fromEntries(CONSULTAS_DO_ERP.map((c) => [c.ferramenta, c.metodo])) as Record<FerramentaErp, string>;
 
 /** Os SETE tipos de falha do transporte, cada um com o que o cliente pode ouvir. */
 function textoParaOModelo(falha: FalhaExterna): string {
@@ -205,7 +232,7 @@ export const crmErpSituacaoDoCliente: McpToolDefinition<typeof porContato> = {
   requiresRole: "agent",
   requiresScope: "mcp:read",
   handler: (input, ctx) =>
-    consultarPorDocumento(ctx, input.contact_id, "crm_erp_situacao_do_cliente", "customer.status", projetarSituacaoDoCliente),
+    consultarPorDocumento(ctx, input.contact_id, "crm_erp_situacao_do_cliente", METODO_DO_ERP.crm_erp_situacao_do_cliente, projetarSituacaoDoCliente),
 };
 
 export const crmErpFaturasDoCliente: McpToolDefinition<typeof porContato> = {
@@ -218,7 +245,7 @@ export const crmErpFaturasDoCliente: McpToolDefinition<typeof porContato> = {
   requiresRole: "agent",
   requiresScope: "mcp:read",
   handler: (input, ctx) =>
-    consultarPorDocumento(ctx, input.contact_id, "crm_erp_faturas_do_cliente", "invoice.list", projetarFaturas),
+    consultarPorDocumento(ctx, input.contact_id, "crm_erp_faturas_do_cliente", METODO_DO_ERP.crm_erp_faturas_do_cliente, projetarFaturas),
 };
 
 const porNumeroDeFatura = {
@@ -235,7 +262,7 @@ export const crmErpFatura: McpToolDefinition<typeof porNumeroDeFatura> = {
   category: "read",
   requiresRole: "agent",
   requiresScope: "mcp:read",
-  handler: (input, ctx) => comIntegracao(ctx, (integ) => consultar(ctx, integ, "crm_erp_fatura", "invoice.get", { numero: input.numero }, projetarFatura)),
+  handler: (input, ctx) => comIntegracao(ctx, (integ) => consultar(ctx, integ, "crm_erp_fatura", METODO_DO_ERP.crm_erp_fatura, { numero: input.numero }, projetarFatura)),
 };
 
 const porNumeroDeContrato = {
@@ -251,7 +278,7 @@ export const crmErpContrato: McpToolDefinition<typeof porNumeroDeContrato> = {
   category: "read",
   requiresRole: "agent",
   requiresScope: "mcp:read",
-  handler: (input, ctx) => comIntegracao(ctx, (integ) => consultar(ctx, integ, "crm_erp_contrato", "contract.get", { numero: input.numero }, projetarContrato)),
+  handler: (input, ctx) => comIntegracao(ctx, (integ) => consultar(ctx, integ, "crm_erp_contrato", METODO_DO_ERP.crm_erp_contrato, { numero: input.numero }, projetarContrato)),
 };
 
 const porNomeDeInstancia = {
@@ -274,5 +301,5 @@ export const crmErpInstancia: McpToolDefinition<typeof porNomeDeInstancia> = {
   // servidor recusar com -32602, o log traz a mensagem literal e o ajuste é
   // uma linha aqui — o modelo recebe "recusou os dados desta consulta" e não
   // insiste.
-  handler: (input, ctx) => comIntegracao(ctx, (integ) => consultar(ctx, integ, "crm_erp_instancia", "chatcore.instance.get", { nome: input.nome }, projetarInstancia)),
+  handler: (input, ctx) => comIntegracao(ctx, (integ) => consultar(ctx, integ, "crm_erp_instancia", METODO_DO_ERP.crm_erp_instancia, { nome: input.nome }, projetarInstancia)),
 };

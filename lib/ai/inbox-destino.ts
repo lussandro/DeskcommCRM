@@ -73,10 +73,13 @@ export const POLITICAS_DE_AVISO = {
   // Módulo Asaas (migration 0261). Nenhum tem tela própria ainda — a integração
   // Asaas é o destino de todos, e o que muda é a orientação e o papel.
   lead_sem_funil: { refs: [], orientacao: "Crie um funil para esse número, ou marque um funil existente como \"Todos os números\" na lista de funis.", geral: { papel: "manager", href: "/app/kanban", rotulo: "Abrir a lista de funis" } },
-  // (migration 0263) SEM `geral`: a tela da integração MCP ainda não existe, e
-  // um `href` para página inexistente é botão que leva a 404 — pior que não ter
-  // botão. Ele entra junto com a tela (Task 6 do plano do ERP por MCP).
-  mcp_externo_falhou: { refs: [], orientacao: "Peça a quem administra para conferir o endereço e a chave da integração com o sistema externo." },
+  // (migration 0263) A tela existe desde a Task 6, então o aviso ganhou o
+  // `geral`: é lá que se confere o endereço, a chave e o resultado do teste.
+  mcp_externo_falhou: {
+    refs: [],
+    orientacao: "Peça a quem administra para conferir o endereço e a chave da integração com o sistema externo.",
+    geral: { papel: "admin", href: "/app/integrations/mcp", rotulo: "Abrir integração com o sistema de gestão" },
+  },
   charge_unmatched: { refs: [], orientacao: "Abra a integração Asaas, encontre a cobrança pelo nome do cliente e vincule-a a uma empresa ou a um contato.", geral: { papel: "agent", href: "/app/integrations/asaas", rotulo: "Abrir integração Asaas" } },
   charge_overdue_no_flow: { refs: ["contact"], orientacao: "Escolha o fluxo de retorno para cobrança vencida na integração Asaas, ou marque o número principal da empresa.", geral: { papel: "admin", href: "/app/integrations/asaas", rotulo: "Configurar avisos de cobrança" } },
   charge_reissue_failed: { refs: ["contact"], orientacao: "Leia o motivo do Asaas e resolva no painel dele; o cliente já recebeu a resposta do assistente.", geral: { papel: "agent", href: "/app/integrations/asaas", rotulo: "Abrir integração Asaas" } },

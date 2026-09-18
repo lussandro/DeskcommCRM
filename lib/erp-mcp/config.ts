@@ -27,6 +27,22 @@ export const metadataErpMcpSchema = z.object({
   falhas_consecutivas: z.number().int().min(0).default(0),
 });
 
+/**
+ * As cinco consultas, em UMA lista: ferramenta nossa ↔ método do ERP.
+ *
+ * Fonte única de propósito — os handlers (`lib/mcp/tools/erp.ts`) chamam por
+ * `metodo` e a tela da integração compara esta lista com o `catalogo` que o
+ * `tools/list` devolveu. Duas cópias divergiriam no dia em que o ERP renomear
+ * uma ferramenta: a tela diria "disponível" e o agente receberia `-32601`.
+ */
+export const CONSULTAS_DO_ERP = [
+  { ferramenta: "crm_erp_situacao_do_cliente", metodo: "customer.status", rotulo: "Situação do cliente" },
+  { ferramenta: "crm_erp_faturas_do_cliente", metodo: "invoice.list", rotulo: "Faturas do cliente" },
+  { ferramenta: "crm_erp_fatura", metodo: "invoice.get", rotulo: "Detalhe da fatura" },
+  { ferramenta: "crm_erp_contrato", metodo: "contract.get", rotulo: "Contrato" },
+  { ferramenta: "crm_erp_instancia", metodo: "chatcore.instance.get", rotulo: "Instância" },
+] as const;
+
 export interface IntegracaoErpMcp {
   id: string;
   url: string;

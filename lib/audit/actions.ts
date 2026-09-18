@@ -581,6 +581,13 @@ export const AUDIT_ACTIONS = [
   // (vencida perdida, paga perdida, webhook religado ou pausado). Mesmo
   // critério de `attendant.heartbeat_swept`: rodada vazia não grava linha.
   "cron.asaas_reconcile",
+  // Integração com o ERP externo por MCP (migration 0263). A chave entra na
+  // auditoria só pelos QUATRO ÚLTIMOS dígitos — o suficiente para responder
+  // "qual chave estava valendo quando parou de funcionar?" sem guardá-la.
+  "mcp.integration_config_changed",
+  "mcp.integration_tested",
+  "mcp.integration_enabled",
+  "mcp.integration_disabled",
 ] as const;
 
 /** Um código de auditoria. Derivado de `AUDIT_ACTIONS` — não redigite a lista. */
