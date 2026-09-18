@@ -17,10 +17,16 @@
  *     `ai_agent_runs`, fora do cascade de anonimização da LGPD. Por isso a
  *     projeção é positiva — nomeia o que SAI — e nunca uma lista do que remove.
  *
+ *  4. **Campo TIPADO não é campo FECHADO.** Podar a chave certa não basta se o
+ *     valor que sobra é texto que o ERP escolheu: `motivoBloqueio` chegava ao
+ *     modelo verbatim, com CPF e telefone dentro. Todo texto livre passa pelo
+ *     vocabulário fechado abaixo, e só `itens[].produto` sobrevive — saneado.
+ *
  * Proteção depois do fato não protege: o que não está aqui não chega ao modelo.
  */
 import { z } from "zod";
 
+import { logger } from "@/lib/logger";
 import type { ResultadoExterno } from "./tipos";
 
 // ─── primitivos ────────────────────────────────────────────────────────────
@@ -39,7 +45,17 @@ export function centavosDeString(valor: string | null | undefined): number | nul
 }
 
 /**
- * CPF/CNPJ embutido em texto livre vira os 4 últimos dígitos.
+ * Sequência de dígitos com pontuação de documento/telefone no meio.
+ *
+ * Casar só `\d{11,14}` deixava `123.456.789-09` passar INTACTO — provado na
+ * revisão adversarial de 18/09: a máscara do `inst<cnpj>` funcionava por sorte,
+ * porque o ERP medido não pontua. Aqui o trecho é normalizado antes de julgar,
+ * então documento com e sem máscara caem no mesmo caminho.
+ */
+const SEQUENCIA_DE_DIGITOS = /\d[\d.\-/\s]{8,24}\d/g;
+
+/**
+ * CPF/CNPJ (e telefone) embutido em texto livre vira os 4 últimos dígitos.
  *
  * Existe por um achado da medição: o nome da instância no ERP é
  * `inst<cnpj>` — o identificador que o cliente usa carrega o documento dele
@@ -49,7 +65,154 @@ export function centavosDeString(valor: string | null | undefined): number | nul
  * dígitos distinguem e não identificam.
  */
 export function mascararDocumento(texto: string): string {
-  return texto.replace(/\d{11,14}/g, (d) => `…${d.slice(-4)}`);
+  return texto.replace(SEQUENCIA_DE_DIGITOS, (trecho) => {
+    const digitos = trecho.replace(/\D/g, "");
+    // 11 = CPF/celular, 14 = CNPJ. Data (`2026-09-10`, 8) e número de contrato
+    // (`CT-2026-0000`) ficam de fora: mascará-los apagaria o dado que o cliente
+    // pediu.
+    if (digitos.length < 11 || digitos.length > 14) return trecho;
+    return `…${digitos.slice(-4)}`;
+  });
+}
+
+/**
+ * Texto REMOTO que vai para o LOG do servidor — nunca para o modelo.
+ *
+ * Uma linha só, sem documento, no máximo 200 caracteres. O log é onde o
+ * operador descobre POR QUE a consulta falhou; não é onde o ERP escreve um
+ * romance nem onde o CPF de um cliente acaba arquivado por meses.
+ */
+export function textoParaOLog(texto: string): string {
+  return mascararDocumento(texto.replace(/\s+/g, " ").trim()).slice(0, 200);
+}
+
+// ─── vocabulário fechado (D10) ─────────────────────────────────────────────
+
+/**
+ * **Nenhum texto escolhido pelo ERP sai daqui como veio.**
+ *
+ * Campo TIPADO não é campo FECHADO: `status`, `ciclo` e `motivoBloqueio` são
+ * `string` no servidor, e a revisão adversarial provou rodando que
+ * `motivoBloqueio` chegava ao modelo verbatim — com `"JOAO DA SILVA, CPF
+ * 123.456.789-09, tel 11999998888"` dentro. Dois estragos num campo só: dado
+ * pessoal no prompt (e em `ai_agent_runs`, fora do cascade da LGPD) e uma
+ * superfície de injeção que o operador do ERP controla e nós não.
+ *
+ * Por isso cada campo de texto tem UMA das três saídas: valor do nosso
+ * vocabulário, `"outro"`, ou `null`. O que não reconhecemos vai ao log e morre
+ * ali. A exceção é `itens[].produto` — o cliente precisa ler o nome do produto
+ * que ele contratou —, e ela é SANEADA, não liberada.
+ */
+export type MotivoDeBloqueio = "falta_de_pagamento" | "suspensao_manual" | "outro";
+
+const MOTIVOS: ReadonlyArray<readonly [MotivoDeBloqueio, RegExp]> = [
+  ["falta_de_pagamento", /inadimpl|pagament|fatura|vencid|atras|cobran|d[eé]bito/i],
+  ["suspensao_manual", /suspens|manual|administrativ|solicita|cancela|encerrad|rescis/i],
+];
+
+/** `null` = não há motivo (instância liberada). Texto desconhecido = `"outro"`. */
+export function motivoFechado(texto: string | null | undefined): MotivoDeBloqueio | null {
+  if (typeof texto !== "string" || !texto.trim()) return null;
+  for (const [chave, padrao] of MOTIVOS) {
+    if (padrao.test(texto)) return chave;
+  }
+  logger.warn("[erp-mcp] motivo de bloqueio fora do vocabulário", { motivo: textoParaOLog(texto) });
+  return "outro";
+}
+
+/**
+ * Os valores MEDIDOS são `ACTIVE` (contrato), `PENDING` (fatura) e `MONTHLY`
+ * (ciclo); os demais são a família convencional do mesmo vocabulário. Valor
+ * fora da lista NÃO passa: vira `"outro"` e vai ao log — acrescentar um nome
+ * aqui é barato, deixar texto do ERP entrar no prompt não é.
+ */
+const STATUS_DE_CONTRATO = new Set(["ACTIVE", "INACTIVE", "SUSPENDED", "CANCELLED", "CANCELED", "EXPIRED", "PENDING"]);
+const STATUS_DE_FATURA = new Set(["PENDING", "PAID", "RECEIVED", "CONFIRMED", "OVERDUE", "CANCELLED", "CANCELED", "REFUNDED"]);
+const CICLOS = new Set(["DAILY", "WEEKLY", "BIWEEKLY", "MONTHLY", "BIMONTHLY", "QUARTERLY", "SEMIANNUAL", "SEMIANNUALLY", "YEARLY", "ANNUAL"]);
+
+function fechado(valor: string | null | undefined, conhecidos: ReadonlySet<string>, campo: string): string | null {
+  if (typeof valor !== "string" || !valor.trim()) return null;
+  const normalizado = valor.trim().toUpperCase();
+  if (conhecidos.has(normalizado)) return normalizado;
+  logger.warn("[erp-mcp] valor fora do vocabulário conhecido", { campo, valor: textoParaOLog(valor) });
+  return "outro";
+}
+
+const EMAIL_EM_TEXTO = /[^\s@]+@[^\s@]+\.[a-z]{2,}/i;
+const NAO_DISPONIVEL = "(descrição indisponível)";
+const TAMANHO_DE_PRODUTO = 80;
+
+/** Documento, telefone ou e-mail dentro de um texto que o ERP escolheu. */
+function temDadoPessoal(texto: string): boolean {
+  if (EMAIL_EM_TEXTO.test(texto)) return true;
+  for (const trecho of texto.match(SEQUENCIA_DE_DIGITOS) ?? []) {
+    const digitos = trecho.replace(/\D/g, "");
+    if (digitos.length >= 10 && digitos.length <= 14) return true;
+  }
+  return false;
+}
+
+/**
+ * Nome de produto: o ÚNICO texto do ERP que chega ao cliente, e mesmo assim
+ * saneado — uma linha, 80 caracteres, e recusado inteiro se carregar dado
+ * pessoal (nesse caso o cliente vê que falta a descrição, nunca o CPF de
+ * alguém).
+ */
+export function produtoSaneado(texto: string | null | undefined): string | null {
+  if (typeof texto !== "string" || !texto.trim()) return null;
+  const uma_linha = texto.replace(/\s+/g, " ").trim();
+  if (temDadoPessoal(uma_linha)) {
+    logger.warn("[erp-mcp] item de contrato com cara de dado pessoal; descrição recusada", {
+      produto: textoParaOLog(uma_linha),
+    });
+    return NAO_DISPONIVEL;
+  }
+  return uma_linha.slice(0, TAMANHO_DE_PRODUTO);
+}
+
+/**
+ * Hosts de pagamento aceitos além do próprio ERP.
+ *
+ * ponytail: lista curta dos adquirentes que aparecem no ERP medido e dos mais
+ * comuns no Brasil. Cliente com outro adquirente acrescenta uma linha aqui — o
+ * default é recusar, porque um link escolhido pelo ERP é um link que o
+ * assistente manda o cliente ABRIR.
+ */
+const HOSTS_DE_PAGAMENTO = [
+  "asaas.com",
+  "mercadopago.com",
+  "mercadopago.com.br",
+  "pagseguro.uol.com.br",
+  "pagbank.com.br",
+  "pagar.me",
+  "stripe.com",
+  "cielo.com.br",
+  "efipay.com.br",
+  "gerencianet.com.br",
+];
+
+function ehDoHost(host: string, permitido: string): boolean {
+  return host === permitido || host.endsWith(`.${permitido}`);
+}
+
+/** `https` de host permitido, ou `null`. Nunca o link cru do ERP. */
+export function linkSeguro(link: string | null | undefined, hostDoErp: string): string | null {
+  if (typeof link !== "string" || !link.trim()) return null;
+  let url: URL;
+  try {
+    url = new URL(link.trim());
+  } catch {
+    logger.warn("[erp-mcp] link de pagamento não é uma URL; descartado", {});
+    return null;
+  }
+  const host = url.hostname.toLowerCase();
+  const permitido =
+    (hostDoErp !== "" && ehDoHost(host, hostDoErp)) || HOSTS_DE_PAGAMENTO.some((h) => ehDoHost(host, h));
+  if (url.protocol !== "https:" || !permitido) {
+    logger.warn("[erp-mcp] link de pagamento recusado", { host, esquema: url.protocol });
+    return null;
+  }
+  return url.toString();
 }
 
 type Falha = { ok: false; falha: { tipo: "corpo_invalido"; detalhe: string } };
@@ -65,16 +228,23 @@ function corpoInvalido(detalhe: string): Falha {
 export function desembrulhar(result: unknown): ResultadoExterno<unknown> {
   const conteudo = (result as { content?: unknown })?.content;
   if (!Array.isArray(conteudo) || conteudo.length === 0) return corpoInvalido("resposta sem conteúdo");
+  let tentados = 0;
   for (const item of conteudo) {
     const texto = (item as { text?: unknown })?.text;
     if (typeof texto !== "string" || !texto.trim()) continue;
+    tentados += 1;
     try {
       return { ok: true, dados: JSON.parse(texto) as unknown };
     } catch {
-      // Plano B do plano: texto que não é JSON não vira adivinhação.
-      return corpoInvalido(`conteúdo não é JSON (${texto.length} bytes)`);
+      // `continue`, não `return`: o comentário acima promete "o primeiro que
+      // PARSEIA manda", e abortar no primeiro item não-JSON descartaria um
+      // segundo item válido (um preâmbulo em prosa antes da carga é forma
+      // legítima de `content[]`). Texto que não é JSON nunca vira adivinhação
+      // — só não cala o resto da lista.
+      continue;
     }
   }
+  if (tentados > 0) return corpoInvalido(`nenhum dos ${tentados} itens de texto é JSON`);
   return corpoInvalido("resposta sem texto");
 }
 
@@ -97,8 +267,19 @@ function projetarDe<E, S>(result: unknown, schema: z.ZodType<E>, oQue: string, m
 
 const textoOpcional = z.string().nullable().optional();
 
-// ─── customer.status ───────────────────────────────────────────────────────
+// ─── customer.status: a SITUAÇÃO e a PROVA DE POSSE ────────────────────────
 
+/**
+ * `customer.status` é consultado pelo DOCUMENTO DO CADASTRO, então tudo que ele
+ * devolve é, por construção, do titular da conversa. Por isso ele é a fonte
+ * dupla desta feature: o que o modelo vê (`situacao`) e a allowlist contra a
+ * qual todo identificador vindo do MODELO é conferido (`contratos`,
+ * `instancias`).
+ *
+ * Sem essa conferência, `crm_erp_contrato("CT-2026-0001")` respondia sobre o
+ * contrato de OUTRO cliente — os números são sequenciais, e nada no caminho
+ * ligava o identificador ao titular (achado nº 1 da revisão de 18/09).
+ */
 const instanciaZ = z.object({
   nome: z.string(),
   bloqueada: z.boolean(),
@@ -115,42 +296,73 @@ const situacaoZ = z.object({
     .object({ numero: textoOpcional, vencimento: textoOpcional, valor: textoOpcional })
     .nullable()
     .optional(),
+  // Só o NÚMERO: é o que serve de prova de posse. Status, ciclo e itens vêm de
+  // `contract.get`, depois da prova.
+  contratos: z.array(z.object({ numero: textoOpcional })).default([]),
   instancias: z.array(instanciaZ).default([]),
 });
+
+export interface Instancia {
+  nome: string;
+  bloqueada: boolean;
+  motivo: MotivoDeBloqueio | null;
+  liberada: boolean | null;
+}
 
 export interface SituacaoDoCliente {
   em_atraso: boolean;
   faturas_vencidas: number;
   total_vencido_centavos: number | null;
   proxima_fatura: { numero: string | null; vencimento: string | null; valor_centavos: number | null } | null;
-  instancias: Array<{ nome: string; bloqueada: boolean; motivo: string | null }>;
+  instancias: Instancia[];
 }
 
-export function projetarSituacaoDoCliente(result: unknown): ResultadoExterno<SituacaoDoCliente> {
-  return projetarDe(result, situacaoZ, "situação do cliente", (v) => ({
-    em_atraso: v.emAtraso,
-    faturas_vencidas: v.faturasVencidas.length,
-    total_vencido_centavos: centavosDeString(v.totalVencido),
-    proxima_fatura: v.proximaFatura
-      ? {
-          numero: v.proximaFatura.numero ?? null,
-          vencimento: v.proximaFatura.vencimento ?? null,
-          valor_centavos: centavosDeString(v.proximaFatura.valor),
-        }
-      : null,
-    instancias: v.instancias.map((i) => ({
-      nome: mascararDocumento(i.nome),
-      bloqueada: i.bloqueada,
-      motivo: i.motivoBloqueio ?? null,
-    })),
-  }));
+export interface TitularDoErp {
+  /** O que o modelo pode ver. */
+  situacao: SituacaoDoCliente;
+  /** Números de contrato DO TITULAR — a allowlist de `crm_erp_contrato`. */
+  contratos: string[];
+  /** As instâncias já projetadas (nome mascarado) — a allowlist de `crm_erp_instancia`. */
+  instancias: Instancia[];
 }
 
-// ─── invoice.list / invoice.get ────────────────────────────────────────────
+function montarInstancia(v: z.infer<typeof instanciaZ>): Instancia {
+  return {
+    nome: mascararDocumento(v.nome),
+    bloqueada: v.bloqueada,
+    motivo: motivoFechado(v.motivoBloqueio),
+    liberada: v.gate?.allowed ?? null,
+  };
+}
+
+export function projetarTitular(result: unknown): ResultadoExterno<TitularDoErp> {
+  return projetarDe(result, situacaoZ, "situação do cliente", (v) => {
+    const instancias = v.instancias.map(montarInstancia);
+    return {
+      situacao: {
+        em_atraso: v.emAtraso,
+        faturas_vencidas: v.faturasVencidas.length,
+        total_vencido_centavos: centavosDeString(v.totalVencido),
+        proxima_fatura: v.proximaFatura
+          ? {
+              numero: v.proximaFatura.numero ?? null,
+              vencimento: v.proximaFatura.vencimento ?? null,
+              valor_centavos: centavosDeString(v.proximaFatura.valor),
+            }
+          : null,
+        instancias,
+      },
+      contratos: v.contratos.map((c) => c.numero).filter((n): n is string => typeof n === "string" && n.trim() !== ""),
+      instancias,
+    };
+  });
+}
+
+// ─── invoice.list ──────────────────────────────────────────────────────────
 
 const faturaZ = z.object({
   numero: z.string(),
-  status: z.string(),
+  status: textoOpcional,
   competencia: textoOpcional,
   vencimento: textoOpcional,
   valor: textoOpcional,
@@ -161,35 +373,36 @@ const faturaZ = z.object({
 
 export interface Fatura {
   numero: string;
-  status: string;
+  /** Vocabulário fechado; o que o ERP escrever fora dele vira `"outro"`. */
+  status: string | null;
   competencia: string | null;
   vencimento: string | null;
   valor_centavos: number | null;
   pago_centavos: number | null;
   contrato: string | null;
-  /** Medido: pode vir null. A projeção não promete link que não existe. */
+  /** Medido: pode vir null — e link fora dos hosts permitidos TAMBÉM vira null. */
   link_pagamento: string | null;
 }
 
-function montarFatura(v: z.infer<typeof faturaZ>): Fatura {
-  return {
-    numero: v.numero,
-    status: v.status,
-    competencia: v.competencia ?? null,
-    vencimento: v.vencimento ?? null,
-    valor_centavos: centavosDeString(v.valor),
-    pago_centavos: centavosDeString(v.pago),
-    contrato: v.contrato ?? null,
-    link_pagamento: v.linkPagamento ?? null,
-  };
-}
-
-export function projetarFaturas(result: unknown): ResultadoExterno<{ faturas: Fatura[] }> {
-  return projetarDe(result, z.array(faturaZ), "faturas do cliente", (v) => ({ faturas: v.map(montarFatura) }));
-}
-
-export function projetarFatura(result: unknown): ResultadoExterno<Fatura> {
-  return projetarDe(result, faturaZ, "fatura", montarFatura);
+/**
+ * `hostDoErp` é o hostname da integração da organização: o link do próprio ERP
+ * é legítimo, e os demais só passam se forem de um adquirente conhecido. Um
+ * `link_pagamento` é uma URL que a `description` manda o assistente enviar ao
+ * cliente — quem escolhe o destino não pode ser o texto que voltou da rede.
+ */
+export function projetarFaturas(result: unknown, hostDoErp: string): ResultadoExterno<{ faturas: Fatura[] }> {
+  return projetarDe(result, z.array(faturaZ), "faturas do cliente", (v) => ({
+    faturas: v.map((f) => ({
+      numero: f.numero,
+      status: fechado(f.status, STATUS_DE_FATURA, "fatura.status"),
+      competencia: f.competencia ?? null,
+      vencimento: f.vencimento ?? null,
+      valor_centavos: centavosDeString(f.valor),
+      pago_centavos: centavosDeString(f.pago),
+      contrato: f.contrato ?? null,
+      link_pagamento: linkSeguro(f.linkPagamento, hostDoErp),
+    })),
+  }));
 }
 
 // ─── contract.get ──────────────────────────────────────────────────────────
@@ -201,7 +414,7 @@ export function projetarFatura(result: unknown): ResultadoExterno<Fatura> {
  */
 const contratoZ = z.object({
   numero: z.string(),
-  status: z.string(),
+  status: textoOpcional,
   diaVencimento: z.number().nullable().optional(),
   ciclo: textoOpcional,
   isento: z.boolean().nullable().optional(),
@@ -214,7 +427,7 @@ const contratoZ = z.object({
 
 export interface Contrato {
   numero: string;
-  status: string;
+  status: string | null;
   dia_vencimento: number | null;
   ciclo: string | null;
   isento: boolean | null;
@@ -228,32 +441,14 @@ export interface Contrato {
 export function projetarContrato(result: unknown): ResultadoExterno<Contrato> {
   return projetarDe(result, contratoZ, "contrato", (v) => ({
     numero: v.numero,
-    status: v.status,
+    status: fechado(v.status, STATUS_DE_CONTRATO, "contrato.status"),
     dia_vencimento: v.diaVencimento ?? null,
-    ciclo: v.ciclo ?? null,
+    ciclo: fechado(v.ciclo, CICLOS, "contrato.ciclo"),
     isento: v.isento ?? null,
     inicio: v.inicio ?? null,
     fim: v.fim ?? null,
     renova_sozinho: v.renovaSozinho ?? null,
     suspenso_desde: v.suspensoDesde ?? null,
-    itens: v.itens.map((i) => ({ produto: i.produto ?? null })),
-  }));
-}
-
-// ─── chatcore.instance.get ─────────────────────────────────────────────────
-
-export interface Instancia {
-  nome: string;
-  bloqueada: boolean;
-  motivo: string | null;
-  liberada: boolean | null;
-}
-
-export function projetarInstancia(result: unknown): ResultadoExterno<Instancia> {
-  return projetarDe(result, instanciaZ, "instância", (v) => ({
-    nome: mascararDocumento(v.nome),
-    bloqueada: v.bloqueada,
-    motivo: v.motivoBloqueio ?? null,
-    liberada: v.gate?.allowed ?? null,
+    itens: v.itens.map((i) => ({ produto: produtoSaneado(i.produto) })),
   }));
 }

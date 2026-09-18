@@ -34,13 +34,22 @@ export const metadataErpMcpSchema = z.object({
  * `metodo` e a tela da integração compara esta lista com o `catalogo` que o
  * `tools/list` devolveu. Duas cópias divergiriam no dia em que o ERP renomear
  * uma ferramenta: a tela diria "disponível" e o agente receberia `-32601`.
+ *
+ * **Três ferramentas, dois métodos que se repetem — e isso é de propósito.**
+ * `crm_erp_fatura` e `crm_erp_instancia` NÃO chamam mais `invoice.get` nem
+ * `chatcore.instance.get`: desde a correção do achado nº 1 (revisão de 18/09)
+ * elas precisam provar que o identificador pedido é do titular da conversa, e
+ * a consulta que prova (`invoice.list` / `customer.status`, as duas pelo
+ * documento do CADASTRO) já traz o registro pedido dentro. Chamar o método
+ * específico depois seria gastar uma segunda ida à rede para receber o que já
+ * está na mão — e ainda por cima com o nome de parâmetro que nunca foi medido.
  */
 export const CONSULTAS_DO_ERP = [
   { ferramenta: "crm_erp_situacao_do_cliente", metodo: "customer.status", rotulo: "Situação do cliente" },
   { ferramenta: "crm_erp_faturas_do_cliente", metodo: "invoice.list", rotulo: "Faturas do cliente" },
-  { ferramenta: "crm_erp_fatura", metodo: "invoice.get", rotulo: "Detalhe da fatura" },
+  { ferramenta: "crm_erp_fatura", metodo: "invoice.list", rotulo: "Detalhe da fatura" },
   { ferramenta: "crm_erp_contrato", metodo: "contract.get", rotulo: "Contrato" },
-  { ferramenta: "crm_erp_instancia", metodo: "chatcore.instance.get", rotulo: "Instância" },
+  { ferramenta: "crm_erp_instancia", metodo: "customer.status", rotulo: "Instância" },
 ] as const;
 
 export interface IntegracaoErpMcp {

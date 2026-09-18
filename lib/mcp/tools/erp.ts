@@ -11,23 +11,30 @@
  *
  *  1. **Erro é `{ ok:false, error }`.** `ok:false` é o que o breaker do engine
  *     conta como falha (`lib/agent-engine/agent/tool-breaker.ts`); `{ error }`
- *     sozinho passa batido e o modelo insiste na mesma chamada quebrada.
+ *     sozinho passa batido e o modelo insiste na mesma chamada quebrada. Vale
+ *     também para "módulo desligado" e "falta documento": os dois são motivo
+ *     para PARAR de chamar, e o arquivo dizia isso enquanto fazia o contrário.
  *  2. **O texto da falha que vai ao MODELO é nosso, em pt-BR.** A mensagem real
  *     do ERP (inclusive a de `isError`) vai só para o log: ela é texto remoto, e
  *     texto remoto no prompt é injeção.
  *  3. **4 consultas por turno.** A quinta não sai para a rede (D5) — o loop do
  *     agente não para por tempo de parede.
+ *  4. **Identificador vindo do MODELO não é prova de nada.** `numero` e `nome`
+ *     são sequenciais ou derivados do CNPJ; quem prova posse é sempre uma
+ *     consulta pelo DOCUMENTO DO CADASTRO, e o pedido só é atendido se o
+ *     identificador estiver na resposta dela (`provaDePosse` abaixo).
  */
 import { z } from "zod";
 
 import { registrarFalha, registrarSucesso } from "@/lib/erp-mcp/aviso";
 import { CONSULTAS_DO_ERP, carregarIntegracaoErpMcp, type IntegracaoErpMcp } from "@/lib/erp-mcp/config";
 import {
+  mascararDocumento,
   projetarContrato,
-  projetarFatura,
   projetarFaturas,
-  projetarInstancia,
-  projetarSituacaoDoCliente,
+  projetarTitular,
+  textoParaOLog,
+  type TitularDoErp,
 } from "@/lib/erp-mcp/projecao";
 import type { FalhaExterna, ResultadoExterno } from "@/lib/erp-mcp/tipos";
 import { chamarRpc } from "@/lib/erp-mcp/transporte";
@@ -89,19 +96,27 @@ function textoParaOModelo(falha: FalhaExterna): string {
   }
 }
 
-/** Para o log: motivo e status, nunca corpo, nunca URL, nunca a chave. */
+/**
+ * Para o log: motivo e status, nunca corpo, nunca URL, nunca a chave.
+ *
+ * `rpc` e `tool_error` carregam a mensagem que o ERP escreveu — é exatamente
+ * onde vive o `{"erro":…}` de negócio, e um `-32602` ecoa o argumento que
+ * mandamos. Texto remoto, portanto: passa por `textoParaOLog` (documento
+ * mascarado, uma linha, 200 caracteres). O cabeçalho promete "nunca corpo" e
+ * este era o caminho que entregava corpo.
+ */
 function motivoParaOLog(falha: FalhaExterna): Record<string, unknown> {
   switch (falha.tipo) {
     case "http":
       return { motivo: "http", http_status: falha.status };
     case "rpc":
-      return { motivo: "rpc", codigo: falha.codigo, mensagem: falha.mensagem };
+      return { motivo: "rpc", codigo: falha.codigo, mensagem: textoParaOLog(falha.mensagem) };
     case "tool_error":
-      return { motivo: "tool_error", mensagem: falha.mensagem };
+      return { motivo: "tool_error", mensagem: textoParaOLog(falha.mensagem) };
     case "url_recusada":
     case "rede":
     case "corpo_invalido":
-      return { motivo: falha.tipo, detalhe: falha.detalhe };
+      return { motivo: falha.tipo, detalhe: textoParaOLog(falha.detalhe) };
     case "timeout":
       return { motivo: "timeout" };
   }
@@ -174,24 +189,43 @@ async function documentoDoContato(ctx: McpContext, contactId: string): Promise<s
 
 type Resposta = Record<string, unknown>;
 
+/** Um passo intermediário: ou o dado projetado, ou a resposta pronta ao modelo. */
+type Passo<T> = { ok: true; dados: T } | { ok: false; resposta: Resposta };
+
 /** A porta: sem integração ligada, nenhuma consulta acontece. */
 async function comIntegracao(ctx: McpContext, seguir: (integ: IntegracaoErpMcp) => Promise<Resposta>): Promise<Resposta> {
   const integ = await carregarIntegracaoErpMcp(ctx.supabase, ctx.organizationId);
-  if (!integ) return { error: SEM_MODULO };
+  if (!integ) return { ok: false, error: SEM_MODULO };
   return seguir(integ);
 }
 
+/** O documento do cadastro, ou a instrução de pedi-lo. Nenhuma das cinco passa sem ele. */
+async function comDocumento(ctx: McpContext, contactId: string, seguir: (documento: string) => Promise<Resposta>): Promise<Resposta> {
+  const documento = await documentoDoContato(ctx, contactId);
+  if (!documento) return { ok: false, needs_document: true, error: SEM_DOCUMENTO };
+  return seguir(documento);
+}
+
+/** O host da integração desta organização — é ele que autoriza um link de pagamento. */
+function hostDaIntegracao(url: string): string {
+  try {
+    return new URL(url).hostname.toLowerCase();
+  } catch {
+    return "";
+  }
+}
+
 /** limite → transporte → projeção. Todo caminho de falha passa por aqui. */
-async function consultar<T>(
+async function consultarCru<T>(
   ctx: McpContext,
   integ: IntegracaoErpMcp,
   ferramenta: string,
   metodoDoErp: string,
   argumentos: Record<string, unknown>,
   projetar: (result: unknown) => ResultadoExterno<T>,
-): Promise<Resposta> {
+): Promise<Passo<T>> {
   if (!gastarConsulta(ctx.requestId)) {
-    return { ok: false, error: "limite de consultas ao sistema neste atendimento" };
+    return { ok: false, resposta: { ok: false, error: "limite de consultas ao sistema neste atendimento" } };
   }
 
   const bruto = await chamarRpc({ url: integ.url, chave: integ.chave }, "tools/call", {
@@ -205,28 +239,67 @@ async function consultar<T>(
     // resposta ao cliente — o `await` é só para não perder o efeito quando o
     // processo do turno acabar antes da escrita.
     await registrarFalha(ctx.supabase, ctx.organizationId, integ.id, resultado.falha);
-    return { ok: false, error: textoParaOModelo(resultado.falha) };
+    return { ok: false, resposta: { ok: false, error: textoParaOModelo(resultado.falha) } };
   }
   await registrarSucesso(ctx.supabase, ctx.organizationId, integ.id);
-  return resultado.dados as Resposta;
+  return { ok: true, dados: resultado.dados };
+}
+
+async function consultar<T>(
+  ctx: McpContext,
+  integ: IntegracaoErpMcp,
+  ferramenta: string,
+  metodoDoErp: string,
+  argumentos: Record<string, unknown>,
+  projetar: (result: unknown) => ResultadoExterno<T>,
+): Promise<Resposta> {
+  const passo = await consultarCru(ctx, integ, ferramenta, metodoDoErp, argumentos, projetar);
+  return passo.ok ? (passo.dados as Resposta) : passo.resposta;
+}
+
+/**
+ * A PROVA DE POSSE: `customer.status` pelo documento do CADASTRO.
+ *
+ * Tudo que volta daqui é, por construção, do titular da conversa — o documento
+ * não passou pelo modelo. É contra estas listas que `crm_erp_contrato` e
+ * `crm_erp_instancia` conferem o identificador que o modelo pediu.
+ */
+function titularDoContato(
+  ctx: McpContext,
+  integ: IntegracaoErpMcp,
+  documento: string,
+  ferramenta: string,
+): Promise<Passo<TitularDoErp>> {
+  return consultarCru(ctx, integ, ferramenta, METODO_DO_ERP.crm_erp_situacao_do_cliente, { documento }, projetarTitular);
+}
+
+const NAO_E_DESTE_CLIENTE = {
+  fatura: "essa cobrança não é deste cliente. Use um número que veio da lista de faturas dele.",
+  contrato: "esse contrato não é deste cliente. Use um número que veio da situação dele.",
+  instancia: "essa instância não é deste cliente. Use um nome que veio da situação dele.",
+};
+
+/**
+ * O pedido não está na lista do titular: recusa, e o operador fica sabendo.
+ *
+ * O log é o laço de retorno — uma enumeração de identificadores aparece aqui
+ * como uma sequência destas linhas. O identificador pedido é texto vindo do
+ * MODELO, então vai pelo mesmo caminho de todo texto remoto (`textoParaOLog`).
+ */
+function recusarPorPosse(ferramenta: string, pedido: string, error: string): Resposta {
+  logger.warn("[erp-mcp] identificador recusado: não pertence ao titular da conversa", {
+    ferramenta,
+    pedido: textoParaOLog(pedido),
+  });
+  return { ok: false, error };
+}
+
+function mesmoIdentificador(a: string, b: string): boolean {
+  return a.trim().toUpperCase() === b.trim().toUpperCase();
 }
 
 /** As quatro que partem do cadastro do cliente pedem só o contato do turno. */
 const porContato = { contact_id: z.string().uuid().describe("O cliente da conversa.") };
-
-function consultarPorDocumento<T>(
-  ctx: McpContext,
-  contactId: string,
-  ferramenta: string,
-  metodoDoErp: string,
-  projetar: (result: unknown) => ResultadoExterno<T>,
-): Promise<Resposta> {
-  return comIntegracao(ctx, async (integ) => {
-    const documento = await documentoDoContato(ctx, contactId);
-    if (!documento) return { needs_document: true, message: SEM_DOCUMENTO };
-    return consultar(ctx, integ, ferramenta, metodoDoErp, { documento }, projetar);
-  });
-}
 
 export const crmErpSituacaoDoCliente: McpToolDefinition<typeof porContato> = {
   name: "crm_erp_situacao_do_cliente",
@@ -238,7 +311,12 @@ export const crmErpSituacaoDoCliente: McpToolDefinition<typeof porContato> = {
   requiresRole: "agent",
   requiresScope: "mcp:read",
   handler: (input, ctx) =>
-    consultarPorDocumento(ctx, input.contact_id, "crm_erp_situacao_do_cliente", METODO_DO_ERP.crm_erp_situacao_do_cliente, projetarSituacaoDoCliente),
+    comIntegracao(ctx, (integ) =>
+      comDocumento(ctx, input.contact_id, async (documento) => {
+        const titular = await titularDoContato(ctx, integ, documento, "crm_erp_situacao_do_cliente");
+        return titular.ok ? (titular.dados.situacao as unknown as Resposta) : titular.resposta;
+      }),
+    ),
 };
 
 export const crmErpFaturasDoCliente: McpToolDefinition<typeof porContato> = {
@@ -251,7 +329,13 @@ export const crmErpFaturasDoCliente: McpToolDefinition<typeof porContato> = {
   requiresRole: "agent",
   requiresScope: "mcp:read",
   handler: (input, ctx) =>
-    consultarPorDocumento(ctx, input.contact_id, "crm_erp_faturas_do_cliente", METODO_DO_ERP.crm_erp_faturas_do_cliente, projetarFaturas),
+    comIntegracao(ctx, (integ) =>
+      comDocumento(ctx, input.contact_id, (documento) =>
+        consultar(ctx, integ, "crm_erp_faturas_do_cliente", METODO_DO_ERP.crm_erp_faturas_do_cliente, { documento }, (r) =>
+          projetarFaturas(r, hostDaIntegracao(integ.url)),
+        ),
+      ),
+    ),
 };
 
 const porNumeroDeFatura = {
@@ -263,12 +347,26 @@ export const crmErpFatura: McpToolDefinition<typeof porNumeroDeFatura> = {
   name: "crm_erp_fatura",
   description:
     "Detalha UMA fatura deste cliente pelo número, com status, vencimento, valor, valor pago e link de pagamento quando existe. " +
-    "Use o número que veio da lista de faturas — não invente número.",
+    "Use o número que veio da lista de faturas — número de outro cliente é recusado.",
   inputSchema: porNumeroDeFatura,
   category: "read",
   requiresRole: "agent",
   requiresScope: "mcp:read",
-  handler: (input, ctx) => comIntegracao(ctx, (integ) => consultar(ctx, integ, "crm_erp_fatura", METODO_DO_ERP.crm_erp_fatura, { numero: input.numero }, projetarFatura)),
+  // A fatura sai da LISTA do titular (`invoice.list` pelo documento do
+  // cadastro), não de um `invoice.get` pelo número que o modelo digitou: a
+  // lista é a prova de posse E o dado pedido, numa ida à rede só.
+  handler: (input, ctx) =>
+    comIntegracao(ctx, (integ) =>
+      comDocumento(ctx, input.contact_id, async (documento) => {
+        const lista = await consultarCru(ctx, integ, "crm_erp_fatura", METODO_DO_ERP.crm_erp_fatura, { documento }, (r) =>
+          projetarFaturas(r, hostDaIntegracao(integ.url)),
+        );
+        if (!lista.ok) return lista.resposta;
+        const achada = lista.dados.faturas.find((f) => mesmoIdentificador(f.numero, input.numero));
+        if (!achada) return recusarPorPosse("crm_erp_fatura", input.numero, NAO_E_DESTE_CLIENTE.fatura);
+        return achada as unknown as Resposta;
+      }),
+    ),
 };
 
 const porNumeroDeContrato = {
@@ -279,12 +377,26 @@ const porNumeroDeContrato = {
 export const crmErpContrato: McpToolDefinition<typeof porNumeroDeContrato> = {
   name: "crm_erp_contrato",
   description:
-    "Mostra o contrato do cliente pelo número: status, dia de vencimento, ciclo de cobrança, início, fim, se renova sozinho, se está suspenso e os itens contratados.",
+    "Mostra o contrato do cliente pelo número: status, dia de vencimento, ciclo de cobrança, início, fim, se renova sozinho, se está suspenso e os itens contratados. " +
+    "Use o número que veio da situação do cliente — número de outro cliente é recusado.",
   inputSchema: porNumeroDeContrato,
   category: "read",
   requiresRole: "agent",
   requiresScope: "mcp:read",
-  handler: (input, ctx) => comIntegracao(ctx, (integ) => consultar(ctx, integ, "crm_erp_contrato", METODO_DO_ERP.crm_erp_contrato, { numero: input.numero }, projetarContrato)),
+  // Esta é a única das cinco que gasta DUAS consultas: a prova de posse não
+  // traz o detalhe do contrato (a situação do cliente só lista os números), e
+  // devolver o detalhe sem a prova é o achado nº 1.
+  handler: (input, ctx) =>
+    comIntegracao(ctx, (integ) =>
+      comDocumento(ctx, input.contact_id, async (documento) => {
+        const titular = await titularDoContato(ctx, integ, documento, "crm_erp_contrato");
+        if (!titular.ok) return titular.resposta;
+        if (!titular.dados.contratos.some((n) => mesmoIdentificador(n, input.numero))) {
+          return recusarPorPosse("crm_erp_contrato", input.numero, NAO_E_DESTE_CLIENTE.contrato);
+        }
+        return consultar(ctx, integ, "crm_erp_contrato", METODO_DO_ERP.crm_erp_contrato, { numero: input.numero.trim() }, projetarContrato);
+      }),
+    ),
 };
 
 const porNomeDeInstancia = {
@@ -295,17 +407,42 @@ const porNomeDeInstancia = {
 export const crmErpInstancia: McpToolDefinition<typeof porNomeDeInstancia> = {
   name: "crm_erp_instancia",
   description:
-    "Diz se uma instância do cliente está bloqueada e o motivo do bloqueio. Use quando ele perguntar por que parou de funcionar.",
+    "Diz se uma instância do cliente está bloqueada e o motivo do bloqueio. Use quando ele perguntar por que parou de funcionar. " +
+    "Use o nome que veio da situação do cliente — instância de outro cliente é recusada.",
   inputSchema: porNomeDeInstancia,
   category: "read",
   requiresRole: "agent",
   requiresScope: "mcp:read",
-  // NÃO MEDIDO: o nome do parâmetro de `invoice.get` e de
-  // `chatcore.instance.get` não foi capturado numa chamada real (a medição só
-  // cobriu `customer.status`/`invoice.list` com `documento` e `contract.get`
-  // com `numero`), e os nomes VARIAM entre ferramentas do mesmo servidor. Se o
-  // servidor recusar com -32602, o log traz a mensagem literal e o ajuste é
-  // uma linha aqui — o modelo recebe "recusou os dados desta consulta" e não
-  // insiste.
-  handler: (input, ctx) => comIntegracao(ctx, (integ) => consultar(ctx, integ, "crm_erp_instancia", METODO_DO_ERP.crm_erp_instancia, { nome: input.nome }, projetarInstancia)),
+  // A instância sai da situação do titular, que já a traz inteira (nome,
+  // bloqueada, motivo, gate). O nome chega ao modelo MASCARADO (`inst…0191`,
+  // porque o nome no ERP carrega o CNPJ), então é mascarado dos dois lados que
+  // se comparam — senão a ferramenta recusaria o nome que ela mesma mostrou.
+  handler: (input, ctx) =>
+    comIntegracao(ctx, (integ) =>
+      comDocumento(ctx, input.contact_id, async (documento) => {
+        const titular = await titularDoContato(ctx, integ, documento, "crm_erp_instancia");
+        if (!titular.ok) return titular.resposta;
+        const pedido = mascararDocumento(input.nome);
+        const achada = titular.dados.instancias.find((i) => mesmoIdentificador(i.nome, pedido));
+        if (!achada) return recusarPorPosse("crm_erp_instancia", input.nome, NAO_E_DESTE_CLIENTE.instancia);
+        return achada as unknown as Resposta;
+      }),
+    ),
 };
+
+/**
+ * As cinco NÃO são servidas pelo servidor MCP do próprio CRM (`lib/mcp/server.ts`).
+ *
+ * Lá o `requestId` é um UUID por requisição HTTP, então o teto de 4 por turno
+ * não existe — qualquer token com `mcp:read` consultaria o ERP do cliente sem
+ * limite nenhum, usando a NOSSA chave, e cada chamada ainda custa duas idas à
+ * rede (a prova de posse). O teto é do TURNO do agente e não tem tradução para
+ * uma API sem turno; inventar uma seria infra nova (contador compartilhado) para
+ * uma superfície que ninguém pediu. Quem precisar do dado do ERP fala com o ERP,
+ * que tem MCP próprio — o CRM não é proxy dele.
+ *
+ * Elas continuam no `allTools` porque é de lá que o agente monta as capacidades
+ * (`lib/ai/runtime/tools.ts`) e de lá que a tela de configuração do agente lista
+ * o que dá para ligar.
+ */
+export const FERRAMENTAS_SO_DO_AGENTE: ReadonlySet<string> = new Set(CONSULTAS_DO_ERP.map((c) => c.ferramenta));
