@@ -6,6 +6,13 @@
  * A lógica inteira mora em `lib/asaas/reconcile.ts` — esta rota só autentica,
  * chama e audita quando houve efeito.
  *
+ * Desde a migration 0263 esta rodada leva CARONA: a conferência diária das
+ * integrações MCP com o ERP externo (`revisarSaudeDasIntegracoesMcp`, D9 da
+ * spec do MCP cliente) roda aqui. Cron irmão exigiria linha nova em
+ * `docker/scheduler/entrypoint.sh` e em `vercel.ts`, e todo clone já instalado
+ * teria de ganhar o agendamento à mão — a doutrina de packaging cobra que a
+ * mudança chegue a quem já instalou.
+ *
  * Mesmo contrato de auth dos demais crons (Bearer INTERNAL_CRON_SECRET|
  * INTERNAL_SECRET, fail-closed). Também é chamada fire-and-forget por
  * `app/actions/integrations/asaas.ts` ao ativar a integração.
@@ -17,6 +24,7 @@ import { ok, fail } from "@/lib/api/wrappers";
 import { audit } from "@/lib/audit";
 import { env } from "@/lib/env";
 import { reconciliarTudo } from "@/lib/asaas/reconcile";
+import { revisarSaudeDasIntegracoesMcp } from "@/lib/erp-mcp/aviso";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 export const dynamic = "force-dynamic";
@@ -33,8 +41,10 @@ export async function GET(req: NextRequest): Promise<Response> {
 
   const admin = createAdminClient();
   const totais = await reconciliarTudo(admin);
+  const mcp = await revisarSaudeDasIntegracoesMcp(admin);
 
-  const total = totais.overdue_emitidos + totais.received_emitidos + totais.webhooks_religados + totais.avisos;
+  const total =
+    totais.overdue_emitidos + totais.received_emitidos + totais.webhooks_religados + totais.avisos + mcp.erros;
   // Rodada que não achou nada para consertar não é mutação e não ocupa linha
   // de auditoria (mesmo critério de `attendant-heartbeat`/`snooze-watcher`) —
   // a que achou, audita sempre.
@@ -43,9 +53,9 @@ export async function GET(req: NextRequest): Promise<Response> {
       action: "cron.asaas_reconcile",
       requestId,
       bypassedRls: true,
-      metadata: { ...totais },
+      metadata: { ...totais, mcp_verificadas: mcp.verificadas, mcp_erros: mcp.erros },
     });
   }
 
-  return ok(totais, { requestId });
+  return ok({ ...totais, mcp }, { requestId });
 }

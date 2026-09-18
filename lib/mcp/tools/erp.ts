@@ -20,6 +20,7 @@
  */
 import { z } from "zod";
 
+import { registrarFalha, registrarSucesso } from "@/lib/erp-mcp/aviso";
 import { CONSULTAS_DO_ERP, carregarIntegracaoErpMcp, type IntegracaoErpMcp } from "@/lib/erp-mcp/config";
 import {
   projetarContrato,
@@ -200,8 +201,13 @@ async function consultar<T>(
   const resultado = bruto.ok ? projetar(bruto.dados) : bruto;
   if (!resultado.ok) {
     logger.error("[erp-mcp] consulta falhou", { ferramenta, ...motivoParaOLog(resultado.falha) });
+    // D8: a terceira consecutiva abre o aviso na Central. Não bloqueia a
+    // resposta ao cliente — o `await` é só para não perder o efeito quando o
+    // processo do turno acabar antes da escrita.
+    await registrarFalha(ctx.supabase, ctx.organizationId, integ.id, resultado.falha);
     return { ok: false, error: textoParaOModelo(resultado.falha) };
   }
+  await registrarSucesso(ctx.supabase, ctx.organizationId, integ.id);
   return resultado.dados as Resposta;
 }
 
