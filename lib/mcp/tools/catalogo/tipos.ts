@@ -45,7 +45,7 @@ export interface McpToolCatalogEntry {
    * integração (`lib/asaas/config.ts` → `carregarCapacidadesDeIntegracao`).
    * Nunca entra por pacote — ver `selecao-por-pacote.ts`.
    */
-  requerIntegracao?: "asaas" | "asaas:reemitir";
+  requerIntegracao?: "asaas" | "asaas:reemitir" | "mcp";
 }
 
 /**

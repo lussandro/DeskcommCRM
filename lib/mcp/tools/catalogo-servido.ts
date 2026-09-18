@@ -37,7 +37,7 @@ export interface CapacidadeServida {
   o_que_toca: string;
   risco: ToolRisk;
   pacotes: ReadonlyArray<ToolBundle>;
-  requer_integracao?: "asaas" | "asaas:reemitir";
+  requer_integracao?: "asaas" | "asaas:reemitir" | "mcp";
 }
 
 export function juntarCatalogoComHandlers(

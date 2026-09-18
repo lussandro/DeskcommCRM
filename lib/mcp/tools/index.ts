@@ -86,6 +86,13 @@ import {
   crmProposeReactivation,
 } from "./retencao";
 import {
+  crmErpContrato,
+  crmErpFatura,
+  crmErpFaturasDoCliente,
+  crmErpInstancia,
+  crmErpSituacaoDoCliente,
+} from "./erp";
+import {
   crmListContactCharges,
   crmGetChargePaymentInfo,
   crmLinkContactToBilling,
@@ -122,6 +129,12 @@ export const allTools: ReadonlyArray<McpToolDefinition> = [
   crmListPrivacyRequests,
   crmListContactCharges,
   crmGetChargePaymentInfo,
+  // read — consulta ao sistema de gestão externo (ERP por MCP)
+  crmErpSituacaoDoCliente,
+  crmErpFaturasDoCliente,
+  crmErpFatura,
+  crmErpContrato,
+  crmErpInstancia,
   // read — organizar a operação (W4)
   crmListStages,
   crmListTags,
