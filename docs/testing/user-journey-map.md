@@ -2156,3 +2156,31 @@ produção (a spec nunca cria/edita webhook). **Status: spec escrita; execução
 na VPS pendente** — este checkpoint (Task 11 da spec) cobre spec, `FORA_DO_CI`
 e journey map; a corrida real, com evidência em `.superpowers/evidence/`, é
 checkpoint separado do controlador.
+
+---
+
+## J25 — Consultar o ERP do cliente pelo assistente `[P1]`
+
+Contexto do código: spec `docs/superpowers/specs/2026-09-18-mcp-cliente-design.md`
+(migration 0263). Módulo opcional: o admin liga uma integração `provider='mcp'`
+em Configurações › Sistema de gestão (MCP) — endereço do servidor MCP e chave —,
+testa, ativa e marca as cinco consultas nas ferramentas do agente. As cinco são
+LOCAIS (`lib/mcp/tools/erp.ts`) e roteiam para o servidor externo; nada do ERP
+chega ao modelo sem passar pela projeção (`lib/erp-mcp/projecao.ts`).
+
+| # | Caso | Expectativa |
+|---|------|-------------|
+| J25.1 | Chegar na tela por Configurações, sem digitar a URL | entrada "Sistema de gestão (MCP)" no grupo Organização; `manager` não vê o link e recebe 404 na URL |
+| J25.2 | Salvar endereço + chave e usar "Testar conexão" | `tools/list` real; a tela passa a dizer quantas ferramentas o servidor expõe e marca "Disponível" cada uma das cinco consultas encontradas |
+| J25.3 | Ativar, e perguntar pelo WhatsApp "minha fatura está vencida?" com contato cuja empresa tem CNPJ | o agente responde com o dado do ERP (vencimento, valor, link quando existe), sem e-mail, telefone nem razão social na resposta |
+| J25.4 | Mesma pergunta com contato SEM CPF/CNPJ na ficha | o agente pede o documento e abre caso humano; a ficha do contato é onde uma pessoa completa o cadastro |
+| J25.5 | Derrubar o servidor (ou trocar a chave por uma inválida) e fazer três perguntas | aviso `mcp_externo_falhou` na Central, com o motivo real e botão para a tela da integração |
+| J25.6 | Voltar o servidor e perguntar de novo | o aviso é retratado e o contador de falhas volta a zero, sem intervenção |
+| J25.7 | Deixar a conferência diária rodar com o servidor fora | integração cai para `error` com motivo, as cinco consultas somem do agente, e o aviso abre na hora (não espera três) |
+| J25.8 | Desativar a integração | as cinco consultas somem do turno; "Esquecer chave" é recusado enquanto a integração está ativa |
+
+**Status: NÃO EXECUTADO.** Nenhuma chamada real ao servidor MCP da ChatCore foi
+feita nesta implementação — o transporte foi escrito a partir das medições em
+`.superpowers/sdd/2026-09-18-mcp-cliente/mcp-externo-medido.md`, e a prova que
+vale é a conversa real pelo WhatsApp de testes (§7 da spec), com o controlador.
+Não há spec Playwright para esta jornada ainda.

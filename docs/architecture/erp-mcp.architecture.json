@@ -1,0 +1,221 @@
+{
+  "schema_version": 1,
+  "diagram_type": "architecture",
+  "meta": {
+    "title": "ERP externo por MCP — o agente consulta, o CRM projeta, a falha aparece",
+    "subtitle": "Cinco consultas LOCAIS roteiam para o servidor MCP do cliente; nada do ERP chega ao modelo sem passar pela projeção",
+    "output": "erp-mcp.html",
+    "quality_profile": "standard"
+  },
+  "lanes": [
+    { "id": "tela", "label": "Tela" },
+    { "id": "agente", "label": "Agente IA" },
+    { "id": "biblioteca", "label": "lib/erp-mcp" },
+    { "id": "dados", "label": "Dados" },
+    { "id": "externo", "label": "ERP do cliente" }
+  ],
+  "mainPath": ["tools-erp", "chamar-transporte", "servidor-mcp", "projecao", "aviso"],
+  "nodes": [
+    {
+      "id": "tela-mcp",
+      "lane": "tela",
+      "col": 0,
+      "type": "ui",
+      "label": "Tela Sistema de gestão (/app/integrations/mcp) — endereço, chave, testar, o que ficou disponível"
+    },
+    {
+      "id": "central-avisos",
+      "lane": "tela",
+      "col": 1,
+      "type": "ui",
+      "label": "Central de avisos — mcp_externo_falhou, com destino para a tela da integração"
+    },
+    {
+      "id": "tools-erp",
+      "lane": "agente",
+      "col": 0,
+      "type": "service",
+      "label": "As cinco consultas (lib/mcp/tools/erp.ts) — situação, faturas, fatura, contrato, instância"
+    },
+    {
+      "id": "capacidades",
+      "lane": "agente",
+      "col": 1,
+      "type": "service",
+      "label": "carregarCapacidadesDeIntegracao — capacidade 'mcp' só com status healthy"
+    },
+    {
+      "id": "config-mcp",
+      "lane": "biblioteca",
+      "col": 0,
+      "type": "service",
+      "label": "config.ts — linha cifrada, fail-closed; CONSULTAS_DO_ERP (ferramenta ↔ método)"
+    },
+    {
+      "id": "chamar-transporte",
+      "lane": "biblioteca",
+      "col": 1,
+      "type": "service",
+      "label": "transporte.ts — JSON-RPC, guards anti-SSRF, redirect manual, timeout 10s, SSE e JSON"
+    },
+    {
+      "id": "projecao",
+      "lane": "biblioteca",
+      "col": 2,
+      "type": "service",
+      "label": "projecao.ts — Zod nosso e projeção campo a campo; e-mail, telefone e ids internos ficam fora"
+    },
+    {
+      "id": "aviso",
+      "lane": "biblioteca",
+      "col": 3,
+      "type": "service",
+      "label": "aviso.ts — conta falhas consecutivas, abre e retrata o aviso, confere a saúde diária"
+    },
+    {
+      "id": "tenant-integrations",
+      "lane": "dados",
+      "col": 0,
+      "type": "data",
+      "label": "tenant_integrations (provider='mcp') — chave cifrada, url, catálogo, falhas_consecutivas"
+    },
+    {
+      "id": "agent-inbox-items",
+      "lane": "dados",
+      "col": 1,
+      "type": "data",
+      "label": "agent_inbox_items — kind mcp_externo_falhou, um aberto por integração"
+    },
+    {
+      "id": "contatos",
+      "lane": "dados",
+      "col": 2,
+      "type": "data",
+      "label": "contacts / crm_companies — o CPF ou CNPJ vem do cadastro, nunca do modelo"
+    },
+    {
+      "id": "cron-diario",
+      "lane": "dados",
+      "col": 3,
+      "type": "service",
+      "label": "Cron diário (asaas-reconcile, 6h) — carona da conferência anti-morte"
+    },
+    {
+      "id": "servidor-mcp",
+      "lane": "externo",
+      "col": 0,
+      "type": "external",
+      "label": "Servidor MCP do ERP do cliente — 24 ferramentas, das quais só cinco são alcançáveis"
+    }
+  ],
+  "edges": [
+    {
+      "id": "tela-grava-config",
+      "from": "tela-mcp",
+      "to": "tenant-integrations",
+      "label": "salva endereço e chave cifrada; auditoria só com os 4 últimos dígitos"
+    },
+    {
+      "id": "tela-testa",
+      "from": "tela-mcp",
+      "to": "chamar-transporte",
+      "label": "Testar conexão → tools/list de verdade"
+    },
+    {
+      "id": "teste-grava-catalogo",
+      "from": "chamar-transporte",
+      "to": "tenant-integrations",
+      "label": "grava status, last_health_check_at e o catálogo descoberto"
+    },
+    {
+      "id": "tools-lê-config",
+      "from": "tools-erp",
+      "to": "config-mcp",
+      "label": "carrega a linha e decifra a chave; null = módulo desligado"
+    },
+    {
+      "id": "config-lê-linha",
+      "from": "config-mcp",
+      "to": "tenant-integrations",
+      "label": "filtra organization_id e provider='mcp'"
+    },
+    {
+      "id": "tools-resolve-documento",
+      "from": "tools-erp",
+      "to": "contatos",
+      "label": "CNPJ da empresa ou CPF decifrado; sem documento → pede ao cliente e abre caso humano"
+    },
+    {
+      "id": "tools-chama-transporte",
+      "from": "tools-erp",
+      "to": "chamar-transporte",
+      "label": "tools/call, no máximo 4 por turno"
+    },
+    {
+      "id": "transporte-fala-com-erp",
+      "from": "chamar-transporte",
+      "to": "servidor-mcp",
+      "label": "POST JSON-RPC com Bearer no cabeçalho; resposta SSE ou JSON"
+    },
+    {
+      "id": "transporte-projeta",
+      "from": "chamar-transporte",
+      "to": "projecao",
+      "label": "desembrulha content[].text e valida com Zod nosso"
+    },
+    {
+      "id": "projecao-responde-ao-modelo",
+      "from": "projecao",
+      "to": "tools-erp",
+      "label": "objeto montado campo a campo — nunca texto livre do ERP"
+    },
+    {
+      "id": "tools-registra-falha",
+      "from": "tools-erp",
+      "to": "aviso",
+      "label": "ok:false → soma consecutiva; sucesso → zera"
+    },
+    {
+      "id": "aviso-conta-na-linha",
+      "from": "aviso",
+      "to": "tenant-integrations",
+      "label": "falhas_consecutivas em store_metadata"
+    },
+    {
+      "id": "aviso-abre-item",
+      "from": "aviso",
+      "to": "agent-inbox-items",
+      "label": "na 3ª abre; no primeiro sucesso retrata (status='resolved')"
+    },
+    {
+      "id": "inbox-aponta-para-tela",
+      "from": "agent-inbox-items",
+      "to": "central-avisos",
+      "label": "política do kind dá o destino: abrir a integração"
+    },
+    {
+      "id": "cron-confere",
+      "from": "cron-diario",
+      "to": "aviso",
+      "label": "revisarSaudeDasIntegracoesMcp — tools/list por organização healthy"
+    },
+    {
+      "id": "cron-marca-erro",
+      "from": "aviso",
+      "to": "servidor-mcp",
+      "label": "falhou → status='error' com motivo e aviso na hora"
+    },
+    {
+      "id": "capacidades-lê-status",
+      "from": "capacidades",
+      "to": "tenant-integrations",
+      "label": "capacidade 'mcp' some do agente quando a integração cai"
+    },
+    {
+      "id": "capacidades-liberam-tools",
+      "from": "capacidades",
+      "to": "tools-erp",
+      "label": "requerIntegracao='mcp' — sem a capacidade, as cinco não entram no turno"
+    }
+  ]
+}
