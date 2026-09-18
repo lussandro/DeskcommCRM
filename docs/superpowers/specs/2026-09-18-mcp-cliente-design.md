@@ -1,208 +1,238 @@
-# Spec — o CRM como CLIENTE de MCP
+# Spec — o CRM consulta um ERP externo por MCP
 
 **Data:** 2026-09-18 · **Branch alvo:** `bacco` · **Migration:** 0263
 **Objetivo:** `.superpowers/sdd/2026-09-18-mcp-cliente/objetivo.md`
-**Medições que a spec herda:** `.superpowers/sdd/2026-09-18-mcp-cliente/mcp-externo-medido.md`
-(contrato real do servidor) e `levantamento.md` (pontos de integração, com arquivo:linha).
+**Medições:** `mcp-externo-medido.md` (contrato real do servidor, chamadas de produção) ·
+`levantamento.md` (pontos de integração com arquivo:linha)
+**Revisões que reescreveram esta spec:** `refutacao-spec.md` (25 achados, 5 bloqueantes) e o
+Codex (5 críticos). A versão anterior — "as ferramentas do servidor entram no catálogo do
+agente" — **foi descartada**, e a §11 diz por quê.
 
 ---
 
 ## 1. O problema, medido
 
-O CRM **serve** MCP (`app/api/mcp/route.ts` → `lib/mcp/server.ts`) e não **consome** nenhum:
-zero ocorrência de `sdk/client`, `StreamableHTTPClientTransport` ou `experimental_createMCPClient`
-no repositório; o `@modelcontextprotocol/sdk` (`package.json:47`) entra só pelo lado servidor.
+O CRM **serve** MCP e não **consome** nenhum: zero `sdk/client` no repositório; o
+`@modelcontextprotocol/sdk` só entra pelo lado servidor (`app/api/mcp/route.ts:14`).
 
-A consequência foi medida em produção (18/09/2026). A organização do dono atende dois negócios;
-o segundo (ChatCore, número 554899357781) tem um ERP próprio com 24 ferramentas MCP em produção
-— contrato, fatura, instância, QR, situação de cobrança ao vivo. Os três agentes da ChatCore
-foram publicados e **não alcançam nada disso**: toda pergunta de contrato, fatura ou instância
-vira ocorrência humana. A análise de 18 meses de conversa (3.069 mensagens) mostra que é
-exatamente aí que está o volume: 22 conversas de suporte, 10 de financeiro, e **11% das
-mensagens de cliente nunca tiveram resposta humana**.
-
-Não é falta de configuração. É metade de mecanismo que não existe.
+A organização do dono atende dois negócios. O segundo (ChatCore, número 554899357781) tem ERP
+próprio com 24 ferramentas MCP em produção — contrato, fatura, instância, QR, situação de
+cobrança ao vivo. Os três agentes dela foram publicados e **não alcançam nada disso**: toda
+pergunta de contrato, fatura ou instância vira ocorrência humana. A análise de 18 meses (3.069
+mensagens) mostra que é aí que está o volume — 22 conversas de suporte, 10 de financeiro — e
+que **11% das mensagens de cliente nunca tiveram resposta humana**.
 
 ## 2. O que esta spec entrega
 
-Uma organização passa a poder **cadastrar um servidor MCP externo** (URL + chave), e as
-ferramentas desse servidor ficam disponíveis para os agentes dela, escolhidas uma a uma pelo
-admin, como qualquer outra capacidade.
+**Cinco ferramentas locais de CONSULTA**, declaradas no catálogo como qualquer outra, que por
+baixo perguntam ao ERP externo por MCP. O admin liga uma integração (URL + chave) e marca as
+capacidades no agente, exatamente como já faz com as do Asaas.
 
-**Fora de escopo, declarado:** mais de um servidor por organização; OAuth (só Bearer estático);
-`resources` e `prompts` do protocolo MCP (só `tools`); descoberta automática de mudança no
-servidor remoto.
+**Fora de escopo, declarado:** escrever no ERP (nenhuma ferramenta de escrita no v1); expor as
+24 ferramentas do servidor; mais de um servidor por organização; OAuth; `resources`/`prompts`
+do protocolo; descoberta automática de ferramenta nova.
 
-## 3. Decisões
+## 3. As cinco ferramentas
 
-### D1 — Um servidor por organização (v1)
+Nome, descrição e schema são **nossos**, escritos em código. O servidor não escreve nada que
+chegue ao modelo sem passar por uma projeção que declaramos campo a campo.
 
-O cadastro vive em `tenant_integrations` com `provider = 'mcp'`, o mesmo padrão do Asaas —
-chave cifrada em `oauth_access_token_encrypted`, config em `store_metadata`, `status`
-`connecting|healthy|error`, `status_reason`, `last_health_check_at`. A constraint
-`tenant_integrations_provider_check` ganha `'mcp'` **no bloco único já existente**
-(`supabase/baseline.sql:25336-25338`), nunca num segundo bloco (regra #159).
+| ferramenta local | pergunta ao ERP | responde a |
+|---|---|---|
+| `crm_erp_situacao_do_cliente` | `customer.status` | "estou em atraso?", "por que bloqueou?" |
+| `crm_erp_faturas_do_cliente` | `invoice.list` | "quais faturas estão abertas?" |
+| `crm_erp_fatura` | `invoice.get` | "detalhe e link da fatura X" |
+| `crm_erp_contrato` | `contract.get` | "o que tem no meu contrato?" |
+| `crm_erp_instancia` | `chatcore.instance.get` | "minha instância está bloqueada?" |
 
-*Por quê:* `tenant_integrations` é unique por `(organization_id, provider)`, e o dono tem um
-servidor. Dois servidores exigiriam tabela própria e multiplicariam a superfície sem demanda
-medida. Quando existir a demanda, a migração é de uma linha para N.
+Todas `category: "read"`, `requiresScope: "mcp:read"`, `requerIntegracao: "mcp"`.
+Cinco vagas do teto de 25 — sem teto paralelo, sem contador novo na tela.
 
-### D2 — Namespace próprio, e o teto também
+## 4. Decisões
 
-`tool_id` externo é **`mcp:<tool>`** — prefixo reservado, literal. `customer.status` do servidor
-vira `mcp:customer.status` no `tool_ids` da versão do agente.
+### D1 — Ferramenta LOCAL que roteia, não ferramenta externa no catálogo
 
-- `lib/ai/agents/validation.ts:97-100` passa a aceitar `VALID_TOOL_IDS` **ou** o padrão
-  `^mcp:[A-Za-z0-9._-]{1,80}$`.
-- **Teto próprio de 10 ferramentas externas**, contado à parte das 25 locais — o mesmo desenho
-  que `operator_tool_ids` já usa (`validation.ts:142-160`). Sem isto, toda ferramenta externa
-  come vaga de ferramenta de negócio num teto que o repo já declara apertado
-  (`selecao-por-pacote.ts:17-55`).
-- Colisão com nome local é impossível por construção (o prefixo não existe no catálogo local), e
-  a montagem **loga** quando descarta algo, em vez do silêncio de hoje
-  (`inbound-turn.ts:3624`).
+É a decisão estruturante, e ela existe porque a alternativa foi medida e reprovada (§11).
+Consequências que vêm de graça: `tool_id` continua no catálogo compilado, então publicação,
+server actions, `ToolPicker`, pacotes, escopo de funil, breaker e a rota do catálogo **não
+mudam**; a descrição no prompt é nossa, então não há injeção pela `description` remota; o
+schema é Zod nosso, então não é preciso converter JSON Schema.
 
-### D3 — Quatro ferramentas nunca são ligáveis
+### D2 — Só leitura no v1, e a lista é allowlist
 
-`invoice.cancel`, `contract.cancel`, `payment.settle_manual`, `chatcore.instance.delete` —
-e, em geral, **qualquer ferramenta cujo nome case a lista de destrutivas configurada** — não
-aparecem para marcar na tela e são recusadas no salvamento, mesmo por API. A lista vive no
-código, não em config de tenant: config de tenant é o que o operador erra às duas da manhã.
+As cinco ferramentas da §3 são as únicas que existem. **Tudo o mais do servidor é inalcançável
+por construção** — não há denylist a manter, não há renomeação remota que escape, e as
+destrutivas (`*.cancel`, `payment.settle_manual`, `chatcore.instance.delete`) nem entram na
+conversa. Escrita no ERP, se um dia entrar, é spec nova com o gate de escopo correspondente.
 
-*Nota de desenho:* a recusa é por nome porque o protocolo MCP não expõe "esta ferramenta é
-destrutiva". O `tools/list` traz `name`, `description` e `inputSchema` — nada de risco. Se o
-servidor renomear uma destrutiva, a proteção falha; por isso a lista é **denylist + prefixos**
-(`*.cancel`, `*.delete`, `payment.settle_*`) e o teste a congela.
+*A revisão mostrou por que a polaridade importa:* a denylist da versão anterior deixava passar
+`contract.suspend`, `contract.activate`, `chatcore.instance.block`, `invoice.create_standalone`,
+`invoice.resend_email` e `customer.create` — todas medidas no servidor real.
 
-### D4 — Erro do servidor externo é resposta, nunca exceção
+### D3 — A resposta é PROJETADA, não repassada
 
-Timeout, 5xx, SSE malformado, JSON inválido e `isError: true` viram `{ error: "<texto em
-pt-BR>" }` devolvido ao modelo — o mesmo contrato de `lib/ai/runtime/tools.ts:265-266`. O turno
-segue e o agente escala.
+Cada ferramenta devolve ao modelo um objeto que **nós montamos**, com os campos que o
+atendimento precisa. O JSON do ERP (que vem dentro de uma string, `content[].text`) é
+desembrulhado, validado por Zod nosso, e projetado.
 
-**Mas o silêncio acaba:** toda falha externa emite `logger.error` com `tool`, `http_status` e
-`motivo`, e a falha repetida abre aviso na Central (D8). O levantamento mostrou que hoje a
-montagem engole erro sem log (`inbound-turn.ts:3657-3660`), e esse é o modo de falha que o
-próprio repo já documentou como o pior: capacidade ligada na tela, inalcançável na prática.
+`crm_erp_situacao_do_cliente` devolve: `em_atraso`, `faturas_vencidas` (quantidade),
+`total_vencido_centavos`, `proxima_fatura` (data e valor), `instancias` (nome, bloqueada,
+motivo). **Não devolve** `emailsRecentes`, e-mail, telefone, razão social nem ids internos.
 
-**`isError` é traduzido, não repassado cru.** O texto técnico do servidor entra como
-`{ error: … }` e o prompt já proíbe repassar erro técnico ao cliente. Precedente: `tools.ts:256-263`.
+*Isto resolve o vazamento que as duas revisões apontaram por caminhos diferentes:* o dado
+sensível não chega ao prompt, não entra em `ai_agent_runs` e não entra no audit — porque nunca
+sai da projeção. Redação depois do fato não protege o que já foi para o contexto do modelo.
+
+O que a projeção descarta é registrado em log agregado (contagem, nunca conteúdo).
+
+### D4 — Erro é `{ ok: false, error }`, não exceção e não `{ error }`
+
+Timeout, 5xx, SSE malformado, JSON inválido, `isError: true` e `-32602` viram
+`{ ok: false, error: "<texto em pt-BR>" }`. **`ok: false` é o que o breaker do engine entende
+como falha** (`lib/agent-engine/agent/tool-breaker.ts:18-20`); a versão anterior usava
+`{ error }`, que o breaker não conta.
+
+Toda falha emite `logger.error` com `ferramenta`, `http_status` e `motivo` — nunca a URL
+completa, nunca o cabeçalho, nunca o corpo.
 
 ### D5 — Orçamento de tempo, que hoje não existe
 
-- **10 segundos por chamada** (`AbortSignal.timeout`), igual ao cliente do Asaas
-  (`lib/asaas/cliente.ts:32`).
-- **No máximo 4 chamadas externas por turno.** A quinta devolve
-  `{ error: "limite de consultas externas neste atendimento" }` sem sair para a rede.
+10 segundos por chamada (`AbortSignal.timeout`, igual ao cliente do Asaas) e **no máximo 4
+chamadas ao ERP por turno**; a quinta devolve `{ ok:false, error:"limite de consultas neste
+atendimento" }` sem sair para a rede. O loop do agente para por passo, token e custo, **nunca
+por tempo de parede** (`lib/ai/runtime/agent.ts:503-538`).
 
-*Por quê:* o loop do agente para por passo, token e custo, **nunca por tempo de parede**
-(`lib/ai/runtime/agent.ts:503-538`). Um servidor lento consome o turno inteiro e o cliente fica
-sem resposta.
+### D6 — SSRF: os dois guards, a cada chamada, e o risco residual declarado
 
-### D6 — A URL é do tenant, então passa pelos guards que já existem
+`assertSafeOutboundUrl` e `assertDestinoResolvidoSeguro` na ordem, mais `redirect: "manual"`,
+como `call-webhook.ts:70-121`. Em produção, só `https`.
 
-`assertSafeOutboundUrl` (`lib/automation/outbound-url.ts:18`) **e**
-`assertDestinoResolvidoSeguro` (`lib/automation/outbound-ip.ts:95`), na ordem, mais
-`redirect: "manual"` no fetch — exatamente como `call-webhook.ts:70-121`. Em produção, só
-`https`. Os dois guards rodam **a cada chamada**, não só no cadastro: DNS muda.
+**Risco residual aceito e escrito:** entre a resolução e o `fetch` o DNS pode mudar
+(`lib/automation/outbound-ip.ts:88-93` já declara essa janela). A consequência aqui é entregar
+o Bearer a um destino interno. Mitigação do v1: a URL é cadastrada por um admin da própria
+organização, o destino é fixo e o `redirect: "manual"` impede o salto. Fechar a janela exige
+transporte com IP fixado, que é trabalho próprio e fica declarado como dívida.
 
-### D7 — Redação recursiva, dos dois lados
+### D7 — Configuração no molde do Asaas, sem segredo falso
 
-A resposta do servidor externo carrega dado pessoal e financeiro real (medido: CNPJ, e-mail,
-telefone, valores). Antes de ir para log, auditoria ou serialização de passo, ela passa pela
-redação **recursiva** que já existe em `lib/ai/runtime/serialize.ts:21-34`. A lista de chaves
-sensíveis, hoje duplicada em dois arquivos (`lib/mcp/audit.ts:23-34` e `serialize.ts:8-19`),
-passa a ter **uma fonte** importada pelos dois, e `redactArgs` do audit passa a ser recursivo.
+`tenant_integrations` com `provider = 'mcp'`: chave cifrada em
+`oauth_access_token_encrypted`, URL e catálogo descoberto em `store_metadata`, `status`
+`connecting|healthy|error`, `status_reason`, `last_health_check_at`.
 
-*Isto conserta um buraco que já existia*, e é pré-requisito: sem ele, a primeira chamada ao
-servidor externo grava CNPJ e telefone de terceiro no audit em texto puro.
+**A migration torna `webhook_secret_encrypted` nullable.** Hoje é `NOT NULL`
+(`supabase/baseline.sql:1819`) e o Asaas fabrica um segredo de webhook que nunca usa
+(`app/actions/integrations/asaas.ts:99-114`). Um provider sem webhook não deve inventar
+segredo: `drop not null` é aditivo e não quebra quem já grava.
 
-### D8 — O que falha aparece na tela
+Papel: **admin**, com `notFound()` na página, como o Asaas — embora a RLS de
+`tenant_integrations` permita manager escrever, a tela e a server action exigem admin.
 
-Aviso novo na Central, kind `mcp_externo_falhou` (CHECK de `agent_inbox_items` no bloco único),
-**um aberto por organização**: aberto quando N falhas consecutivas acontecem no mesmo dia, com
-o motivo real e o caminho ("Configurações › Integrações › MCP"). Fecha quando uma chamada
-volta a dar certo.
+### D8 — O que falha aparece na tela, sem duplicar o que já existe
 
-### D9 — Ferramenta que sumiu do servidor
+Aviso na Central, kind `mcp_externo_falhou`, **um aberto por organização**, quando três
+chamadas consecutivas falham; fecha quando uma volta a funcionar. O contador de consecutivas
+vive em `store_metadata.falhas_consecutivas` da própria linha de integração.
 
-`tool_ids` é snapshot congelado por versão (`selecao-por-pacote.ts:30-31`). Se o servidor
-deixar de expor uma ferramenta marcada, a montagem a descarta **com log** e o aviso do D8
-nomeia quais sumiram. Nada tenta re-derivar a versão publicada sozinho.
+**Precedência:** quando o motivo for capacidade ausente, quem avisa é o `capabilities_missing`
+que já existe (`inbound-turn.ts:1563-1592`); `mcp_externo_falhou` é só para falha de
+comunicação com o ERP. O kind novo exige os cinco pontos além da migration que a revisão
+listou: `repository.ts`, `agent-inbox-copy.ts`, `inbox-destino.ts` (dois lugares) e o
+vocabulário banco × TypeScript.
 
-### D10 — O que o servidor devolve é dado, nunca instrução
+### D9 — Anti-morte ativo
 
-Texto vindo do MCP externo entra como resultado de ferramenta e não altera o comportamento do
-agente. Mesma regra que o repo aplica a webhook e conteúdo de página.
+O cron diário de reconciliação (o mesmo lugar onde o Asaas já se re-testa) chama `tools/list`
+uma vez por dia por organização com integração `healthy`, atualiza `last_health_check_at` e,
+falhando, marca `status='error'` com motivo. Sem isso o D8 seria passivo e o operador só
+descobriria pelo cliente reclamando.
 
-## 4. Arquitetura
+### D10 — O que o servidor devolve é dado, e o mecanismo é a projeção
 
-```
-Configurações › Integrações › MCP  (admin)
-        │  URL + chave → cifrada em tenant_integrations (provider 'mcp')
-        │  "Testar conexão" → tools/list → grava o catálogo em store_metadata
-        ▼
-Agentes › capacidades  ── o admin marca as ferramentas externas (teto 10, destrutivas fora)
-        ▼
-turno do agente
-  pickToolsFromMcp  ──► tools locais (como hoje)
-        └────────────► tools externas: lib/mcp-cliente/*  ──► POST JSON-RPC (SSE)
-                                  guards SSRF · 10s · máx 4/turno · redação
-```
-
-**Arquivos novos** (`lib/mcp-cliente/`):
-
-- `tipos.ts` — `FerramentaExterna { nome, descricao, inputSchema }`, `RespostaExterna`.
-- `transporte.ts` — o POST JSON-RPC: monta o corpo, aplica os dois guards, `redirect:"manual"`,
-  timeout, **lê SSE** (`data: `) e também JSON puro, devolve `result` ou erro tipado. É aqui que
-  mora tudo que a medição do servidor real ensinou.
-- `catalogo.ts` — `listarFerramentas(config)` (`tools/list`) e a filtragem de destrutivas.
-- `executar.ts` — `chamarFerramenta(config, nome, args)` (`tools/call`), desembrulha
-  `result.content[].text` (JSON dentro de string), traduz `isError`.
-- `config.ts` — molde de `lib/asaas/config.ts`: lê a linha cifrada, `null` = desligado, nunca lança.
-- `denylist.ts` — as destrutivas, com o teste que as congela.
-
-**Pontos tocados:** `lib/ai/agents/validation.ts` (aceitar `mcp:`, teto próprio),
-`lib/ai/runtime/tools.ts` (montar as externas), `lib/agent-engine/edge/crm/mcp-tools.ts` (idem no
-engine), `lib/mcp/audit.ts` + `lib/ai/runtime/serialize.ts` (redação única e recursiva),
-`app/api/v1/mcp/tools/route.ts` (a tela precisa ver as externas), `ToolPicker.tsx` (marcar),
-`lib/navigation/catalogo.ts` (porta), `supabase/*` (0263).
+Não é frase de boa intenção: o texto livre do ERP não chega ao modelo porque **nenhuma das
+cinco ferramentas devolve texto livre** — todas devolvem campos tipados. `support.docs`, que
+devolve documento inteiro, **fica fora do v1** exatamente por isso.
 
 ## 5. Migration 0263
 
 1. `'mcp'` em `tenant_integrations_provider_check` — **no bloco único existente**.
 2. `'mcp_externo_falhou'` em `agent_inbox_items_kind_check` — **no bloco único existente**.
-3. Nada mais: o cadastro reusa as colunas que já existem.
+3. `alter table public.tenant_integrations alter column webhook_secret_encrypted drop not null;`
 
-Tripla obrigatória: arquivo + apêndice no `baseline.sql` **antes** do bloco de varredura anon +
-linha no MANIFEST.
+Tripla obrigatória: arquivo + apêndice idempotente no `baseline.sql` **antes** do bloco de
+varredura anon + linha no MANIFEST.
 
-## 6. Prova de que funciona
+## 6. Arquivos
 
-**Unidade:** o transporte contra respostas gravadas do servidor real (SSE, JSON puro, `isError`,
-`-32602` de argumento faltando, corpo truncado, 500, timeout); a denylist; o teto de 10; a
-redação recursiva com um payload real de `customer.status`.
+**Novos** (`lib/erp-mcp/`):
 
-**Integração (test:db):** a migration aplica em banco novo e em atualização.
+- `transporte.ts` — POST JSON-RPC: guards SSRF, `redirect:"manual"`, timeout, **leitura de SSE**
+  (`data: `) e de JSON puro, erro tipado. É onde mora tudo que a medição do servidor ensinou.
+- `config.ts` — molde de `lib/asaas/config.ts`: lê a linha cifrada, `null` = desligado, nunca lança.
+- `projecao.ts` — os cinco Zod de entrada e as cinco projeções de saída (D3).
+- `chamar.ts` — orquestra: config → transporte → desembrulha `content[].text` → projeta →
+  `{ ok }`; conta as chamadas do turno (D5).
 
-**Produção, e é esta que vale:** o agente financeiro da ChatCore responde
-"sua fatura FAT-… venceu em …, aqui está o link" **com o dado vindo do MCP**, numa conversa real
-pelo WhatsApp de testes. Sem isso, a feature não está pronta.
+**Tocados:** `lib/mcp/tools/erp.ts` + `lib/mcp/tools/catalogo/erp.ts` (as cinco, no padrão do
+Asaas), `lib/mcp/tools/index.ts` e `catalogo/index.ts` (registro), `lib/asaas/config.ts`
+(`carregarCapacidadesDeIntegracao` passa a devolver `"mcp"` também — é a função canônica de
+capacidades), `lib/agent-engine/db/repository.ts` + `lib/ai/agent-inbox-copy.ts` +
+`lib/ai/inbox-destino.ts` (kind novo), `app/app/integrations/mcp/**` +
+`app/actions/integrations/mcp.ts` (tela, molde do Asaas), `lib/navigation/catalogo.ts` (porta),
+`app/api/v1/cron/asaas-reconcile` ou cron irmão (D9), `supabase/*` (0263), `.changes/`.
 
-## 7. O que pode dar errado, e o que acontece então
+## 7. Prova
+
+**Unidade:** transporte contra respostas gravadas do servidor real (SSE, JSON puro, `isError`,
+`-32602`, corpo truncado, 500, timeout); as cinco projeções com o payload real de
+`customer.status`, provando que e-mail, telefone e `emailsRecentes` **não** aparecem na saída;
+o limite de 4 por turno; `ok:false` alimentando o breaker.
+
+**test:db:** a migration aplica em banco novo e em atualização.
+
+**Produção, e é esta que vale:** o agente financeiro da ChatCore responde "sua fatura venceu em
+…, aqui está o link" com o dado vindo do ERP, numa conversa real pelo WhatsApp de testes.
+
+## 8. Riscos
 
 | risco | efeito | mitigação |
 |---|---|---|
-| servidor fora do ar | agente escala | D4 + aviso D8 |
-| servidor lento | turno preso | D5 (10s, máx 4) |
-| URL interna (SSRF) | acesso à rede do host | D6, os dois guards por chamada |
-| dado pessoal em log | vazamento | D7, redação recursiva |
-| modelo chama destrutiva | contrato cancelado | D3, denylist em duas camadas |
-| ferramenta some do servidor | capacidade morta em silêncio | D9, log + aviso |
-| texto do servidor vira instrução | injeção | D10 |
+| ERP fora do ar | agente escala | D4 + D8 + D9 |
+| ERP lento | turno preso | D5 |
+| URL interna (SSRF) | Bearer para destino interno | D6, com janela residual declarada |
+| dado pessoal no prompt | vazamento fora do cascade LGPD | D3, projeção — não redação |
+| modelo executa ação destrutiva | contrato cancelado | D2, allowlist de cinco leituras |
+| texto do ERP vira instrução | injeção | D3 + D10, nenhuma ferramenta devolve texto livre |
+| ferramenta some do ERP | capacidade morta | D4 (erro com log) + D9 |
 
-## 8. NÃO MEDIDO
+## 9. Definition of Done
 
-- Comportamento do `tools/list` quando o servidor tem mais de 24 ferramentas ou pagina.
-- Servidor MCP que exija `initialize` antes de `tools/list` (o da ChatCore não exigiu).
-- Custo em tokens de injetar 10 `inputSchema` externos no prompt.
+Além do padrão: porta em `NAV_CATALOG` (DoD 14), fragmento em `.changes/` (DoD 17), espanhol de
+toda string nova, e a prova de produção da §7.
+
+## 10. NÃO MEDIDO
+
+- `tools/list` paginado ou com mais de 24 ferramentas.
+- Servidor que exija `initialize` antes de `tools/list` (o da ChatCore não exigiu).
+- Custo em tokens dos cinco schemas no prompt.
+- Comportamento sob `Content-Type` errado ou stream truncado no meio de um `data:`.
+
+## 11. Por que a versão anterior desta spec foi descartada
+
+Ela propunha que as ferramentas do servidor entrassem no catálogo do agente com prefixo
+`mcp:`. Duas revisões independentes a reprovaram, e por razões que não se resolvem com remendo:
+
+- `tool_id` fora do catálogo compilado é recusado em **três** lugares além do que a spec citava
+  (`publish/route.ts:80`, `_actions.ts:383` e `:502`) — o agente não publicava.
+- A ferramenta externa não passaria por `wrapMcpTool`, escapando do gate de escopo de funil:
+  `contract.suspend` rodaria sem escopo enquanto `crm_update_lead` é recusada.
+- A `description` de cada ferramenta vem do servidor e vira descrição no prompt: texto remoto
+  viraria instrução **antes** de qualquer chamada.
+- O JSON Schema remoto teria de virar Zod, e não há conversor no repo nem nas dependências.
+- O `ToolPicker` marcaria toda externa como órfã e ofereceria removê-las; `ligarPacote`
+  apagaria os ids externos ao reconstruir a lista.
+- A redação depois do fato não protegia o prompt: CNPJ e telefone de terceiro entrariam em
+  `ai_agent_runs` em texto puro, fora do cascade de anonimização.
+
+O desenho atual elimina todos esses por construção. O custo é que expor uma consulta nova exige
+um commit — e isso é aceitável para um produto que já declara, na §2, que escrita no ERP fica
+fora do escopo.
