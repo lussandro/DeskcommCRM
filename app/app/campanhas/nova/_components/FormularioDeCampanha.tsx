@@ -127,10 +127,10 @@ export function FormularioDeCampanha({ canais }: Props) {
           rows={5}
           value={texto}
           onChange={(e) => setTexto(e.target.value)}
-          placeholder={t("Use {{primeiro_nome}} para tratar a pessoa pelo nome.")}
+          placeholder={t("Use {{saudacao}} para bom dia/boa tarde/boa noite conforme a hora do envio.")}
         />
         <p className="text-xs text-muted-foreground">
-          {t("Quem não tiver nome no cadastro é pulado quando a mensagem usa o nome — mensagem com buraco denuncia disparo automático.")}
+          {t("A saudação é resolvida na hora do envio: escrever \"bom dia\" fixo faria a mensagem das 16h chegar errada. Quem não tiver nome no cadastro é pulado quando a mensagem usa o nome — mensagem com buraco denuncia disparo automático.")}
         </p>
       </div>
 

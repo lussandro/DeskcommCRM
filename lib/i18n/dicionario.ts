@@ -8844,6 +8844,8 @@ export const DICIONARIO: Traducoes = {
   Produção: { es: "Producción" },
   "Fluxo de retorno para cobrança vencida": { es: "Flujo de retorno para cobro vencido" },
   "Fluxos de retorno para cobrança vencida": { es: "Flujos de retorno para cobro vencido" },
+  "Use {{saudacao}} para bom dia/boa tarde/boa noite conforme a hora do envio.": { es: "Use {{saudacao}} para buenos días/buenas tardes/buenas noches según la hora del envío." },
+  "A saudação é resolvida na hora do envio: escrever \"bom dia\" fixo faria a mensagem das 16h chegar errada. Quem não tiver nome no cadastro é pulado quando a mensagem usa o nome — mensagem com buraco denuncia disparo automático.": { es: "El saludo se resuelve en el momento del envío: escribir \"buenos días\" fijo haría que el mensaje de las 16h llegara equivocado. Quien no tenga nombre en el registro es omitido cuando el mensaje usa el nombre — un mensaje con hueco delata un envío automático." },
   "Não foi possível mudar o estado da campanha.": { es: "No fue posible cambiar el estado de la campaña." },
   "Campanha pausada.": { es: "Campaña pausada." },
   "Campanha começou. A primeira mensagem sai no próximo minuto.": { es: "La campaña empezó. El primer mensaje sale en el próximo minuto." },

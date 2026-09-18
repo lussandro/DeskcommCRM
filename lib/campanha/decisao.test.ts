@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { baseLegalValida, corpoParaODestinatario, motivoParaPular } from "./decisao";
+import { baseLegalValida, corpoParaODestinatario, motivoParaPular, saudacaoDaHora } from "./decisao";
 
 const ok = {
   contactId: "c1",
@@ -51,6 +51,22 @@ describe("baseLegalValida", () => {
   });
 });
 
+describe("saudacaoDaHora", () => {
+  const fuso = "America/Sao_Paulo";
+  it("os cortes são os do português falado: tarde ao meio-dia, noite às 18h", () => {
+    expect(saudacaoDaHora(new Date("2026-09-18T14:59:00Z"), fuso)).toBe("Bom dia"); // 11h59
+    expect(saudacaoDaHora(new Date("2026-09-18T15:00:00Z"), fuso)).toBe("Boa tarde"); // 12h00
+    expect(saudacaoDaHora(new Date("2026-09-18T20:59:00Z"), fuso)).toBe("Boa tarde"); // 17h59
+    expect(saudacaoDaHora(new Date("2026-09-18T21:00:00Z"), fuso)).toBe("Boa noite"); // 18h00
+  });
+
+  it("é o fuso do canal que manda, não o do servidor", () => {
+    const instante = new Date("2026-09-18T23:00:00Z"); // 20h em SP, 00h em Lisboa
+    expect(saudacaoDaHora(instante, "America/Sao_Paulo")).toBe("Boa noite");
+    expect(saudacaoDaHora(instante, "Europe/Lisbon")).toBe("Bom dia");
+  });
+});
+
 describe("corpoParaODestinatario", () => {
   it("interpola nome e primeiro nome", () => {
     expect(corpoParaODestinatario("Oi {{primeiro_nome}}, tudo bem?", { nome: "Maria da Glória" })).toBe(
@@ -61,6 +77,21 @@ describe("corpoParaODestinatario", () => {
   it("template que PEDE nome e contato sem nome → não manda (frase com buraco denuncia disparo)", () => {
     expect(corpoParaODestinatario("Oi {{nome}}, tudo bem?", { nome: null })).toBeNull();
     expect(corpoParaODestinatario("Oi {{nome}}, tudo bem?", { nome: "   " })).toBeNull();
+  });
+
+  it("{{saudacao}} vira a saudação DA HORA DO ENVIO, no fuso do canal", () => {
+    const manha = new Date("2026-09-18T12:00:00Z"); // 09h em São Paulo
+    const tarde = new Date("2026-09-18T19:00:00Z"); // 16h
+    const noite = new Date("2026-09-18T23:30:00Z"); // 20h30
+    const fuso = "America/Sao_Paulo";
+    const t = "{{saudacao}}! Aqui é a Bacco.";
+    expect(corpoParaODestinatario(t, { nome: null }, { agora: manha, fuso })).toBe("Bom dia! Aqui é a Bacco.");
+    expect(corpoParaODestinatario(t, { nome: null }, { agora: tarde, fuso })).toBe("Boa tarde! Aqui é a Bacco.");
+    expect(corpoParaODestinatario(t, { nome: null }, { agora: noite, fuso })).toBe("Boa noite! Aqui é a Bacco.");
+  });
+
+  it("sem saber a hora, a saudação vira 'Olá' — nunca um 'bom dia' chutado", () => {
+    expect(corpoParaODestinatario("{{saudacao}}!", { nome: null })).toBe("Olá!");
   });
 
   it("template sem variável vai para quem não tem nome", () => {

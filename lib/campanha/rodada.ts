@@ -138,17 +138,6 @@ export async function rodarUmaRodadaDeCampanha(admin: SupabaseClient): Promise<R
     return { enviadas: 0, pulados: 1, concluidas: 0, detalhe: `pulado:${pulo}` };
   }
 
-  const corpo = corpoParaODestinatario(campanha.template_body, {
-    nome: contato?.name ?? contato?.display_name ?? null,
-  });
-  if (!corpo) {
-    await admin
-      .from("campaign_recipients")
-      .update({ status: "skipped", skip_reason: "Sem nome no cadastro e a mensagem usa o nome" })
-      .eq("id", alvo.id);
-    return { enviadas: 0, pulados: 1, concluidas: 0, detalhe: "pulado:sem_nome" };
-  }
-
   // ─── O ritmo ───
   const pool = getRequestPool();
   const { knobs, numberActivatedAt } = await loadChannelKnobs(pool, campanha.organization_id, campanha.channel_session_id);
@@ -173,6 +162,23 @@ export async function rodarUmaRodadaDeCampanha(admin: SupabaseClient): Promise<R
     // Nada é marcado: o destinatário continua `pending` e a próxima rodada tenta
     // de novo. Não existe "falhou por ritmo" — ritmo é espera, não erro.
     return { enviadas: 0, pulados: 0, concluidas: 0, detalhe: `aguardando_ritmo:${decisao.code}` };
+  }
+
+  // O corpo é montado DEPOIS do ritmo, e não antes: a saudação ("bom dia" x
+  // "boa tarde") tem de ser a do instante em que a mensagem sai, no fuso do
+  // canal. Montar antes de saber se o envio é agora produziria "bom dia" numa
+  // mensagem enviada à tarde — foi o defeito do primeiro piloto.
+  const corpo = corpoParaODestinatario(
+    campanha.template_body,
+    { nome: contato?.name ?? contato?.display_name ?? null },
+    { agora, fuso: knobs.timezone },
+  );
+  if (!corpo) {
+    await admin
+      .from("campaign_recipients")
+      .update({ status: "skipped", skip_reason: "Sem nome no cadastro e a mensagem usa o nome" })
+      .eq("id", alvo.id);
+    return { enviadas: 0, pulados: 1, concluidas: 0, detalhe: "pulado:sem_nome" };
   }
 
   try {

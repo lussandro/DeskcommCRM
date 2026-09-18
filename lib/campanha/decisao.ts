@@ -84,11 +84,35 @@ export function baseLegalValida(input: { baseLegal: string; liaRef: string | nul
 export function corpoParaODestinatario(
   template: string,
   contato: { nome: string | null },
+  quando?: { agora: Date; fuso: string },
 ): string | null {
   const nome = (contato.nome ?? "").trim();
   const precisaDeNome = /\{\{\s*(nome|primeiro_nome)\s*\}\}/.test(template);
   if (precisaDeNome && nome === "") return null;
   return template
     .replace(/\{\{\s*nome\s*\}\}/g, nome)
-    .replace(/\{\{\s*primeiro_nome\s*\}\}/g, nome.split(/\s+/)[0] ?? "");
+    .replace(/\{\{\s*primeiro_nome\s*\}\}/g, nome.split(/\s+/)[0] ?? "")
+    .replace(/\{\{\s*saudacao\s*\}\}/g, quando ? saudacaoDaHora(quando.agora, quando.fuso) : "Olá");
+}
+
+/**
+ * "Bom dia" / "Boa tarde" / "Boa noite" — resolvido na HORA DO ENVIO, no fuso do
+ * canal.
+ *
+ * Existe porque a alternativa é o defeito que apareceu no primeiro piloto: a
+ * janela de envio vai das 8h às 22h e o texto trazia "Bom dia!" cravado, então
+ * a mensagem das 16h chegaria dizendo bom dia. Numa campanha que se apresenta
+ * como alguém escrevendo, isso denuncia o disparo automático na primeira
+ * palavra — exatamente o que a lista não perdoa.
+ *
+ * Os cortes são os do português falado, não os do relógio: tarde começa ao
+ * meio-dia e noite às 18h.
+ */
+export function saudacaoDaHora(agora: Date, fuso: string): string {
+  const hora = Number(
+    new Intl.DateTimeFormat("pt-BR", { hour: "numeric", hour12: false, timeZone: fuso }).format(agora),
+  );
+  if (hora < 12) return "Bom dia";
+  if (hora < 18) return "Boa tarde";
+  return "Boa noite";
 }

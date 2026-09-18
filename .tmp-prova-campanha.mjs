@@ -13,7 +13,7 @@ await p.waitForURL(/\/app/, { timeout: 60000 });
 
 await p.goto(`${BASE}/app/campanhas/7f745157-0809-4d55-9829-b833abe698c4`, { waitUntil: "domcontentloaded" });
 await p.waitForTimeout(3000);
-await p.screenshot({ path: `${SHOT}/camp-3-piloto.png`, fullPage: true });
+await p.screenshot({ path: `${SHOT}/camp-4-botao.png`, fullPage: true });
 console.log("LISTA:", (await p.locator("body").innerText()).slice(0, 400));
 
 await p.goto(`${BASE}/app/campanhas/nova`, { waitUntil: "domcontentloaded" });
