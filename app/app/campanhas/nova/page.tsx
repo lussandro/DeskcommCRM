@@ -22,7 +22,20 @@ export default async function NovaCampanhaPage() {
 
   const idioma = normalizarIdioma(user?.locale ?? null);
   const t = (texto: string) => traduzir(texto, idioma);
-  const canais = await listSelectableChannels(createAdminClient(), activeOrg.orgId);
+  const admin = createAdminClient();
+  const [canais, { data: linhasDeTag }] = await Promise.all([
+    listSelectableChannels(admin, activeOrg.orgId),
+    // As etiquetas que EXISTEM nos contatos desta organização. Sem isto a tela
+    // pediria que o operador digitasse a etiqueta de cabeça, e errar uma letra
+    // devolveria "0 pessoas" sem dizer por quê.
+    admin.from("contacts").select("tags").eq("organization_id", activeOrg.orgId).not("tags", "is", null).limit(5000),
+  ]);
+  const frequencia = new Map<string, number>();
+  for (const linha of (linhasDeTag ?? []) as Array<{ tags: string[] | null }>) {
+    for (const tag of linha.tags ?? []) frequencia.set(tag, (frequencia.get(tag) ?? 0) + 1);
+  }
+  const tags = [...frequencia.entries()].sort((a, b) => b[1] - a[1]).slice(0, 24).map(([tag]) => tag);
+  const fuso = "America/Sao_Paulo";
 
   return (
     <div className="mx-auto max-w-2xl space-y-6 p-6">
@@ -43,6 +56,8 @@ export default async function NovaCampanhaPage() {
         <CardContent>
           <FormularioDeCampanha
             canais={canais.map((c) => ({ id: c.id, rotulo: c.phone_number ?? c.display_name }))}
+            tags={tags}
+            fuso={fuso}
           />
         </CardContent>
       </Card>

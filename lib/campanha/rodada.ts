@@ -27,6 +27,7 @@ import { beginServiceAtOrigin } from "@/lib/atendimento/origem";
 import { logger } from "@/lib/logger";
 
 import { corpoParaODestinatario, motivoParaPular, TEXTO_DO_PULO, type DestinatarioDaCampanha } from "./decisao";
+import { podeMandarAgora } from "./ritmo";
 
 export interface ResultadoDaRodada {
   /** Quantas mensagens saíram de fato (0 ou 1 por rodada). */
@@ -46,6 +47,10 @@ interface CampanhaRow {
   channel_session_id: string;
   template_body: string;
   name: string;
+  intervalo_segundos: number | null;
+  janela_inicio_hora: number | null;
+  janela_fim_hora: number | null;
+  teto_diario: number | null;
 }
 
 interface DestinatarioRow {
@@ -87,7 +92,7 @@ export async function rodarUmaRodadaDeCampanha(admin: SupabaseClient): Promise<R
 
   let consulta = admin
     .from("campaigns")
-    .select("id, organization_id, channel_session_id, template_body, name")
+    .select("id, organization_id, channel_session_id, template_body, name, intervalo_segundos, janela_inicio_hora, janela_fim_hora, teto_diario")
     .eq("status", "running")
     .order("started_at", { ascending: true })
     .limit(1);
@@ -152,6 +157,35 @@ export async function rodarUmaRodadaDeCampanha(admin: SupabaseClient): Promise<R
     timezone: knobs.timezone,
     numberActivatedAt,
   });
+  // O ritmo PRÓPRIO da campanha vem ANTES do ritmo do canal: ele é o mais
+  // restritivo dos dois por desenho, e perguntar ao canal primeiro gastaria a
+  // decisão do número numa mensagem que a campanha não deixaria sair.
+  const inicioDoDia = new Date(agora);
+  inicioDoDia.setUTCHours(0, 0, 0, 0);
+  const { data: jaHoje } = await admin
+    .from("campaign_recipients")
+    .select("sent_at")
+    .eq("campaign_id", campanha.id)
+    .eq("status", "sent")
+    .gte("sent_at", inicioDoDia.toISOString())
+    .order("sent_at", { ascending: false });
+  const enviadasHoje = (jaHoje ?? []).length;
+  const ultimoEnvio = (jaHoje ?? [])[0]?.sent_at ? new Date((jaHoje ?? [])[0]!.sent_at as string) : null;
+  const doRitmoDaCampanha = podeMandarAgora(
+    {
+      intervaloSegundos: campanha.intervalo_segundos,
+      janelaInicioHora: campanha.janela_inicio_hora,
+      janelaFimHora: campanha.janela_fim_hora,
+      tetoDiario: campanha.teto_diario,
+    },
+    { ultimoEnvio, enviadasHoje },
+    agora,
+    knobs.timezone,
+  );
+  if (!doRitmoDaCampanha.pode) {
+    return { enviadas: 0, pulados: 0, concluidas: 0, detalhe: `aguardando_ritmo:${doRitmoDaCampanha.motivo}` };
+  }
+
   const decisao = decidePacing({
     now: agora,
     knobs,

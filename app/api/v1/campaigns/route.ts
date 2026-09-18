@@ -30,7 +30,19 @@ const criarSchema = z.strictObject({
   template_body: z.string().trim().min(1).max(4000),
   base_legal: z.enum(["consent", "legitimate_interest"]),
   lia_ref: z.string().trim().min(1).max(200).nullable().optional(),
-});
+  // Ritmo próprio — null/ausente herda o do canal. Os limites são os do CHECK
+  // da migration 0265: intervalo de 30s a 24h, teto de 1 a 1000.
+  intervalo_segundos: z.number().int().min(30).max(86400).nullable().optional(),
+  janela_inicio_hora: z.number().int().min(0).max(23).nullable().optional(),
+  janela_fim_hora: z.number().int().min(1).max(24).nullable().optional(),
+  teto_diario: z.number().int().min(1).max(1000).nullable().optional(),
+}).refine(
+  (v) => (v.janela_inicio_hora == null) === (v.janela_fim_hora == null),
+  { message: "Informe as duas pontas do horário, ou nenhuma — meia janela parece configurada e não é." },
+).refine(
+  (v) => v.janela_inicio_hora == null || v.janela_fim_hora == null || v.janela_fim_hora > v.janela_inicio_hora,
+  { message: "O fim do horário tem de ser depois do início." },
+);
 
 export async function GET(): Promise<Response> {
   const requestId = randomUUID();
@@ -40,7 +52,7 @@ export async function GET(): Promise<Response> {
   const admin = createAdminClient();
   const { data, error } = await admin
     .from("campaigns")
-    .select("id, name, status, channel_session_id, base_legal, started_at, finished_at, created_at")
+    .select("id, name, status, channel_session_id, base_legal, started_at, finished_at, created_at, intervalo_segundos, janela_inicio_hora, janela_fim_hora, teto_diario")
     .eq("organization_id", authz.org.orgId)
     .order("created_at", { ascending: false });
   if (error) return fail("internal_error", "Não foi possível listar as campanhas.", 500, { requestId });
@@ -115,6 +127,10 @@ export async function POST(req: NextRequest): Promise<Response> {
       template_body: input.template_body,
       base_legal: input.base_legal,
       lia_ref: input.lia_ref ?? null,
+      intervalo_segundos: input.intervalo_segundos ?? null,
+      janela_inicio_hora: input.janela_inicio_hora ?? null,
+      janela_fim_hora: input.janela_fim_hora ?? null,
+      teto_diario: input.teto_diario ?? null,
       created_by: authz.user.id,
     })
     .select("id, name, status, channel_session_id, base_legal, created_at")

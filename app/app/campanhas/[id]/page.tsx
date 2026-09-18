@@ -17,6 +17,7 @@ import { rotuloDoContato } from "@/lib/contacts/rotulo-do-contato";
 import { enviosPorDia, funilDaCampanha, motivosDePulo, taxa } from "@/lib/campanha/desempenho";
 import { GraficosDaCampanha } from "./_components/GraficosDaCampanha";
 import { BotoesDaCampanha } from "./_components/BotoesDaCampanha";
+import { EditarCampanha } from "./_components/EditarCampanha";
 import { listSelectableChannels } from "@/lib/channels/selectable";
 
 export const dynamic = "force-dynamic";
@@ -40,7 +41,7 @@ export default async function CampanhaPage({ params }: { params: Promise<{ id: s
 
   const { data: campanha } = await admin
     .from("campaigns")
-    .select("id, name, status, template_body, base_legal, lia_ref, started_at, finished_at, channel_session_id")
+    .select("id, name, status, template_body, base_legal, lia_ref, started_at, finished_at, channel_session_id, intervalo_segundos, janela_inicio_hora, janela_fim_hora, teto_diario")
     .eq("organization_id", activeOrg.orgId)
     .eq("id", id)
     .maybeSingle();
@@ -87,6 +88,22 @@ export default async function CampanhaPage({ params }: { params: Promise<{ id: s
   const canais = await listSelectableChannels(admin, activeOrg.orgId);
   const numeroDaCampanha =
     canais.find((c) => c.id === campanha.channel_session_id)?.phone_number ?? t("número removido");
+  // O que o NÚMERO impõe — a tela mostra o piso herdado em vez de deixar o
+  // operador adivinhar o que "vazio" significa.
+  const { data: knobsDoCanal } = await admin
+    .from("channel_knobs")
+    .select("window_start_hour, window_end_hour")
+    .eq("channel_session_id", campanha.channel_session_id as string)
+    .maybeSingle();
+  const { data: canalDaCampanha } = await admin
+    .from("channel_sessions")
+    .select("daily_message_limit")
+    .eq("id", campanha.channel_session_id as string)
+    .maybeSingle();
+  const doCanal = {
+    janela: `${(knobsDoCanal as { window_start_hour: number | null } | null)?.window_start_hour ?? 7}h-${(knobsDoCanal as { window_end_hour: number | null } | null)?.window_end_hour ?? 22}h`,
+    tetoDiario: (canalDaCampanha as { daily_message_limit: number | null } | null)?.daily_message_limit ?? null,
+  };
   const pct = (parte: number) => {
     const v = taxa(parte, funil.enviadas);
     return v === null ? "—" : `${v}%`;
@@ -134,9 +151,19 @@ export default async function CampanhaPage({ params }: { params: Promise<{ id: s
           <CardDescription>{t("É o que cada pessoa da lista recebe, com o nome dela no lugar da variável.")}</CardDescription>
         </CardHeader>
         <CardContent>
-          <p className="whitespace-pre-wrap rounded-md border border-border bg-surface p-3 text-sm">
-            {campanha.template_body as string}
-          </p>
+          <EditarCampanha
+            campanhaId={id}
+            editavel={campanha.status === "draft"}
+            fuso="America/Sao_Paulo"
+            inicial={{
+              template_body: campanha.template_body as string,
+              intervalo_segundos: campanha.intervalo_segundos as number | null,
+              janela_inicio_hora: campanha.janela_inicio_hora as number | null,
+              janela_fim_hora: campanha.janela_fim_hora as number | null,
+              teto_diario: campanha.teto_diario as number | null,
+            }}
+            doCanal={doCanal}
+          />
         </CardContent>
       </Card>
 
