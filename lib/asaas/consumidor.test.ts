@@ -252,6 +252,19 @@ describe("processarEvento — asaas.payment_overdue", () => {
     expect(reg.enrolls).toEqual([{ pointerId: POINTER_B, contactId: CONTATO, channelSessionId: CANAL_B }]);
   });
 
+  it("UM fluxo só, mas o contato conversa em OUTRO número → não dispara (o degrau não é desculpa para cobrar errado)", async () => {
+    // O estado real da organização do dono em 18/09/2026: dois números, um
+    // fluxo (o do Bacco). Medir "há um fluxo só" em vez de "o contato nunca
+    // escreveu" devolveria o bug original — cliente da ChatCore cobrado pelo
+    // financeiro do Bacco.
+    const reg = registro();
+    const titular: Titular = { kind: "contact", id: CONTATO, customerId: CUSTOMER };
+    const db = fakeDb({ reg, titular, fluxos: [POINTER], canalDoFluxo: { [POINTER]: CANAL_A }, canaisDoContato: [CANAL_B] });
+    const r = await processarEvento(deps(db), evento(EVENTO_OVERDUE, {}));
+    expect(r).toEqual({ status: "skipped", detail: "sem_fluxo_para_o_numero" });
+    expect(reg.enrolls).toEqual([]);
+  });
+
   it("dois fluxos e nenhum no número do contato → não dispara, aviso apontando o contato", async () => {
     const reg = registro();
     const titular: Titular = { kind: "contact", id: CONTATO, customerId: CUSTOMER };

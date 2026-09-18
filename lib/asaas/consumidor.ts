@@ -163,17 +163,23 @@ async function tratarOverdue(deps: ConsumidorDeps, row: EventRow, p: z.infer<typ
     return { status: "skipped", detail: `fluxo_invalido:${ultimoInvalido && !ultimoInvalido.ok ? ultimoInvalido.motivo : "nenhum"}` };
   }
 
-  // A escolha por NÚMERO. Um fluxo só: ele atende — inclusive contato que ainda
-  // não escreveu (não há outro financeiro para errar, e barrar aqui desligaria a
-  // cobrança de cliente novo na instalação de um número, que é o self-host comum).
-  // Dois ou mais: só dispara quando o contato amarra a exatamente um; senão a
-  // Central decide, porque adivinhar quem cobra é o defeito que se conserta.
+  // A escolha por NÚMERO.
+  //
+  // O degrau do meio é sobre contato que NUNCA escreveu — não sobre "só há um
+  // fluxo". A diferença não é sutil: numa organização com dois números e um
+  // fluxo só (o estado real do Bacco em 18/09/2026), medir os FLUXOS faria o
+  // cliente que conversa no outro número cair no único fluxo existente — que é
+  // o bug que esta feature existe para fechar, voltando pela porta dos fundos.
+  //
+  // Quem tem zero canais não tem por qual número ser cobrado, e aí um fluxo só
+  // é resposta suficiente: `fn_service_begin` cria a conversa nesse número, e é
+  // isso que mantém a cobrança de cliente novo viva na instalação de um número.
   const canais = await db.canaisDoContato(contactId);
   const candidatos = validos.filter((f) => canais.includes(f.channelSessionId));
   let escolhido: { pointerId: string; channelSessionId: string };
   if (candidatos.length === 1) {
     escolhido = candidatos[0]!;
-  } else if (candidatos.length === 0 && validos.length === 1) {
+  } else if (candidatos.length === 0 && canais.length === 0 && validos.length === 1) {
     escolhido = validos[0]!;
   } else {
     const ambiguo = candidatos.length > 1;

@@ -93,10 +93,12 @@ Em `tratarVencida` (`lib/asaas/consumidor.ts`), onde hoje há `db.followupPointe
 2. `db.canaisDoContato(contactId)` → números em que o contato tem conversa não-grupo;
 3. candidatos = fluxos cujo número está nesses canais:
    - **1 candidato** → matricula **passando o canal** (§4);
-   - **0 candidatos e a org tem exatamente 1 fluxo válido** → matricula nesse fluxo. Não é
-     adivinhação: com um fluxo só não existe outro financeiro para errar, e é o caso do
-     self-host de um número — sem este degrau, cliente novo que ainda não escreveu deixaria de
-     ser cobrado (hoje ele é, porque `fn_service_begin` cria a conversa);
+   - **0 candidatos, contato sem canal NENHUM, e a org tem 1 fluxo válido** → matricula nesse
+     fluxo. O degrau é sobre quem **nunca escreveu**, não sobre "só há um fluxo": a
+     organização do dono tem dois números e um fluxo, e medir os fluxos faria o cliente da
+     ChatCore cair no fluxo do Bacco — o bug original voltando pela porta dos fundos. Com zero
+     canais não há por qual número cobrar, e `fn_service_begin` cria a conversa no número do
+     fluxo; é isso que mantém viva a cobrança de cliente novo no self-host de um número;
    - **0 candidatos com ≥2 fluxos**, ou **≥2 candidatos** → aviso, `detail`
      `sem_fluxo_para_o_numero` / `fluxo_ambiguo`. Adivinhar quem cobra é o defeito que se
      conserta; "último número que falou" não vira regra.
@@ -146,6 +148,9 @@ Separar cobrança por número **não** separa a fila. Fora do escopo desta entre
 2. Contato só com conversa no `7781`, dois fluxos configurados, nenhum do `7781` → `skipped` +
    aviso com `ref_kind: "contact"`.
 3. Contato sem conversa nenhuma, um fluxo só → **matricula** (o degrau do §3).
+3b. Contato COM conversa em outro número, um fluxo só → **não matricula**. Foi o defeito que a
+   prova em tela de 18/09 revelou na primeira versão desta entrega: o degrau media fluxos em
+   vez de canais.
 4. `pnpm test:unit` e `pnpm test:db` verdes, e os 7 arquivos de teste que passam a mentir
    (`lib/asaas/consumidor.test.ts`, `config.test.ts`, `reconcile.test.ts`,
    `app/actions/integrations/asaas.test.ts`, `tests/unit/mcp-cobranca-tools.test.ts`,

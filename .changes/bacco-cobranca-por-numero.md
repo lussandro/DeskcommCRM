@@ -8,7 +8,7 @@ Quem atende dois negócios na mesma organização — dois números de WhatsApp 
 
 Agora a tela do Asaas aceita **um fluxo por número**, e mostra ao lado de cada fluxo em qual número ele fala, ou o que há de errado com ele — o erro fica visível antes de acontecer, não depois, na conversa do cliente. Dois fluxos no mesmo número são recusados na hora de salvar, assim como fluxo armado por agentes de números diferentes e fluxo cujo número foi excluído.
 
-Na hora de cobrar, o CRM escolhe o fluxo pelo número em que aquele cliente conversa. Quando há um fluxo só, ele atende — inclusive cliente que ainda não escreveu, como antes. Quando há mais de um e o cliente não amarra a exatamente um número, **ninguém é disparado**: abre um aviso na Central apontando o cliente, para uma pessoa decidir. Adivinhar quem cobra é exatamente o defeito que esta correção fecha.
+Na hora de cobrar, o CRM escolhe o fluxo pelo número em que aquele cliente conversa. Cliente que ainda nunca escreveu continua sendo cobrado pelo único fluxo configurado, como antes. Mas cliente que conversa num número sem fluxo de cobrança NÃO é cobrado por outro número só porque ele é o único configurado. Quando há mais de um e o cliente não amarra a exatamente um número, **ninguém é disparado**: abre um aviso na Central apontando o cliente, para uma pessoa decidir. Adivinhar quem cobra é exatamente o defeito que esta correção fecha.
 
 E a conversa da cobrança passa a nascer no número do fluxo escolhido. Antes ela nascia na conversa mais recente do cliente, de qualquer número: escolher o fluxo certo não bastava, porque a mensagem ainda podia sair pela linha errada.
 
