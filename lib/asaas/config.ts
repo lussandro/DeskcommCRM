@@ -80,6 +80,9 @@ export async function carregarIntegracaoAsaas(admin: SupabaseClient, orgId: stri
 /**
  * Capacidades de integração da org, para o filtro de ferramentas do turno. Sem decifrar chave.
  * "asaas" = ler cobranças; "asaas:reemitir" = também prorrogar (só com a cerca preenchida).
+ * "mcp" = consultar o ERP externo (as cinco de `lib/mcp/tools/erp.ts`) — entra pelo ramo
+ * genérico abaixo, que usa o próprio `provider` como nome da capacidade, e só com
+ * `status='healthy'`: é assim que as cinco ferramentas somem do turno quando a integração cai.
  * Set vazio = nada de integração chega ao modelo (direção segura).
  */
 export async function carregarCapacidadesDeIntegracao(admin: SupabaseClient, orgId: string): Promise<ReadonlySet<string>> {
