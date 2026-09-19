@@ -26,6 +26,18 @@ function candidato(over: Partial<CandidatoDaAudiencia> = {}): CandidatoDaAudienc
 
 const RENDER_OK = (c: CandidatoDaAudiencia) => ({ texto: `Oi ${c.nome}`, faltando: [] as string[] });
 
+/** O contexto mínimo: sem exclusão, sem compromisso, hash previsível. */
+function ctx(over: Partial<Parameters<typeof classificarAudiencia>[1]> = {}) {
+  return {
+    excluidosAMao: new Set<string>(),
+    jaEmCampanha: new Set<string>(),
+    suprimidos: new Set<string>(),
+    hashDoEndereco: (e: string) => `h:${e}`,
+    renderizar: RENDER_OK,
+    ...over,
+  };
+}
+
 describe("vetos por pessoa", () => {
   it("quem pediu para parar é o primeiro veto, mesmo sem telefone", () => {
     // A ordem não é estética: dizer "sem telefone" para quem pediu para parar
@@ -77,44 +89,34 @@ describe("classificação da lista", () => {
         candidato({ contactId: "a", telefone: "+5548999990000" }),
         candidato({ contactId: "b", telefone: "+5548999990000" }),
       ],
-      { excluidosAMao: new Set(), jaEmCampanha: new Set(), renderizar: RENDER_OK },
+      ctx(),
     );
     expect(linhas.map((l) => l.motivo)).toEqual([null, "duplicado"]);
   });
 
   it("quem está em campanha viva fica de fora — três variantes não vão para a mesma pessoa", () => {
-    const linhas = classificarAudiencia([candidato({ contactId: "a" })], {
-      excluidosAMao: new Set(),
-      jaEmCampanha: new Set(["a"]),
-      renderizar: RENDER_OK,
-    });
+    const linhas = classificarAudiencia([candidato({ contactId: "a" })], ctx({ jaEmCampanha: new Set(["a"]) }));
     expect(linhas[0]!.motivo).toBe("ja_em_campanha");
   });
 
   it("incluir à mão não fura opt-out: o veto por pessoa vem antes do 'já em campanha'", () => {
-    const linhas = classificarAudiencia([candidato({ contactId: "a", bloqueado: true })], {
-      excluidosAMao: new Set(),
-      jaEmCampanha: new Set(["a"]),
-      renderizar: RENDER_OK,
-    });
+    const linhas = classificarAudiencia(
+      [candidato({ contactId: "a", bloqueado: true })],
+      ctx({ jaEmCampanha: new Set(["a"]) }),
+    );
     expect(linhas[0]!.motivo).toBe("opt_out");
   });
 
   it("excluído à mão vence tudo — foi uma decisão explícita do operador", () => {
-    const linhas = classificarAudiencia([candidato({ contactId: "a" })], {
-      excluidosAMao: new Set(["a"]),
-      jaEmCampanha: new Set(),
-      renderizar: RENDER_OK,
-    });
+    const linhas = classificarAudiencia([candidato({ contactId: "a" })], ctx({ excluidosAMao: new Set(["a"]) }));
     expect(linhas[0]!.motivo).toBe("excluido_manualmente");
   });
 
   it("variável sem valor exclui em vez de mandar texto com buraco", () => {
-    const linhas = classificarAudiencia([candidato({ contactId: "a", nome: null })], {
-      excluidosAMao: new Set(),
-      jaEmCampanha: new Set(),
-      renderizar: () => ({ texto: "Olá {{nome}}", faltando: ["nome"] }),
-    });
+    const linhas = classificarAudiencia(
+      [candidato({ contactId: "a", nome: null })],
+      ctx({ renderizar: () => ({ texto: "Olá {{nome}}", faltando: ["nome"] }) }),
+    );
     expect(linhas[0]!.motivo).toBe("variavel_ausente");
     expect(linhas[0]!.corpo).toBeNull();
   });
@@ -126,18 +128,24 @@ describe("classificação da lista", () => {
         candidato({ contactId: "a", telefone: "+5548999990000", bloqueado: true }),
         candidato({ contactId: "b", telefone: "+5548999990000" }),
       ],
-      { excluidosAMao: new Set(), jaEmCampanha: new Set(), renderizar: RENDER_OK },
+      ctx(),
     );
     expect(linhas.map((l) => l.motivo)).toEqual(["opt_out", null]);
   });
 
   it("o elegível sai com o corpo pronto", () => {
-    const linhas = classificarAudiencia([candidato({ nome: "Ana" })], {
-      excluidosAMao: new Set(),
-      jaEmCampanha: new Set(),
-      renderizar: RENDER_OK,
-    });
+    const linhas = classificarAudiencia([candidato({ nome: "Ana" })], ctx());
     expect(linhas[0]).toMatchObject({ elegivel: true, motivo: null, corpo: "Oi Ana" });
+  });
+
+  it("quem está na lista de exclusão da operação fica de fora — e isso não é opt-out", () => {
+    // A suppression é decisão de quem opera; o opt-out é do titular. Quem está
+    // suprimido não recebe CAMPANHA, mas continua sendo atendido se escrever.
+    const linhas = classificarAudiencia(
+      [candidato({ contactId: "a", telefone: "+5548999990000" })],
+      ctx({ suprimidos: new Set(["h:+5548999990000"]) }),
+    );
+    expect(linhas[0]!.motivo).toBe("suprimido");
   });
 
   it("conta os motivos para a prévia", () => {
@@ -148,7 +156,7 @@ describe("classificação da lista", () => {
         candidato({ contactId: "c", telefone: null }),
         candidato({ contactId: "d" }),
       ],
-      { excluidosAMao: new Set(), jaEmCampanha: new Set(), renderizar: RENDER_OK },
+      ctx(),
     );
     expect(contarExclusoes(linhas)).toEqual({ opt_out: 2, sem_telefone: 1 });
   });

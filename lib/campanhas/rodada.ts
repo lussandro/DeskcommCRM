@@ -44,6 +44,7 @@ import { beginServiceAtOrigin } from "@/lib/atendimento/origem";
 import { logger } from "@/lib/logger";
 
 import { motivoParaExcluir, recusouMarketing } from "./elegibilidade";
+import { hashDoEndereco } from "./exclusoes";
 import { renderizar } from "./renderizador";
 import { podeMandarAgora, proximaTentativa, type RitmoDaCampanha } from "./ritmo";
 import { TEXTO_DA_EXCLUSAO } from "./tipos";
@@ -258,6 +259,30 @@ async function rodarUmaCampanha(
       .eq("id", alvo.id)
       .eq("status", "pending");
     return { enviadas: 0, pulados: 1, concluidas: 0, detalhe: `pulado:${motivo}` };
+  }
+
+  // A lista de exclusão da operação, revalidada AQUI e não só na preparação:
+  // ela pode ter crescido depois do snapshot, e o ponto dela é impedir o envio.
+  const enderecoAtual = (contato?.phone_number ?? alvo.recipient_address ?? "").trim();
+  if (enderecoAtual !== "") {
+    const { data: suprimido } = await admin
+      .from("campaign_suppressions")
+      .select("id")
+      .eq("organization_id", campanha.organization_id)
+      .eq("recipient_address_hash", hashDoEndereco(enderecoAtual))
+      .maybeSingle();
+    if (suprimido) {
+      await admin
+        .from("campaign_recipients")
+        .update({
+          status: "skipped",
+          eligibility_status: "excluded",
+          exclusion_reason: "suprimido",
+        })
+        .eq("id", alvo.id)
+        .eq("status", "pending");
+      return { enviadas: 0, pulados: 1, concluidas: 0, detalhe: "pulado:suprimido" };
+    }
   }
 
   // ─── O ritmo ───

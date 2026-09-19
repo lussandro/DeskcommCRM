@@ -76,6 +76,13 @@ export interface ContextoDaClassificacao {
   excluidosAMao: ReadonlySet<string>;
   /** Contatos já comprometidos com outra campanha não concluída. */
   jaEmCampanha: ReadonlySet<string>;
+  /**
+   * Hashes da lista de exclusão da operação (migration 0265). Decisão de quem
+   * opera, diferente do opt-out: aqui não se silencia o atendimento.
+   */
+  suprimidos: ReadonlySet<string>;
+  /** O hash de um endereço — injetado para esta função continuar pura. */
+  hashDoEndereco: (endereco: string) => string;
   /** Renderiza o texto e diz o que faltou. Injetado para esta função ficar pura. */
   renderizar: (c: CandidatoDaAudiencia) => { texto: string; faltando: string[] };
 }
@@ -126,6 +133,10 @@ export function classificarAudiencia(
       continue;
     }
     const endereco = candidato.telefone!.trim();
+    if (ctx.suprimidos.has(ctx.hashDoEndereco(endereco))) {
+      excluir("suprimido");
+      continue;
+    }
     if (enderecosVistos.has(endereco)) {
       excluir("duplicado");
       continue;

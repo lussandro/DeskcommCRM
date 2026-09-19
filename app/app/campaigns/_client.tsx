@@ -38,12 +38,17 @@ export function ListaDeCampanhas() {
             {t("Escolha o público, escreva a mensagem e acompanhe quem recebeu.")}
           </p>
         </div>
+        <div className="flex shrink-0 items-center gap-2">
+        <Button variant="outline" asChild>
+          <Link href="/app/campaigns/settings">{t("Configuração")}</Link>
+        </Button>
         <Button asChild>
           <Link href="/app/campaigns/new">
             <Plus size={16} weight="bold" aria-hidden />
             <span>{t("Nova campanha")}</span>
           </Link>
         </Button>
+        </div>
       </header>
 
       <div className="flex flex-wrap items-center gap-2 rounded-lg border border-border bg-surface p-2">

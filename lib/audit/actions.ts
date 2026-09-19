@@ -604,6 +604,15 @@ export const AUDIT_ACTIONS = [
   // Rodada do cron que MEXEU em alguma campanha (enviou, pulou, concluiu,
   // promoveu agendada). Rodada vazia não audita — o critério do `CLAUDE.md`.
   "cron.campaign_worker",
+  // Lista de exclusão da operação (migration 0265). Audita porque é decisão que
+  // tira alguém de todo envio futuro — "quem tirou este número, e quando?"
+  // precisa de resposta. O telefone NÃO entra no payload: só os últimos dígitos.
+  "campaign.suppression_added",
+  "campaign.suppression_removed",
+  // Padrões de campanha da organização (janela de atribuição de resposta e o
+  // ritmo que campanha nova herda). Auditável porque muda o comportamento de
+  // TODA campanha futura, e a de atribuição muda a métrica das já enviadas.
+  "campaign.settings_updated",
 ] as const;
 
 /** Um código de auditoria. Derivado de `AUDIT_ACTIONS` — não redigite a lista. */

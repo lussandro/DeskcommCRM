@@ -111,6 +111,11 @@ export function DetalheDaCampanha({ id }: { id: string }) {
           )}
         </div>
         <div className="flex flex-wrap gap-2">
+          {c.status === "draft" && (
+            <Button variant="outline" asChild>
+              <Link href={`/app/campaigns/${c.id}/edit`}>{t("Editar")}</Link>
+            </Button>
+          )}
           {disponiveis.map((a) => (
             <Button
               key={a}

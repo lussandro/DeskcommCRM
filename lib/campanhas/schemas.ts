@@ -72,6 +72,27 @@ export const previaSchema = z.object({
   campaign_id: z.string().uuid().optional(),
 });
 
+export const criarTemplateSchema = z.object({
+  name: z.string().trim().min(1).max(120),
+  body: z.string().trim().min(1).max(4096),
+});
+
+export const editarTemplateSchema = z.object({
+  name: z.string().trim().min(1).max(120).optional(),
+  body: z.string().trim().min(1).max(4096).optional(),
+});
+
+/**
+ * O telefone entra CRU e sai em hash — a normalização e o hash moram em
+ * `lib/campanhas/exclusoes.ts`, para o mesmo cálculo valer na gravação e na
+ * consulta. Aqui só se exige que algo tenha sido digitado.
+ */
+export const criarExclusaoSchema = z.object({
+  address: z.string().trim().min(8).max(32),
+  reason: z.string().trim().max(240).nullable().optional(),
+  contact_id: z.string().uuid().nullable().optional(),
+});
+
 export const agendarSchema = z.object({ scheduled_at: z.string().datetime() });
 export const testarSchema = z.object({ contact_id: z.string().uuid() });
 

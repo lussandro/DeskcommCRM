@@ -119,6 +119,20 @@ beforeAll(() => {
             values (v_org, v_campanha, v_contact, '+5548999990000', 1);
         end if;
 
+        -- 0265: a copy guardada é o ativo de quem escreve bem, e a lista de
+        -- exclusão diz de quem a organização decidiu não falar. Vazar a primeira
+        -- entrega a abordagem comercial pronta; vazar a segunda entrega uma
+        -- decisão interna sobre pessoas.
+        if not exists (select 1 from public.campaign_templates where organization_id = v_org) then
+          insert into public.campaign_templates (organization_id, name, body)
+            values (v_org, 'RLS Invariant Texto', 'Oi, tudo bem?');
+        end if;
+        if not exists (select 1 from public.campaign_suppressions where organization_id = v_org) then
+          insert into public.campaign_suppressions
+            (organization_id, recipient_address_hash, address_tail, reason)
+            values (v_org, md5(v_org::text) || md5('sal'), '0000', 'RLS Invariant');
+        end if;
+
         -- 0227: sugestões contêm texto privado da conversa. Os dois tenants
         -- recebem uma linha real, com todos os FKs e a fronteira canônica.
         -- A prova abaixo usa JWT authenticated; não é só inspeção de policy.
@@ -328,6 +342,10 @@ export const TABLES = [
   // escrita é `rbac-config-ia-canais.test.ts` e a rota.
   "campaigns",
   "campaign_recipients",
+  // migration 0265 — a copy guardada e a lista de exclusão. A primeira é a
+  // abordagem comercial pronta; a segunda é uma decisão interna sobre pessoas.
+  "campaign_templates",
+  "campaign_suppressions",
   // ⚠️ `webhook_lead_captures` (migration 0174) NÃO entra nesta lista, e a
   // ausência é deliberada: a policy dela exige `manager`, e o usuário semeado
   // aqui é `agent` — o controle positivo falharia por ACERTO, e a "correção"

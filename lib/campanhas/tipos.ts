@@ -72,6 +72,7 @@ export const MOTIVOS_DE_EXCLUSAO = [
   "duplicado",
   "variavel_ausente",
   "ja_em_campanha",
+  "suprimido",
 ] as const;
 
 export type MotivoDeExclusao = (typeof MOTIVOS_DE_EXCLUSAO)[number];
@@ -87,4 +88,5 @@ export const TEXTO_DA_EXCLUSAO: Record<MotivoDeExclusao, string> = {
   duplicado: "Mesmo telefone de outro contato da lista",
   variavel_ausente: "Falta um dado que a mensagem usa",
   ja_em_campanha: "Já está em outra campanha ainda não concluída",
+  suprimido: "Está na lista de exclusão de campanhas",
 };

@@ -9091,6 +9091,55 @@ export const DICIONARIO: Traducoes = {
   "Máximo por hora": { es: "Máximo por hora" },
   "Ritmo salvo.": { es: "Ritmo guardado." },
   "Salvar ritmo": { es: "Guardar ritmo" },
+  "Editar campanha": { es: "Editar campaña" },
+  "Enquanto é rascunho, tudo muda. Depois de preparada, só o ritmo.": {
+    es: "Mientras es borrador, todo cambia. Una vez preparada, solo el ritmo.",
+  },
+  "Esta campanha já foi preparada: cada pessoa da lista tem o texto que vai receber guardado. Para mudar o texto ou o público, volte a campanha para rascunho — isso descarta a lista montada.": {
+    es: "Esta campaña ya fue preparada: cada persona de la lista tiene guardado el texto que va a recibir. Para cambiar el texto o el público, vuelva la campaña a borrador — eso descarta la lista armada.",
+  },
+  "O ritmo você ajusta na própria tela da campanha, sem descartar nada.": {
+    es: "El ritmo se ajusta en la propia pantalla de la campaña, sin descartar nada.",
+  },
+  "Voltar para a campanha": { es: "Volver a la campaña" },
+  "Apagar": { es: "Eliminar" },
+  "A proteção do número — ritmo, janela e aquecimento que valem para tudo que sai por ele — fica em": {
+    es: "La protección del número — ritmo, franja y calentamiento que valen para todo lo que sale por él — está en",
+  },
+  "Campo vazio significa herdar o número. Toda campanha nova nasce com estes valores e pode ficar mais devagar, nunca mais rápida.": {
+    es: "Campo vacío significa heredar el número. Toda campaña nueva nace con estos valores y puede ir más lenta, nunca más rápida.",
+  },
+  "Conexões › Proteção de envio": { es: "Conexiones › Protección de envío" },
+  "Configuração de campanhas": { es: "Configuración de campañas" },
+  "Contar como resposta até (horas depois do envio)": {
+    es: "Contar como respuesta hasta (horas después del envío)",
+  },
+  "Copy que você reusa entre campanhas. Mudar um texto aqui não muda mensagem que já foi preparada nem que já foi enviada.": {
+    es: "Texto que usted reutiliza entre campañas. Cambiarlo aquí no cambia un mensaje ya preparado ni ya enviado.",
+  },
+  "Excluir das campanhas": { es: "Excluir de las campañas" },
+  "Ex.: Primeiro contato — produtor": { es: "Ej.: Primer contacto — productor" },
+  "Lista de exclusão": { es: "Lista de exclusión" },
+  "Nenhum número excluído.": { es: "Ningún número excluido." },
+  "Nenhum texto salvo ainda.": { es: "Ningún texto guardado todavía." },
+  "Números que nenhuma campanha alcança. Diferente de quem pediu para parar: aqui o atendimento continua normal se a pessoa escrever — isto é uma decisão sua, não dela.": {
+    es: "Números que ninguna campaña alcanza. Distinto de quien pidió parar: aquí la atención sigue normal si la persona escribe — esta es una decisión suya, no de ella.",
+  },
+  "O que vale para todas as campanhas, e não para uma só.": {
+    es: "Lo que vale para todas las campañas, y no para una sola.",
+  },
+  "Padrões desta organização": { es: "Valores por defecto de esta organización" },
+  "Padrões salvos.": { es: "Valores guardados." },
+  "Salvar padrões": { es: "Guardar valores" },
+  "Salvar texto": { es: "Guardar texto" },
+  "Telefone com DDI e DDD": { es: "Teléfono con código de país y área" },
+  "termina em": { es: "termina en" },
+  "Texto": { es: "Texto" },
+  "Textos salvos": { es: "Textos guardados" },
+  "Tirar da lista": { es: "Quitar de la lista" },
+  "Uma mensagem que chega depois desse prazo é conversa nova, não resposta à campanha. Isso muda o número de respostas que a tela mostra, inclusive das campanhas já enviadas.": {
+    es: "Un mensaje que llega después de ese plazo es una conversación nueva, no una respuesta a la campaña. Eso cambia la cantidad de respuestas que muestra la pantalla, incluso de las campañas ya enviadas.",
+  },
 };
 
 /**

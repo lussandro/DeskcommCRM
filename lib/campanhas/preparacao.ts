@@ -35,6 +35,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 
 import { FILTRO_VAZIO, filtroDeAudienciaSchema, type FiltroDeAudiencia } from "./audiencia";
 import { buscarCandidatos, contatosJaEmCampanha } from "./consulta-de-audiencia";
+import { hashDoEndereco, hashesExcluidos } from "./exclusoes";
 import {
   classificarAudiencia,
   contarExclusoes,
@@ -103,9 +104,12 @@ async function classificar(
     entrada.organizationId,
     entrada.campanhaId,
   );
+  const suprimidos = await hashesExcluidos(admin, entrada.organizationId);
   return classificarAudiencia(candidatos, {
     excluidosAMao: new Set(entrada.filtro.excluir_contatos),
     jaEmCampanha,
+    suprimidos,
+    hashDoEndereco,
     // A saudação NÃO é resolvida aqui: ela é da hora do envio. O token fica no
     // corpo congelado e o despacho o troca — ver `rodada.ts`.
     renderizar: (c: CandidatoDaAudiencia) => {

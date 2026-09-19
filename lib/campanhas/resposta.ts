@@ -32,12 +32,18 @@
  */
 import type { SupabaseClient } from "@supabase/supabase-js";
 
+import { ATRIBUICAO_PADRAO_HORAS, janelaDeAtribuicaoMs, lerConfiguracao } from "./configuracao";
+
 /**
- * Janela de atribuição de resposta. Decisão de produto de 2026-09-18 — mexer
- * aqui muda a taxa de resposta de toda campanha já enviada, então não é ajuste
- * de implementação.
+ * Janela de atribuição de resposta — o DEFAULT.
+ *
+ * Decisão de produto de 2026-09-18. Desde a tela de padrões de campanha, a
+ * organização pode mudá-la sem trocar de versão: quem manda é
+ * `organizations.settings.campanhas.atribuicao_horas`, e isto é o que vale
+ * quando ninguém escolheu. Mexer aqui muda a taxa de resposta de toda campanha
+ * já enviada, então não é ajuste de implementação.
  */
-export const JANELA_DE_ATRIBUICAO_MS = 72 * 60 * 60 * 1000;
+export const JANELA_DE_ATRIBUICAO_MS = ATRIBUICAO_PADRAO_HORAS * 60 * 60 * 1000;
 
 /** Estados que uma resposta pode promover. Quem não saiu não "respondeu". */
 const PROMOVIVEIS = new Set(["sent", "delivered", "read"]);
@@ -60,8 +66,9 @@ export interface DestinatarioCandidato {
 export function destinatarioQueEssaRespostaFecha(
   candidatos: readonly DestinatarioCandidato[],
   recebidoEm: Date,
+  janelaMs: number = JANELA_DE_ATRIBUICAO_MS,
 ): DestinatarioCandidato | null {
-  const piso = recebidoEm.getTime() - JANELA_DE_ATRIBUICAO_MS;
+  const piso = recebidoEm.getTime() - janelaMs;
   let escolhido: DestinatarioCandidato | null = null;
   let maisRecente = -Infinity;
 
@@ -104,7 +111,17 @@ export async function aplicarRespostaNaCampanha(
   entrada: { organizationId: string; contactId: string; recebidoEm: Date },
 ): Promise<ResumoDaResposta> {
   const { organizationId, contactId, recebidoEm } = entrada;
-  const piso = new Date(recebidoEm.getTime() - JANELA_DE_ATRIBUICAO_MS).toISOString();
+
+  // A janela vem da ORGANIZAÇÃO, com o default do produto quando ninguém
+  // escolheu. Ler config nunca derruba a atribuição: `lerConfiguracao` cai no
+  // padrão em vez de lançar.
+  const { data: org } = await admin
+    .from("organizations")
+    .select("settings")
+    .eq("id", organizationId)
+    .maybeSingle();
+  const janelaMs = janelaDeAtribuicaoMs(lerConfiguracao((org as { settings?: unknown } | null)?.settings));
+  const piso = new Date(recebidoEm.getTime() - janelaMs).toISOString();
 
   const { data, error } = await admin
     .from("campaign_recipients")
@@ -121,6 +138,7 @@ export async function aplicarRespostaNaCampanha(
   const alvo = destinatarioQueEssaRespostaFecha(
     (data ?? []) as unknown as DestinatarioCandidato[],
     recebidoEm,
+    janelaMs,
   );
 
   let atribuiu = false;
