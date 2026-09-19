@@ -230,6 +230,23 @@ export interface CampaignRecipientRow {
   opted_out_at: string | null;
 }
 
+/**
+ * Uma linha da lista de exclusão de campanhas que aponta para este titular
+ * (migration 0265).
+ *
+ * O hash do telefone NÃO entra: ele não diz nada a quem lê e não é dado que o
+ * titular reconheça. O que entra é o fato — "este número está fora das
+ * campanhas desde tal dia, por tal motivo" —, que é exatamente a informação
+ * dele que a organização guarda.
+ */
+export interface CampaignSuppressionRow {
+  id: string;
+  address_tail: string | null;
+  reason: string | null;
+  source: string;
+  created_at: string;
+}
+
 export interface ExportPayload {
   request_id: string;
   organization_id: string;
@@ -279,6 +296,15 @@ export interface ExportPayload {
    * prospecção pediria acesso e não veria a mensagem que recebeu.
    */
   campaign_recipients: CampaignRecipientRow[];
+  /**
+   * Lista de exclusão de campanhas (migration 0265).
+   *
+   * Entra pelo mesmo motivo das demais: o trigger
+   * `trg_redigir_exclusoes_anonimizado` APAGA o vínculo e os últimos dígitos
+   * quando o titular pede anonimização, e o que se apaga a pedido dele é o que
+   * se entrega a pedido dele (Art. 18 II).
+   */
+  campaign_suppressions: CampaignSuppressionRow[];
   reply_drafts?: Array<{
     id: string;
     status: string;
@@ -684,6 +710,26 @@ export async function collectExportData(args: CollectArgs): Promise<ExportPayloa
     }
   }
 
+  // Lista de exclusão de campanhas — `contact_id` direto (migration 0265).
+  let campaign_suppressions: CampaignSuppressionRow[] = [];
+  if (contactId) {
+    const { data, error } = await admin
+      .from("campaign_suppressions")
+      .select("id, address_tail, reason, source, created_at")
+      .eq("organization_id", organizationId)
+      .eq("contact_id", contactId)
+      .order("created_at", { ascending: false })
+      .limit(100);
+    if (error) {
+      logger.warn("[lgpd-export-worker] campaign suppressions load failed", {
+        request_id: requestId,
+        error: error.message,
+      });
+    } else if (data) {
+      campaign_suppressions = data as unknown as CampaignSuppressionRow[];
+    }
+  }
+
   // Captação por webhook — a MESMA classe do bloco acima, achada pelo gate.
   let webhook_captures: CaptureRow[] = [];
   if (contactId) {
@@ -860,6 +906,7 @@ export async function collectExportData(args: CollectArgs): Promise<ExportPayloa
     appointment_notices,
     voice_calls,
     campaign_recipients,
+    campaign_suppressions,
   };
 }
 
@@ -892,5 +939,6 @@ function emptyPayload(
     appointment_notices: [],
     voice_calls: [],
     campaign_recipients: [],
+    campaign_suppressions: [],
   };
 }

@@ -263,7 +263,7 @@ export function EditarCampanha({ id }: { id: string }) {
             <li key={v}>
               <button
                 type="button"
-                className="rounded bg-surface-elevated px-1 font-mono text-xs"
+                className="rounded-md bg-surface-elevated px-1 font-mono text-xs"
                 onClick={() => setTexto((atual) => `${atual}{{${v}}}`)}
               >
                 {`{{${v}}}`}
