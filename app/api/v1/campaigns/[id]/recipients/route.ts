@@ -20,7 +20,7 @@ import { createClient } from "@/lib/supabase/server";
 export const dynamic = "force-dynamic";
 
 const COLUNAS =
-  "id, contact_id, status, eligibility_status, exclusion_reason, sent_at, delivered_at, " +
+  "id, contact_id, channel_session_id, status, eligibility_status, exclusion_reason, sent_at, delivered_at, " +
   "read_at, replied_at, opted_out_at, last_error_code, created_at, contacts(name, display_name)";
 
 export async function GET(

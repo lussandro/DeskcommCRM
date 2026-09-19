@@ -9102,6 +9102,21 @@ export const DICIONARIO: Traducoes = {
     es: "El ritmo se ajusta en la propia pantalla de la campaña, sin descartar nada.",
   },
   "Voltar para a campanha": { es: "Volver a la campaña" },
+  "A cada envio, a campanha usa o número com mais folga no teto do dia — e o número que a pessoa já conhece, quando ela já conversou com algum deles.": {
+    es: "En cada envío, la campaña usa el número con más margen en el tope del día — y el número que la persona ya conoce, cuando ya conversó con alguno de ellos.",
+  },
+  "A campanha reveza entre os números marcados, escolhendo a cada envio o que tem mais folga no teto do dia. Quem já conversa com você por um deles recebe por esse mesmo, para não chegar de um número desconhecido.": {
+    es: "La campaña alterna entre los números marcados, eligiendo en cada envío el que tiene más margen en el tope del día. Quien ya conversa con usted por uno de ellos recibe por ese mismo, para no llegar desde un número desconocido.",
+  },
+  "Atenção: o intervalo e os tetos da CAMPANHA somam todos os números. Para o rodízio aumentar o volume, deixe o ritmo da campanha em branco e cada número usa o dele.": {
+    es: "Atención: el intervalo y los topes de la CAMPAÑA suman todos los números. Para que la alternancia aumente el volumen, deje el ritmo de la campaña en blanco y cada número usa el suyo.",
+  },
+  "Falar também por estes números": {
+    es: "Hablar también por estos números",
+  },
+  "Números desta campanha": {
+    es: "Números de esta campaña",
+  },
   "Apagar": { es: "Eliminar" },
   "A proteção do número — ritmo, janela e aquecimento que valem para tudo que sai por ele — fica em": {
     es: "La protección del número — ritmo, franja y calentamiento que valen para todo lo que sale por él — está en",

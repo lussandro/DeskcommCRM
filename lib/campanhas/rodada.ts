@@ -46,6 +46,7 @@ import { logger } from "@/lib/logger";
 import { motivoParaExcluir, recusouMarketing } from "./elegibilidade";
 import { hashDoEndereco } from "./exclusoes";
 import { renderizar } from "./renderizador";
+import { escolherNumero, poolDaCampanha, type NumeroDisponivel } from "./rodizio";
 import { podeMandarAgora, proximaTentativa, type RitmoDaCampanha } from "./ritmo";
 import { TEXTO_DA_EXCLUSAO } from "./tipos";
 
@@ -75,6 +76,7 @@ const NUMEROS_POR_RODADA = 10;
 interface CampanhaRow {
   id: string;
   organization_id: string;
+  /** O número PRINCIPAL. O pool efetivo inclui os vinculados (migration 0266). */
   channel_session_id: string;
   name: string;
   message_body: string | null;
@@ -285,14 +287,13 @@ async function rodarUmaCampanha(
     }
   }
 
-  // ─── O ritmo ───
+  // ─── O ritmo da CAMPANHA, que vale para ela inteira ───
+  //
+  // Antes do rodízio de propósito: o intervalo e o teto da campanha somam TODOS
+  // os números dela. Quem quer que o rodízio aumente o volume deixa o ritmo da
+  // campanha em branco e herda o de cada número; quem põe 60s aqui manda uma a
+  // cada 60s no total, com um número ou com cinco.
   const pool = getRequestPool();
-  const { knobs, numberActivatedAt } = await loadChannelKnobs(
-    pool,
-    campanha.organization_id,
-    campanha.channel_session_id,
-  );
-
   const ritmo: RitmoDaCampanha = {
     intervaloSegundos: campanha.intervalo_segundos,
     janelaInicioHora: campanha.janela_inicio_hora,
@@ -301,10 +302,12 @@ async function rodarUmaCampanha(
     tetoHorario: campanha.teto_horario,
   };
   const estado = await estadoDeEnvio(admin, campanha.id, agora);
-  // O ritmo PRÓPRIO vem ANTES do ritmo do canal: ele é o mais restritivo por
-  // desenho, e perguntar ao canal primeiro gastaria a decisão do número numa
-  // mensagem que a campanha não deixaria sair.
-  const doRitmo = podeMandarAgora(ritmo, estado, agora, knobs.timezone);
+  const numeros = await numerosDaCampanha(admin, campanha);
+  // O fuso da janela da campanha é o do número PRINCIPAL: ela é uma decisão da
+  // campanha, e precisa de um relógio só — três números em fusos diferentes
+  // fariam a mesma campanha abrir e fechar a janela três vezes.
+  const knobsDoPrincipal = await loadChannelKnobs(pool, campanha.organization_id, campanha.channel_session_id);
+  const doRitmo = podeMandarAgora(ritmo, estado, agora, knobsDoPrincipal.knobs.timezone);
   if (!doRitmo.pode) {
     // Espera não é falha: grava QUANDO tentar de novo para a fila não ser varrida
     // a cada tique por uma campanha que só volta amanhã.
@@ -319,31 +322,57 @@ async function rodarUmaCampanha(
     return { enviadas: 0, pulados: 0, concluidas: 0, detalhe: `ritmo:${doRitmo.motivo}` };
   }
 
-  const { data: canal } = await admin
-    .from("channel_sessions")
-    .select("daily_message_limit")
-    .eq("id", campanha.channel_session_id)
-    .maybeSingle();
-  const doCanal = decidePacing({
-    now: agora,
-    knobs,
-    state: await loadPacingState(pool, campanha.organization_id, campanha.channel_session_id, {
+  // ─── O RODÍZIO: qual número fala com esta pessoa ───
+  const disponiveis: NumeroDisponivel[] = [];
+  const knobsPorNumero = new Map<string, Awaited<ReturnType<typeof loadChannelKnobs>>>();
+  for (const sessionId of numeros) {
+    const k =
+      sessionId === campanha.channel_session_id
+        ? knobsDoPrincipal
+        : await loadChannelKnobs(pool, campanha.organization_id, sessionId);
+    knobsPorNumero.set(sessionId, k);
+
+    const { data: canal } = await admin
+      .from("channel_sessions")
+      .select("daily_message_limit, status")
+      .eq("organization_id", campanha.organization_id)
+      .eq("id", sessionId)
+      .maybeSingle();
+    const linha = canal as { daily_message_limit: number | null; status: string } | null;
+    // Número fora do ar não entra no rodízio: mandar por ele seria fabricar uma
+    // mensagem presa em `sending` que o recovery depois marca como falha.
+    if (!linha || linha.status !== "WORKING") continue;
+
+    const estadoDoNumero = await loadPacingState(pool, campanha.organization_id, sessionId, {
       now: agora,
-      timezone: knobs.timezone,
-      numberActivatedAt,
-    }),
-    crmDailyLimit: (canal as { daily_message_limit: number | null } | null)?.daily_message_limit ?? null,
-  });
-  if (!doCanal.allow) {
-    if (doCanal.nextAllowedAt) {
-      await admin
-        .from("campaign_recipients")
-        .update({ next_attempt_at: doCanal.nextAllowedAt.toISOString() })
-        .eq("id", alvo.id)
-        .eq("status", "pending");
-    }
-    return { enviadas: 0, pulados: 0, concluidas: 0, detalhe: `canal:${doCanal.code}` };
+      timezone: k.knobs.timezone,
+      numberActivatedAt: k.numberActivatedAt,
+    });
+    const decisao = decidePacing({
+      now: agora,
+      knobs: k.knobs,
+      state: estadoDoNumero,
+      crmDailyLimit: linha.daily_message_limit ?? null,
+    });
+    disponiveis.push({
+      sessionId,
+      folgaDoDia:
+        linha.daily_message_limit === null
+          ? null
+          : Math.max(0, linha.daily_message_limit - estadoDoNumero.sentToday),
+      podeAgora: decisao.allow,
+      ultimoEnvio: estadoDoNumero.lastSentAt,
+    });
   }
+
+  const escolha = escolherNumero(disponiveis, await numeroDoHistorico(admin, campanha, alvo.contact_id));
+  if (!escolha) {
+    // Nenhum número pode agora. Não é falha do destinatário: é o ritmo dos
+    // números. Volta para a fila e tenta no próximo tique.
+    return { enviadas: 0, pulados: 0, concluidas: 0, detalhe: "canal:sem_numero_livre" };
+  }
+  const sessionEscolhida = escolha.sessionId;
+  const knobs = knobsPorNumero.get(sessionEscolhida)!.knobs;
 
   // ─── O envio ───
   // O id da mensagem nasce AQUI, e não do insert: com ele, o destinatário já
@@ -384,11 +413,11 @@ async function rodarUmaCampanha(
       admin,
       campanha.organization_id,
       alvo.contact_id,
-      campanha.channel_session_id,
+      sessionEscolhida,
     );
     await admin
       .from("campaign_recipients")
-      .update({ conversation_id: boundary.conversation_id })
+      .update({ conversation_id: boundary.conversation_id, channel_session_id: sessionEscolhida })
       .eq("id", alvo.id);
 
     const mensagem = await sendMessageHandler(
@@ -414,7 +443,7 @@ async function rodarUmaCampanha(
         },
       } as Parameters<typeof sendMessageHandler>[2],
     );
-    await recordSend(pool, campanha.organization_id, campanha.channel_session_id, agora);
+    await recordSend(pool, campanha.organization_id, sessionEscolhida, agora);
 
     // O desfecho vem do ESTADO da mensagem, nunca da ausência de exceção — o
     // handler marca `failed` e devolve normalmente.
@@ -437,7 +466,7 @@ async function rodarUmaCampanha(
       enviadas: falhou ? 0 : 1,
       pulados: 0,
       concluidas: 0,
-      detalhe: `enviado:${status ?? "?"}`,
+      detalhe: `enviado:${status ?? "?"}:${escolha.motivo}`,
     };
   } catch (err) {
     const motivoErro = err instanceof Error ? err.message : String(err);
@@ -453,6 +482,54 @@ async function rodarUmaCampanha(
       .eq("status", "sending");
     return { enviadas: 0, pulados: 0, concluidas: 0, detalhe: "falhou" };
   }
+}
+
+/**
+ * Os números que esta campanha pode usar: o principal mais os vinculados.
+ *
+ * Falha ABERTA no principal: se a consulta dos vinculados quebrar, a campanha
+ * segue falando pelo número principal em vez de parar. Rodízio é otimização;
+ * parar de enviar por causa dela seria o remédio pior que a doença.
+ */
+async function numerosDaCampanha(admin: SupabaseClient, campanha: CampanhaRow): Promise<string[]> {
+  const { data, error } = await admin
+    .from("campaign_channel_sessions")
+    .select("channel_session_id")
+    .eq("organization_id", campanha.organization_id)
+    .eq("campaign_id", campanha.id);
+  if (error) {
+    logger.warn("[campanha] pool de números falhou; seguindo pelo principal", {
+      campanha: campanha.id,
+      motivo: error.message,
+    });
+    return [campanha.channel_session_id];
+  }
+  return poolDaCampanha(
+    campanha.channel_session_id,
+    (data ?? []).map((l) => (l as { channel_session_id: string }).channel_session_id),
+  );
+}
+
+/**
+ * O número em que esta pessoa JÁ conversa, se houver.
+ *
+ * A conversa mais recente ganha: se ela falou com dois números da empresa, o
+ * último é o que ela tem na cabeça.
+ */
+async function numeroDoHistorico(
+  admin: SupabaseClient,
+  campanha: CampanhaRow,
+  contactId: string,
+): Promise<string | null> {
+  const { data } = await admin
+    .from("conversations")
+    .select("channel_session_id, last_message_at")
+    .eq("organization_id", campanha.organization_id)
+    .eq("contact_id", contactId)
+    .order("last_message_at", { ascending: false, nullsFirst: false })
+    .limit(1);
+  const linha = (data ?? [])[0] as { channel_session_id: string } | undefined;
+  return linha?.channel_session_id ?? null;
 }
 
 /** Quantas saíram hoje e na última hora, mais o último envio — o estado do ritmo. */

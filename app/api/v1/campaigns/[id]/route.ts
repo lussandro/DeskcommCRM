@@ -15,6 +15,7 @@ import { fail, ok } from "@/lib/api/wrappers";
 import { requireRole } from "@/lib/auth/require-role";
 import { carregarCampanha } from "@/lib/campanhas/acoes";
 import { ehEditavel, ehTerminal } from "@/lib/campanhas/maquina-de-estados";
+import { gravarPool, lerPoolExtra } from "@/lib/campanhas/pool-de-numeros";
 import { editarCampanhaSchema } from "@/lib/campanhas/schemas";
 import { traduzir } from "@/lib/i18n/dicionario";
 import { requireSupportWrite } from "@/lib/impersonate/support";
@@ -49,7 +50,10 @@ export async function GET(
     .maybeSingle();
   if (!data) return fail("campanha_nao_encontrada", t("Campanha não encontrada."), 404, { requestId });
 
-  return ok(data, { requestId });
+  // O pool vem junto: a tela precisa dele para mostrar por quantos números a
+  // campanha fala, e uma segunda chamada para isso seria round-trip à toa.
+  const extras = await lerPoolExtra(createAdminClient(), authz.org.orgId, id);
+  return ok({ ...(data as object), channel_session_ids: extras }, { requestId });
 }
 
 export async function PATCH(
@@ -95,6 +99,7 @@ export async function PATCH(
   // a campanha para trocar um intervalo é obrigar a recomeçar o envio — ou, pior,
   // a deixar correndo do jeito errado porque recomeçar custa caro.
   const CAMPOS_DE_RITMO = [
+    "channel_session_ids",
     "intervalo_segundos",
     "janela_inicio_hora",
     "janela_fim_hora",
@@ -195,7 +200,24 @@ export async function PATCH(
     );
   }
 
+  if (entrada.channel_session_ids !== undefined) {
+    const r = await gravarPool(supabase, {
+      organizationId: authz.org.orgId,
+      campanhaId: id,
+      principal: (data as unknown as { channel_session_id: string }).channel_session_id,
+      extras: entrada.channel_session_ids,
+    });
+    if (!r.ok) {
+      return fail(
+        "campanha_canal_indisponivel",
+        t("Um dos números escolhidos não é uma conexão desta organização."),
+        409,
+        { requestId },
+      );
+    }
+  }
+
   // Editar rascunho NÃO audita: nada saiu dele, e auditar cada tecla encheria o
   // log com o que não tem consequência. Quem audita são as mudanças de estado.
-  return ok(data, { requestId });
+  return ok({ ...(data as object), channel_session_ids: await lerPoolExtra(supabase, authz.org.orgId, id) }, { requestId });
 }

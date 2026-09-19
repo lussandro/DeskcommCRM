@@ -32,6 +32,7 @@ import {
   type AcaoDeCampanha,
   type CampanhaDetalhada,
 } from "@/hooks/campanhas/useCampanhas";
+import { channelLabel, useChannelSessions } from "@/hooks/channels/useChannelSessions";
 import { useContactList } from "@/hooks/contacts/useContactList";
 import { useT } from "@/hooks/i18n/useT";
 import { ArrowBendUpLeft } from "@/lib/ui/icons";
@@ -205,6 +206,8 @@ export function DetalheDaCampanha({ id }: { id: string }) {
         </Card>
       )}
 
+      <NumerosDaCampanha campanha={c} />
+
       <RitmoDaCampanha campanha={c} />
 
       <Card className="space-y-2 p-4">
@@ -325,6 +328,40 @@ function TesteDaCampanha({
       <Button variant="outline" size="sm" onClick={onCancelar}>
         {t("Fechar")}
       </Button>
+    </Card>
+  );
+}
+
+/**
+ * Por quais números a campanha fala.
+ *
+ * Existe porque "quem falou com esta pessoa?" é a primeira pergunta quando o
+ * cliente responde citando um número — e porque o operador precisa ver que o
+ * rodízio está ligado antes de estranhar que as mensagens saiam de remetentes
+ * diferentes.
+ */
+function NumerosDaCampanha({ campanha }: { campanha: CampanhaDetalhada }) {
+  const t = useT();
+  const canais = useChannelSessions();
+  const extras = campanha.channel_session_ids ?? [];
+  if (extras.length === 0) return null;
+
+  const nome = (id: string) => {
+    const c = (canais.data ?? []).find((x) => x.id === id);
+    return c ? channelLabel(c, t) : id.slice(0, 8);
+  };
+
+  return (
+    <Card className="space-y-2 p-4">
+      <h2 className="font-medium">{t("Números desta campanha")}</h2>
+      <p className="text-sm text-muted-foreground">
+        {t("A cada envio, a campanha usa o número com mais folga no teto do dia — e o número que a pessoa já conhece, quando ela já conversou com algum deles.")}
+      </p>
+      <ul className="text-sm">
+        {[campanha.channel_session_id, ...extras].map((id) => (
+          <li key={id}>• {nome(id)}</li>
+        ))}
+      </ul>
     </Card>
   );
 }

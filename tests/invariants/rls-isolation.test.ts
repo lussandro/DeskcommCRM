@@ -133,6 +133,14 @@ beforeAll(() => {
             values (v_org, md5(v_org::text) || md5('sal'), '0000', 'RLS Invariant');
         end if;
 
+        -- 0266: por quais números a campanha fala. Vazar diz ao vizinho qual
+        -- número da empresa dele está sendo usado para prospectar, e quantos.
+        if not exists (select 1 from public.campaign_channel_sessions where organization_id = v_org) then
+          insert into public.campaign_channel_sessions (organization_id, campaign_id, channel_session_id)
+            select v_org, c.id, v_sess from public.campaigns c
+             where c.organization_id = v_org limit 1;
+        end if;
+
         -- 0227: sugestões contêm texto privado da conversa. Os dois tenants
         -- recebem uma linha real, com todos os FKs e a fronteira canônica.
         -- A prova abaixo usa JWT authenticated; não é só inspeção de policy.
@@ -346,6 +354,8 @@ export const TABLES = [
   // abordagem comercial pronta; a segunda é uma decisão interna sobre pessoas.
   "campaign_templates",
   "campaign_suppressions",
+  // migration 0266 — por quais números a campanha fala.
+  "campaign_channel_sessions",
   // ⚠️ `webhook_lead_captures` (migration 0174) NÃO entra nesta lista, e a
   // ausência é deliberada: a policy dela exige `manager`, e o usuário semeado
   // aqui é `agent` — o controle positivo falharia por ACERTO, e a "correção"

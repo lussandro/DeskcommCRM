@@ -17,6 +17,7 @@ import { fail, ok } from "@/lib/api/wrappers";
 import { audit } from "@/lib/audit";
 import { requireRole } from "@/lib/auth/require-role";
 import { FILTRO_VAZIO } from "@/lib/campanhas/audiencia";
+import { gravarPool } from "@/lib/campanhas/pool-de-numeros";
 import {
   codificarCursor,
   criarCampanhaSchema,
@@ -152,14 +153,32 @@ export async function POST(req: NextRequest): Promise<Response> {
     });
   }
 
+  const criada = data as unknown as { id: string };
+  if ((entrada.channel_session_ids ?? []).length > 0) {
+    // Falha do pool NÃO derruba a criação: a campanha existe e fala pelo número
+    // principal. Devolver erro aqui faria o operador achar que nada foi criado
+    // e criar de novo.
+    try {
+      await gravarPool(supabase, {
+        organizationId: org.orgId,
+        campanhaId: criada.id,
+        principal: entrada.channel_session_id,
+        extras: entrada.channel_session_ids ?? [],
+      });
+    } catch {
+      // O texto real já foi para o log do Supabase; a tela mostra o pool salvo
+      // quando recarrega, que é a fonte da verdade.
+    }
+  }
+
   void audit({
     action: "campaign.created",
     actorUserId: user.id,
     organizationId: org.orgId,
     resourceType: "campaign",
-    resourceId: (data as unknown as { id: string }).id,
+    resourceId: criada.id,
     requestId,
-    metadata: { base_legal: entrada.base_legal },
+    metadata: { base_legal: entrada.base_legal, numeros: 1 + (entrada.channel_session_ids ?? []).length },
   });
 
   return ok(data, { requestId, status: 201 });

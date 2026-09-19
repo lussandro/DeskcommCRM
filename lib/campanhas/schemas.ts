@@ -31,6 +31,12 @@ const baseDaCampanha = {
   base_legal: z.enum(["consent", "legitimate_interest"]),
   lia_ref: z.string().trim().max(120).nullable().optional(),
   audience_filter: filtroDeAudienciaSchema.optional(),
+  /**
+   * Os números EXTRAS do rodízio (migration 0266). O principal continua em
+   * `channel_session_id`; estes entram junto. Vazio = campanha de um número só,
+   * que é como toda campanha existente se comporta.
+   */
+  channel_session_ids: z.array(z.string().uuid()).max(10).optional(),
 };
 
 export const criarCampanhaSchema = z
@@ -63,6 +69,7 @@ export const editarCampanhaSchema = z
     base_legal: baseDaCampanha.base_legal.optional(),
     lia_ref: baseDaCampanha.lia_ref,
     audience_filter: filtroDeAudienciaSchema.optional(),
+    channel_session_ids: baseDaCampanha.channel_session_ids,
   })
   .merge(ritmoSchema);
 

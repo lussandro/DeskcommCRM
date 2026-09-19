@@ -30,6 +30,8 @@ export interface CampanhaDaLista {
 }
 
 export interface CampanhaDetalhada extends CampanhaDaLista {
+  /** Números EXTRAS do rodízio (migration 0266). O principal é channel_session_id. */
+  channel_session_ids?: string[];
   description: string | null;
   message_body: string | null;
   base_legal: string;
@@ -49,6 +51,8 @@ export interface CampanhaDetalhada extends CampanhaDaLista {
 export interface Destinatario {
   id: string;
   contact_id: string;
+  /** Por qual número esta pessoa foi falada. `null` = ainda não saiu. */
+  channel_session_id: string | null;
   status: string;
   eligibility_status: string;
   exclusion_reason: string | null;

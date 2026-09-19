@@ -49,6 +49,7 @@ export function NovaCampanha() {
   const [janelaFim, setJanelaFim] = useState("");
   const [tetoDiario, setTetoDiario] = useState("");
   const [tetoHorario, setTetoHorario] = useState("");
+  const [extras, setExtras] = useState<string[]>([]);
 
   const filtro = useMemo(
     () => ({
@@ -85,6 +86,7 @@ export function NovaCampanha() {
       janela_fim_hora: janelaFim ? Number(janelaFim) : null,
       teto_diario: tetoDiario ? Number(tetoDiario) : null,
       teto_horario: tetoHorario ? Number(tetoHorario) : null,
+      channel_session_ids: extras,
     });
     router.push(`/app/campaigns/${criada.id}`);
   }
@@ -130,6 +132,40 @@ export function NovaCampanha() {
             </p>
           )}
         </div>
+
+        {(canais.data ?? []).length > 1 && (
+          <fieldset className="space-y-2">
+            <legend className="text-sm font-medium">{t("Falar também por estes números")}</legend>
+            <p className="text-sm text-muted-foreground">
+              {t(
+                "A campanha reveza entre os números marcados, escolhendo a cada envio o que tem mais folga no teto do dia. Quem já conversa com você por um deles recebe por esse mesmo, para não chegar de um número desconhecido.",
+              )}
+            </p>
+            {(canais.data ?? [])
+              .filter((c) => c.id !== canal)
+              .map((c) => (
+                <label key={c.id} className="flex items-center gap-2 text-sm">
+                  <input
+                    type="checkbox"
+                    checked={extras.includes(c.id)}
+                    onChange={(e) =>
+                      setExtras((atual) =>
+                        e.target.checked ? [...atual, c.id] : atual.filter((id) => id !== c.id),
+                      )
+                    }
+                  />
+                  {channelLabel(c, t)}
+                </label>
+              ))}
+            {extras.length > 0 && (
+              <p className="text-sm text-muted-foreground">
+                {t(
+                  "Atenção: o intervalo e os tetos da CAMPANHA somam todos os números. Para o rodízio aumentar o volume, deixe o ritmo da campanha em branco e cada número usa o dele.",
+                )}
+              </p>
+            )}
+          </fieldset>
+        )}
         <fieldset className="space-y-2">
           <legend className="text-sm font-medium">{t("Base legal do envio")}</legend>
           <p className="text-sm text-muted-foreground">
