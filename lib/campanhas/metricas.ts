@@ -96,6 +96,10 @@ export function progresso(c: ContagemDaCampanha): number {
   // Preparada e com ninguém elegível: não há o que andar, e a barra cheia é a
   // leitura certa — a campanha terminou antes de começar.
   if (c.elegiveis <= 0) return 1;
-  const restantes = c.pendentes + c.naFila + c.enviando;
+  // CANCELADO conta como restante, e não como andado. Medido na tela: uma
+  // campanha cancelada sem ter enviado nada mostrava "100%", que se lê como
+  // "terminou de enviar" — o oposto do que aconteceu. Quem foi cancelado não
+  // andou a fila, saiu dela.
+  const restantes = c.pendentes + c.naFila + c.enviando + c.cancelados;
   return Math.min(1, Math.max(0, (c.elegiveis - restantes) / c.elegiveis));
 }

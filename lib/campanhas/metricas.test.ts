@@ -77,6 +77,15 @@ describe("progresso", () => {
     expect(progresso({ ...ZERO, total: 0, elegiveis: 0 })).toBe(0);
   });
 
+  it("campanha cancelada sem envio é 0%, nunca 100% — medido na tela", () => {
+    // Cancelar esvazia a fila, e a conta ingênua de "quantos saíram da fila"
+    // lia isso como "terminou". Quem foi cancelado não andou: saiu.
+    const c: ContagemDaCampanha = { ...ZERO, total: 5, elegiveis: 5, cancelados: 5 };
+    expect(progresso(c)).toBe(0);
+    // E a campanha que enviou metade antes de ser cancelada mostra a metade.
+    expect(progresso({ ...ZERO, total: 4, elegiveis: 4, enviados: 2, cancelados: 2 })).toBeCloseTo(0.5);
+  });
+
   it("nunca passa de 1 nem cai abaixo de 0, mesmo com contador fora de sincronia", () => {
     expect(progresso({ ...ZERO, total: 10, elegiveis: 10, pendentes: 30 })).toBe(0);
     expect(progresso({ ...ZERO, total: 10, elegiveis: 10 })).toBe(1);
