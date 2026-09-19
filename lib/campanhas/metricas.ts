@@ -89,6 +89,12 @@ export function taxasDaCampanha(c: ContagemDaCampanha): TaxasDaCampanha {
  * jamais alcança — a leitura errada seria "está travada", quando está pronta.
  */
 export function progresso(c: ContagemDaCampanha): number {
+  // Lista ainda não montada é 0%, nunca 100%. Medido na tela: o rascunho recém
+  // criado mostrava "Progresso 100%" antes de existir um destinatário sequer —
+  // a leitura errada é "já acabou", justamente em quem nunca começou.
+  if (c.total <= 0) return 0;
+  // Preparada e com ninguém elegível: não há o que andar, e a barra cheia é a
+  // leitura certa — a campanha terminou antes de começar.
   if (c.elegiveis <= 0) return 1;
   const restantes = c.pendentes + c.naFila + c.enviando;
   return Math.min(1, Math.max(0, (c.elegiveis - restantes) / c.elegiveis));

@@ -66,12 +66,19 @@ describe("progresso", () => {
     expect(progresso(c)).toBeCloseTo(0.75);
   });
 
-  it("campanha sem ninguém elegível está concluída, não travada em zero", () => {
+  it("campanha PREPARADA sem ninguém elegível está concluída, não travada em zero", () => {
     expect(progresso({ ...ZERO, total: 10, elegiveis: 0, excluidos: 10 })).toBe(1);
   });
 
+  it("lista ainda não montada é 0%, nunca 100% — medido na tela, no rascunho recém-criado", () => {
+    // O rascunho mostrava "Progresso 100%" antes de existir um destinatário
+    // sequer, e a leitura errada é "já acabou" em quem nunca começou.
+    expect(progresso({ ...ZERO })).toBe(0);
+    expect(progresso({ ...ZERO, total: 0, elegiveis: 0 })).toBe(0);
+  });
+
   it("nunca passa de 1 nem cai abaixo de 0, mesmo com contador fora de sincronia", () => {
-    expect(progresso({ ...ZERO, elegiveis: 10, pendentes: 30 })).toBe(0);
-    expect(progresso({ ...ZERO, elegiveis: 10 })).toBe(1);
+    expect(progresso({ ...ZERO, total: 10, elegiveis: 10, pendentes: 30 })).toBe(0);
+    expect(progresso({ ...ZERO, total: 10, elegiveis: 10 })).toBe(1);
   });
 });

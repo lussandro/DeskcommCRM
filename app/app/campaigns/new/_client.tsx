@@ -48,6 +48,7 @@ export function NovaCampanha() {
   const [janelaInicio, setJanelaInicio] = useState("");
   const [janelaFim, setJanelaFim] = useState("");
   const [tetoDiario, setTetoDiario] = useState("");
+  const [tetoHorario, setTetoHorario] = useState("");
 
   const filtro = useMemo(
     () => ({
@@ -83,6 +84,7 @@ export function NovaCampanha() {
       janela_inicio_hora: janelaInicio ? Number(janelaInicio) : null,
       janela_fim_hora: janelaFim ? Number(janelaFim) : null,
       teto_diario: tetoDiario ? Number(tetoDiario) : null,
+      teto_horario: tetoHorario ? Number(tetoHorario) : null,
     });
     router.push(`/app/campaigns/${criada.id}`);
   }
@@ -305,6 +307,16 @@ export function NovaCampanha() {
               min={1}
               value={tetoDiario}
               onChange={(e) => setTetoDiario(e.target.value)}
+            />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="teto-hora">{t("Máximo por hora")}</Label>
+            <Input
+              id="teto-hora"
+              type="number"
+              min={1}
+              value={tetoHorario}
+              onChange={(e) => setTetoHorario(e.target.value)}
             />
           </div>
           <div className="space-y-2">

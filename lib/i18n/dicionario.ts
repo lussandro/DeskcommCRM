@@ -9088,6 +9088,9 @@ export const DICIONARIO: Traducoes = {
   },
   "Ver quantas pessoas": { es: "Ver cuántas personas" },
   "Você pode usar:": { es: "Puede usar:" },
+  "Máximo por hora": { es: "Máximo por hora" },
+  "Ritmo salvo.": { es: "Ritmo guardado." },
+  "Salvar ritmo": { es: "Guardar ritmo" },
 };
 
 /**

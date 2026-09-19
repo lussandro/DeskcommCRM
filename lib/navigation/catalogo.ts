@@ -182,11 +182,16 @@ export const NAV_CATALOG = [
     icon: "Megaphone",
     group: "crm",
     section: "O dia a dia da venda",
-    // SEM `sidebar: true`, e a razão é medida, não estética: o sidebar do CRM
-    // tem quatro itens porque o quinto fez o menu rolar por 13px em 900px
-    // (e2e `navegacao.spec.ts`), e o conserto foi o hub. Campanha se cria de
-    // vez em quando e se acompanha pela própria tela — é uso de hub, não de
-    // toda hora. `tests/unit/navegacao-registry.test.ts` prende a lista exata.
+    // NO SIDEBAR, e a decisão foi paga em campo: deixada só no hub, a primeira
+    // pessoa a procurar a tela não a achou ("cadê a tela? não achei", 19/09/2026,
+    // com a feature no ar). Porta que existe e ninguém vê é o mesmo que porta
+    // nenhuma — é o defeito que o gate de navegação foi criado para impedir, na
+    // sua versão sutil.
+    //
+    // O custo conhecido é a dobra: o quinto item do CRM já fez o menu rolar 13px
+    // em 900px (e2e `navegacao.spec.ts`). Medido de novo nesta entrega, com
+    // ferramenta e não a olho — ver a nota no `.changes/`.
+    sidebar: true,
   },
   {
     href: "/app/contacts",

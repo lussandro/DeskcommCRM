@@ -21,13 +21,16 @@ import { EstadoDaCampanha } from "@/components/campanhas/EstadoDaCampanha";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
   useAcaoDeCampanha,
   useCampanha,
   useDestinatarios,
+  useEditarCampanha,
   useMetricasDaCampanha,
   type AcaoDeCampanha,
+  type CampanhaDetalhada,
 } from "@/hooks/campanhas/useCampanhas";
 import { useContactList } from "@/hooks/contacts/useContactList";
 import { useT } from "@/hooks/i18n/useT";
@@ -73,8 +76,11 @@ export function DetalheDaCampanha({ id }: { id: string }) {
   // servidor, que é quem recusa de verdade. Aqui é só para não oferecer o
   // impossível.
   const disponiveis: AcaoDeCampanha[] = [];
-  if (c.status === "draft") disponiveis.push("preparar");
-  if (c.status === "ready") disponiveis.push("testar", "iniciar");
+  // Cancelar também de rascunho e de preparada: desistir é decisão legítima
+  // antes do fim, e é mais segura quanto mais cedo. Ver a tabela em
+  // `lib/campanhas/maquina-de-estados.ts`, que diverge da Spec 12 §7.3 aqui.
+  if (c.status === "draft") disponiveis.push("preparar", "cancelar");
+  if (c.status === "ready") disponiveis.push("testar", "iniciar", "cancelar");
   if (c.status === "running") disponiveis.push("pausar", "cancelar");
   if (c.status === "scheduled") disponiveis.push("pausar", "cancelar");
   if (c.status === "paused") disponiveis.push("retomar", "cancelar");
@@ -193,6 +199,8 @@ export function DetalheDaCampanha({ id }: { id: string }) {
           </p>
         </Card>
       )}
+
+      <RitmoDaCampanha campanha={c} />
 
       <Card className="space-y-2 p-4">
         <h2 className="font-medium">{t("Mensagem")}</h2>
@@ -314,6 +322,99 @@ function TesteDaCampanha({
       </Button>
     </Card>
   );
+}
+
+/**
+ * O ritmo, editável com a campanha EM PÉ.
+ *
+ * A API aceita mexer no ritmo em qualquer estado vivo (só conteúdo e público
+ * ficam presos ao rascunho), e a tela precisa oferecer isso: quem vê a campanha
+ * andando rápido demais tem de poder desacelerá-la agora, não duplicá-la. Em
+ * branco herda o número — que é onde mora a proteção de envio da conexão.
+ */
+function RitmoDaCampanha({ campanha }: { campanha: CampanhaDetalhada }) {
+  const t = useT();
+  const editar = useEditarCampanha(campanha.id);
+  const [intervalo, setIntervalo] = useState(texto(campanha.intervalo_segundos));
+  const [tetoDia, setTetoDia] = useState(texto(campanha.teto_diario));
+  const [tetoHora, setTetoHora] = useState(texto(campanha.teto_horario));
+  const [inicio, setInicio] = useState(texto(campanha.janela_inicio_hora));
+  const [fim, setFim] = useState(texto(campanha.janela_fim_hora));
+
+  const encerrada = campanha.status === "completed" || campanha.status === "cancelled";
+  if (encerrada) return null;
+
+  return (
+    <Card className="space-y-4 p-4">
+      <div>
+        <h2 className="font-medium">{t("Ritmo desta campanha")}</h2>
+        <p className="text-sm text-muted-foreground">
+          {t(
+            "Em branco, vale o ritmo do número (Conexões › Proteção de envio). O que você puser aqui só pode deixar mais devagar.",
+          )}
+        </p>
+      </div>
+      <div className="grid gap-4 sm:grid-cols-2">
+        <CampoDeRitmo id="r-intervalo" rotulo={t("Intervalo mínimo entre mensagens (segundos)")} valor={intervalo} onChange={setIntervalo} />
+        <CampoDeRitmo id="r-dia" rotulo={t("Máximo por dia")} valor={tetoDia} onChange={setTetoDia} />
+        <CampoDeRitmo id="r-hora" rotulo={t("Máximo por hora")} valor={tetoHora} onChange={setTetoHora} />
+        <div />
+        <CampoDeRitmo id="r-inicio" rotulo={t("Enviar só a partir das (hora)")} valor={inicio} onChange={setInicio} />
+        <CampoDeRitmo id="r-fim" rotulo={t("Parar de enviar às (hora)")} valor={fim} onChange={setFim} />
+      </div>
+      <div className="flex items-center gap-3">
+        <Button
+          size="sm"
+          disabled={editar.isPending}
+          onClick={() =>
+            editar.mutate({
+              intervalo_segundos: numero(intervalo),
+              teto_diario: numero(tetoDia),
+              teto_horario: numero(tetoHora),
+              janela_inicio_hora: numero(inicio),
+              janela_fim_hora: numero(fim),
+            })
+          }
+        >
+          {editar.isPending ? t("Salvando…") : t("Salvar ritmo")}
+        </Button>
+        {editar.isSuccess && !editar.isPending && (
+          <span className="text-sm text-success-fg">{t("Ritmo salvo.")}</span>
+        )}
+      </div>
+    </Card>
+  );
+}
+
+function CampoDeRitmo({
+  id,
+  rotulo,
+  valor,
+  onChange,
+}: {
+  id: string;
+  rotulo: string;
+  valor: string;
+  onChange: (v: string) => void;
+}) {
+  return (
+    <div className="space-y-2">
+      <Label htmlFor={id}>{rotulo}</Label>
+      <Input id={id} type="number" min={0} value={valor} onChange={(e) => onChange(e.target.value)} />
+    </div>
+  );
+}
+
+/** `null` vira campo vazio — e campo vazio volta a ser `null`, que é "herda o número". */
+function texto(valor: number | null): string {
+  return valor === null || valor === undefined ? "" : String(valor);
+}
+
+function numero(valor: string): number | null {
+  const limpo = valor.trim();
+  if (limpo === "") return null;
+  const n = Number(limpo);
+  return Number.isFinite(n) ? n : null;
 }
 
 function Numero({ titulo, valor }: { titulo: string; valor: number }) {

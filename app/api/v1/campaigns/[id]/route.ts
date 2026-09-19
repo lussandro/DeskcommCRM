@@ -14,7 +14,7 @@ import type { NextRequest } from "next/server";
 import { fail, ok } from "@/lib/api/wrappers";
 import { requireRole } from "@/lib/auth/require-role";
 import { carregarCampanha } from "@/lib/campanhas/acoes";
-import { ehEditavel } from "@/lib/campanhas/maquina-de-estados";
+import { ehEditavel, ehTerminal } from "@/lib/campanhas/maquina-de-estados";
 import { editarCampanhaSchema } from "@/lib/campanhas/schemas";
 import { traduzir } from "@/lib/i18n/dicionario";
 import { requireSupportWrite } from "@/lib/impersonate/support";
@@ -83,10 +83,41 @@ export async function PATCH(
     return fail(carregada.codigo, t(carregada.mensagem), carregada.status, { requestId });
   }
   const campanha = carregada.campanha;
-  if (!ehEditavel(campanha.status)) {
+
+  // ═══ Duas classes de campo, duas permissões ═══
+  //
+  // CONTEÚDO e PÚBLICO só mudam em rascunho: depois da preparação cada
+  // destinatário carrega o texto congelado, e editar ali faria a tela mostrar um
+  // texto e a fila enviar outro.
+  //
+  // RITMO muda em qualquer estado vivo, e isso é deliberado: quem vê a campanha
+  // andando rápido demais precisa poder desacelerá-la AGORA. Obrigar a duplicar
+  // a campanha para trocar um intervalo é obrigar a recomeçar o envio — ou, pior,
+  // a deixar correndo do jeito errado porque recomeçar custa caro.
+  const CAMPOS_DE_RITMO = [
+    "intervalo_segundos",
+    "janela_inicio_hora",
+    "janela_fim_hora",
+    "teto_diario",
+    "teto_horario",
+  ] as const;
+  const mexeEmConteudo = Object.entries(entrada).some(
+    ([campo, valor]) =>
+      valor !== undefined && !(CAMPOS_DE_RITMO as readonly string[]).includes(campo),
+  );
+
+  if (ehTerminal(campanha.status)) {
     return fail(
       "campanha_nao_editavel",
-      t("Só um rascunho pode ser editado. Volte a campanha para rascunho para mudar a lista ou o texto."),
+      t("Campanha concluída ou cancelada não muda mais. Duplique para mandar de novo."),
+      409,
+      { requestId },
+    );
+  }
+  if (mexeEmConteudo && !ehEditavel(campanha.status)) {
+    return fail(
+      "campanha_nao_editavel",
+      t("Só um rascunho aceita mudar o texto e o público. O ritmo você pode ajustar a qualquer momento."),
       409,
       { requestId },
     );
@@ -143,12 +174,15 @@ export async function PATCH(
     }
   }
 
+  // O compare-and-set prende o estado que foi CONFERIDO acima — não o literal
+  // `draft`: ajuste de ritmo numa campanha `running` tem de passar, e continua
+  // recusando se o estado mudou entre a conferência e a escrita.
   const { data, error } = await supabase
     .from("campaigns")
     .update(mudanca)
     .eq("organization_id", authz.org.orgId)
     .eq("id", id)
-    .eq("status", "draft")
+    .eq("status", campanha.status)
     .select(COLUNAS)
     .maybeSingle();
   if (error) return fail("internal_error", error.message, 500, { requestId });

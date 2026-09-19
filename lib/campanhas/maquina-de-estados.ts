@@ -12,13 +12,27 @@
  */
 import { STATUS_DA_CAMPANHA, type StatusDaCampanha } from "./tipos";
 
+/**
+ * ⚠️ DIVERGE da tabela da Spec 12 §7.3 em UM ponto, e de propósito: `cancelled`
+ * também sai de `draft` e de `ready`.
+ *
+ * A spec só previa cancelar o que já está em execução (`scheduled`, `running`,
+ * `paused`). Medido na tela, em produção, em 19/09/2026: uma campanha preparada
+ * para 5 prospects reais, que NÃO devia sair, não tinha como ser descartada —
+ * nem cancelada, nem apagada. A única saída era iniciá-la para poder cancelá-la,
+ * que é o oposto do que se quer, ou deixá-la para sempre na lista, "pronta para
+ * iniciar", esperando o clique errado de alguém.
+ *
+ * Desistir é decisão legítima em qualquer ponto antes do fim, e é mais segura
+ * quanto mais cedo: cancelar um rascunho não desfaz nada, porque nada saiu.
+ */
 const PERMITIDO: Record<StatusDaCampanha, readonly StatusDaCampanha[]> = {
-  draft: ["preparing"],
+  draft: ["preparing", "cancelled"],
   preparing: ["ready", "failed"],
   // Voltar a `draft` é o caminho de editar: invalida o snapshot. Só vale
   // enquanto NADA saiu — quem já enviou não pode reescrever a mensagem que a
   // pessoa recebeu (o guarda de "já enviou" é do chamador, que vê os envios).
-  ready: ["draft", "scheduled", "running"],
+  ready: ["draft", "scheduled", "running", "cancelled"],
   scheduled: ["running", "paused", "cancelled"],
   running: ["paused", "completed", "cancelled", "failed"],
   paused: ["running", "scheduled", "cancelled"],

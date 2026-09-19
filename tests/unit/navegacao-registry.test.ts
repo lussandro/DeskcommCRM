@@ -115,6 +115,10 @@ describe("sidebarGroups", () => {
     const crm = sidebarGroups(true, null).find((g) => g.group.id === "crm");
     expect(crm?.items.map((i) => i.href)).toEqual([
       "/app/kanban",
+      // Campanhas (0264) é o QUINTO, e entrou depois de a ausência dela ser
+      // medida em campo: com a tela só no hub, quem foi procurá-la não a achou.
+      // A altura do menu em 900px foi medida de novo nesta entrega.
+      "/app/campaigns",
       "/app/contacts",
       "/app/companies",
       "/app/tasks",
@@ -153,8 +157,6 @@ describe("hubSections", () => {
     expect(secoes.map((s) => s.section)).toEqual(["O dia a dia da venda", "Preparar a venda"]);
     expect(secoes.flatMap((s) => s.items.map((i) => i.href))).toEqual([
       "/app/kanban",
-      // Campanhas (0264): fica no hub e NÃO no sidebar — ver a asserção exata
-      // do sidebar do CRM acima, que existe por causa da dobra em 900px.
       "/app/campaigns",
       "/app/contacts",
       "/app/companies",
