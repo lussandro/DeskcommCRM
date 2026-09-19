@@ -380,21 +380,14 @@ async function rodarUmaCampanha(
   // encontra a linha. É também a chave de idempotência do `sendMessageHandler` —
   // uma repetição depois de queda relê a linha em vez de mandar de novo.
   const messageId = randomUUID();
-  const { data: reservado } = await admin
-    .from("campaign_recipients")
-    .update({
-      status: "sending",
-      sending_at: agora.toISOString(),
-      last_attempt_at: agora.toISOString(),
-      attempt_count: 1,
-      message_id: messageId,
-    })
-    .eq("id", alvo.id)
-    .eq("status", "pending")
-    .select("id");
-  // Zero linhas: outra rodada ganhou a corrida por este destinatário.
-  if ((reservado ?? []).length === 0) {
-    return { enviadas: 0, pulados: 0, concluidas: 0, detalhe: "ja_reservado" };
+  const reserva = await reservarDestinatario(admin, alvo.id, agora);
+  if (!reserva.reservado) {
+    return {
+      enviadas: 0,
+      pulados: 0,
+      concluidas: 0,
+      detalhe: reserva.erro ? `erro_na_reserva:${reserva.erro.slice(0, 40)}` : "ja_reservado",
+    };
   }
 
   // O corpo é montado DEPOIS do ritmo: a saudação ("bom dia" × "boa tarde") tem
@@ -458,6 +451,11 @@ async function rodarUmaCampanha(
         status: falhou ? "failed" : "sent",
         sent_at: falhou ? null : agora.toISOString(),
         last_error_code: falhou ? "send_failed" : null,
+        // O `message_id` só pode ser gravado AQUI: a coluna tem FK para
+        // `messages`, e a linha da mensagem só existe depois do envio. Gravá-lo
+        // antes — que era o desenho original, para o trigger de ack sempre achar
+        // o destinatário — viola a FK e a reserva falha inteira.
+        message_id: (mensagem as { id?: string }).id ?? messageId,
       })
       .eq("id", alvo.id)
       .eq("status", "sending");
@@ -482,6 +480,45 @@ async function rodarUmaCampanha(
       .eq("status", "sending");
     return { enviadas: 0, pulados: 0, concluidas: 0, detalhe: "falhou" };
   }
+}
+
+/**
+ * Reserva o destinatário para ESTA rodada: `pending` → `sending`, em
+ * compare-and-set.
+ *
+ * ═══ Por que o erro é devolvido, e não engolido ═══
+ *
+ * A primeira versão lia só o `data` do update. Qualquer falha dura — e houve
+ * uma, a FK de `message_id` — virava "zero linhas", que o chamador lia como
+ * "outro worker ganhou a corrida". Resultado medido em produção: a campanha
+ * ficava `running` para sempre, o destinatário `pending` com zero tentativas, e
+ * o cron respondia `ja_reservado` a cada minuto. Um erro disfarçado de
+ * concorrência é a pior espécie: ele descreve um sistema saudável.
+ */
+export async function reservarDestinatario(
+  admin: SupabaseClient,
+  destinatarioId: string,
+  agora: Date,
+): Promise<{ reservado: boolean; erro?: string }> {
+  const { data, error } = await admin
+    .from("campaign_recipients")
+    .update({
+      status: "sending",
+      sending_at: agora.toISOString(),
+      last_attempt_at: agora.toISOString(),
+      attempt_count: 1,
+    })
+    .eq("id", destinatarioId)
+    .eq("status", "pending")
+    .select("id");
+  if (error) {
+    logger.warn("[campanha] reserva do destinatário falhou", {
+      destinatario: destinatarioId,
+      motivo: error.message,
+    });
+    return { reservado: false, erro: error.message };
+  }
+  return { reservado: (data ?? []).length > 0 };
 }
 
 /**

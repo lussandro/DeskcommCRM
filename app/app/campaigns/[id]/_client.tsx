@@ -142,7 +142,7 @@ export function DetalheDaCampanha({ id }: { id: string }) {
         <Card className="space-y-3 border-warning-fg p-4">
           <p className="text-sm">
             {confirmando === "iniciar"
-              ? `${t("Começar a enviar para")} ${c.snapshot_eligible} ${t("pessoas? O envio segue o ritmo do número e pode levar horas.")}`
+              ? `${t("Começar a enviar para")} ${c.snapshot_eligible} ${c.snapshot_eligible === 1 ? t("pessoa?") : t("pessoas?")} ${t("O envio segue o ritmo do número e pode levar horas.")}`
               : t("Cancelar é definitivo: quem ainda não recebeu não recebe mais, e a campanha não volta a rodar.")}
           </p>
           <div className="flex gap-2">

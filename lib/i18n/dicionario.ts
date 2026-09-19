@@ -9102,6 +9102,11 @@ export const DICIONARIO: Traducoes = {
     es: "El ritmo se ajusta en la propia pantalla de la campaña, sin descartar nada.",
   },
   "Voltar para a campanha": { es: "Volver a la campaña" },
+  "pessoa?": { es: "persona?" },
+  "pessoas?": { es: "personas?" },
+  "O envio segue o ritmo do número e pode levar horas.": {
+    es: "El envío sigue el ritmo del número y puede llevar horas.",
+  },
   "A cada envio, a campanha usa o número com mais folga no teto do dia — e o número que a pessoa já conhece, quando ela já conversou com algum deles.": {
     es: "En cada envío, la campaña usa el número con más margen en el tope del día — y el número que la persona ya conoce, cuando ya conversó con alguno de ellos.",
   },
