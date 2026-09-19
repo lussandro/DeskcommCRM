@@ -25,6 +25,7 @@ import {
 } from "@/lib/campanhas/schemas";
 import { traduzir } from "@/lib/i18n/dicionario";
 import { requireSupportWrite } from "@/lib/impersonate/support";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 
 export const dynamic = "force-dynamic";
@@ -101,7 +102,13 @@ export async function POST(req: NextRequest): Promise<Response> {
   }
   const entrada = parsed.data;
 
-  const supabase = await createClient();
+  // Client ADMIN na escrita, e não o da sessão: a migration 0264 concede ao
+  // papel `authenticated` apenas SELECT (a tela lê; só o servidor escreve), e o
+  // PostgREST com o JWT do usuário recebe "permission denied for table
+  // campaigns" — medido na VPS em 19/09/2026, pela tela. O isolamento não se
+  // perde: `org.orgId` vem do `requireRole()` acima, nunca do corpo, e entra
+  // explicitamente em toda consulta abaixo.
+  const supabase = createAdminClient();
   // A conexão é conferida CONTRA A ORGANIZAÇÃO: a FK composta da 0264 recusaria
   // o número de outro tenant, mas a recusa do banco chegaria como erro genérico.
   const { data: canal } = await supabase

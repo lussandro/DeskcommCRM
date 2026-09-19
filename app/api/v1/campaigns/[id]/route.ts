@@ -18,6 +18,7 @@ import { ehEditavel } from "@/lib/campanhas/maquina-de-estados";
 import { editarCampanhaSchema } from "@/lib/campanhas/schemas";
 import { traduzir } from "@/lib/i18n/dicionario";
 import { requireSupportWrite } from "@/lib/impersonate/support";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 
 export const dynamic = "force-dynamic";
@@ -73,7 +74,10 @@ export async function PATCH(
   }
   const entrada = parsed.data;
 
-  const supabase = await createClient();
+  // Client ADMIN na escrita (ver o comentário em `campaigns/route.ts`): o papel
+  // `authenticated` só tem SELECT. O GET acima segue na sessão de propósito —
+  // ali a RLS é a segunda tranca, de graça.
+  const supabase = createAdminClient();
   const carregada = await carregarCampanha(supabase, authz.org.orgId, id);
   if (!carregada.ok) {
     return fail(carregada.codigo, t(carregada.mensagem), carregada.status, { requestId });
