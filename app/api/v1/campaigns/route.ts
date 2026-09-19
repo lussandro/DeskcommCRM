@@ -33,7 +33,8 @@ export const dynamic = "force-dynamic";
 
 const COLUNAS_DA_LISTA =
   "id, name, status, channel_session_id, snapshot_total, snapshot_eligible, snapshot_excluded, " +
-  "scheduled_at, started_at, completed_at, cancelled_at, created_at, created_by";
+  "scheduled_at, started_at, completed_at, cancelled_at, created_at, created_by, " +
+  "pipeline_id, stage_id, agent_id";
 
 export async function GET(req: NextRequest): Promise<Response> {
   const requestId = randomUUID();
@@ -143,6 +144,9 @@ export async function POST(req: NextRequest): Promise<Response> {
       janela_fim_hora: entrada.janela_fim_hora ?? null,
       teto_diario: entrada.teto_diario ?? null,
       teto_horario: entrada.teto_horario ?? null,
+      pipeline_id: entrada.pipeline_id ?? null,
+      stage_id: entrada.stage_id ?? null,
+      agent_id: entrada.agent_id ?? null,
       created_by: user.id,
     })
     .select(COLUNAS_DA_LISTA)

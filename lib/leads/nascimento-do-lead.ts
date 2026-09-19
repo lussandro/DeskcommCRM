@@ -40,6 +40,7 @@
  * aparece neste arquivo.
  */
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { marcaDaOrigem, origemDeCampanhaDaConversa } from "@/lib/campanhas/origem-do-lead";
 
 import { logger } from "@/lib/logger";
 
@@ -180,6 +181,39 @@ export async function funilDeEntrada(
 }
 
 /**
+ * O destino quando a CAMPANHA declara o funil.
+ *
+ * Etapa declarada vale como está. Sem etapa, cai na primeira do funil — a mesma
+ * régua de `funilDeEntrada`, e pelo mesmo motivo: um card não nasce fechado.
+ *
+ * O funil da campanha pode ter sido arquivado depois de ela ser criada; nesse
+ * caso não há etapa viável e o card não nasce ali. Devolver `sem_etapa` é
+ * melhor que cair calado no funil do número, porque a campanha DISSE onde
+ * queria — e o silêncio faria os cards dela aparecerem noutro lugar.
+ */
+async function destinoDaCampanha(
+  db: SupabaseClient,
+  organizationId: string,
+  pipelineId: string,
+  stageId: string | null,
+): Promise<{ pipelineId: string; stageId: string } | { erro: MotivoSemLead }> {
+  if (stageId) return { pipelineId, stageId };
+  const { data: etapa } = await db
+    .from("crm_stages")
+    .select("id")
+    .eq("organization_id", organizationId)
+    .eq("pipeline_id", pipelineId)
+    .eq("is_archived", false)
+    .eq("is_won", false)
+    .eq("is_lost", false)
+    .order("position", { ascending: true })
+    .limit(1)
+    .maybeSingle();
+  if (!etapa) return { erro: "sem_etapa" };
+  return { pipelineId, stageId: (etapa as { id: string }).id };
+}
+
+/**
  * Garante que a conversa tenha um lead. Idempotente por contato: chamar de novo
  * não cria um segundo card.
  *
@@ -219,7 +253,16 @@ export async function garantirLeadDaConversa(
   if (existente) return { criado: false, motivo: "ja_existe" };
 
   // 3 · onde entra
-  const destino = await funilDeEntrada(db, organizationId, dados.channelSessionId);
+  //
+  // A CAMPANHA ganha do número quando declara funil (migration 0267): é a
+  // escolha mais específica, e quem montou a campanha sabe onde quer medir o
+  // resultado dela. Campanha sem funil declarado, ou conversa que não nasceu de
+  // campanha, seguem a regra da 0262 sem diferença nenhuma.
+  const origemDaCampanha = await origemDeCampanhaDaConversa(db, organizationId, conversationId);
+  const destino =
+    origemDaCampanha?.pipelineId
+      ? await destinoDaCampanha(db, organizationId, origemDaCampanha.pipelineId, origemDaCampanha.stageId)
+      : await funilDeEntrada(db, organizationId, dados.channelSessionId);
   if ("erro" in destino) return { criado: false, motivo: destino.erro };
 
   // 4 · o card.
@@ -258,6 +301,11 @@ export async function garantirLeadDaConversa(
   // isso reescreva a origem deste.
   const rotuloDeAnuncio = contato?.source ? ROTULO_DE_ANUNCIO[contato.source] : undefined;
 
+  // A origem da CAMPANHA vence a do anúncio: esta conversa nasceu porque NÓS
+  // falamos com a pessoa. O anúncio que a trouxe meses atrás continua no
+  // contato; o lead copia o que é verdade sobre o próprio nascimento.
+  const marca = origemDaCampanha ? marcaDaOrigem(origemDaCampanha) : null;
+
   // ⚠️ PELA RPC, E NÃO POR INSERT DIRETO — a checagem do passo 2 não basta.
   //
   // Entre aquele `select` e este insert não havia nada, e duas mensagens que
@@ -276,8 +324,12 @@ export async function garantirLeadDaConversa(
     p_pipeline: destino.pipelineId,
     p_stage: destino.stageId,
     p_title: titulo,
-    p_source: rotuloDeAnuncio ? contato!.source : "whatsapp",
-    p_source_metadata: rotuloDeAnuncio ? (contato!.source_metadata ?? {}) : {},
+    p_source: marca ? marca.source : rotuloDeAnuncio ? contato!.source : "whatsapp",
+    p_source_metadata: marca
+      ? marca.source_metadata
+      : rotuloDeAnuncio
+        ? (contato!.source_metadata ?? {})
+        : {},
     // O ponto ao lado do título só acende se a organização cadastrar este
     // rótulo em `crm_pipelines.settings.canonical_tags` (Configurações do
     // funil) — a tag sempre entra; o destaque visual é opt-in do operador.

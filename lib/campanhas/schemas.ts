@@ -37,6 +37,13 @@ const baseDaCampanha = {
    * que é como toda campanha existente se comporta.
    */
   channel_session_ids: z.array(z.string().uuid()).max(10).optional(),
+  /**
+   * Onde o card de quem responde nasce, e quem atende (migration 0267).
+   * `null` devolve a decisão ao número, que é o comportamento de sempre.
+   */
+  pipeline_id: z.string().uuid().nullable().optional(),
+  stage_id: z.string().uuid().nullable().optional(),
+  agent_id: z.string().uuid().nullable().optional(),
 };
 
 export const criarCampanhaSchema = z
@@ -51,6 +58,10 @@ export const criarCampanhaSchema = z
       path: ["lia_ref"],
     },
   )
+  .refine((c) => c.stage_id == null || c.pipeline_id != null, {
+    message: "Escolha o funil antes da etapa — etapa sem funil seria um card sem coluna.",
+    path: ["stage_id"],
+  })
   .refine(
     (c) =>
       c.janela_inicio_hora == null ||
@@ -70,6 +81,9 @@ export const editarCampanhaSchema = z
     lia_ref: baseDaCampanha.lia_ref,
     audience_filter: filtroDeAudienciaSchema.optional(),
     channel_session_ids: baseDaCampanha.channel_session_ids,
+    pipeline_id: baseDaCampanha.pipeline_id,
+    stage_id: baseDaCampanha.stage_id,
+    agent_id: baseDaCampanha.agent_id,
   })
   .merge(ritmoSchema);
 

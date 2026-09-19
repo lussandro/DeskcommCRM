@@ -74,15 +74,68 @@ function makeDeps(overrides: {
   loadPublishedAgentConfigById?: ReturnType<typeof vi.fn>;
   loadPublishedAgentConfig?: ReturnType<typeof vi.fn>;
   classifyIntent?: ReturnType<typeof vi.fn>;
+  agenteDaCampanha?: ReturnType<typeof vi.fn>;
 }) {
   return {
     log: { info: vi.fn(), warn: vi.fn(), error: vi.fn() },
+    // Por padrão a conversa NÃO nasceu de campanha — é o caso de quase todo
+    // turno, e deixar o degrau 0 sempre ligado nos testes antigos esconderia a
+    // régua que eles medem.
+    agenteDaCampanha: overrides.agenteDaCampanha ?? vi.fn().mockResolvedValue(null),
     loadActiveRouter: overrides.loadActiveRouter ?? vi.fn(),
     loadPublishedAgentConfigById: overrides.loadPublishedAgentConfigById ?? vi.fn(),
     loadPublishedAgentConfig: overrides.loadPublishedAgentConfig ?? vi.fn(),
     classifyIntent: overrides.classifyIntent ?? vi.fn(),
   } as never;
 }
+
+describe('resolveTurnAgent — degrau da campanha (migration 0267)', () => {
+  it('conversa nascida de campanha com agente: ele atende, e o roteador nem é consultado', async () => {
+    // O roteador é do NÚMERO e classifica assunto. A campanha sabe algo que o
+    // classificador não infere: que a pessoa está respondendo a uma abordagem,
+    // e que quem aborda segue outro roteiro.
+    const loadActiveRouter = vi.fn();
+    const loadPublishedAgentConfigById = idAwareLoader();
+    const out = await resolveTurnAgent({} as never, {} as never,
+      { ...baseInput, signal: 'quem é você?', stickyAgentId: 'agent-sticky', stickyIntent: 'suporte' },
+      makeDeps({
+        loadActiveRouter,
+        loadPublishedAgentConfigById,
+        agenteDaCampanha: vi.fn().mockResolvedValue('agent-prospeccao'),
+      }));
+    expect(out.outcome).toBe('campanha');
+    expect(out.config?.agentId).toBe('agent-prospeccao');
+    // Vence até a stickiness: quem responde uma abordagem está no assunto DELA.
+    expect(loadActiveRouter).not.toHaveBeenCalled();
+  });
+
+  it('agente da campanha SEM versão publicada não cala o atendimento: cai na régua do número', async () => {
+    // Falhar fechado aqui deixaria a pessoa sem resposta por causa de uma
+    // configuração incompleta — pior que atender pelo agente errado.
+    const loadActiveRouter = vi.fn().mockResolvedValue(null);
+    const loadPublishedAgentConfig = vi.fn().mockResolvedValue(fakeConfig('agent-sessao'));
+    const deps = makeDeps({
+      loadActiveRouter,
+      loadPublishedAgentConfig,
+      loadPublishedAgentConfigById: vi.fn().mockResolvedValue(null),
+      agenteDaCampanha: vi.fn().mockResolvedValue('agent-sem-versao'),
+    });
+    const out = await resolveTurnAgent({} as never, {} as never,
+      { ...baseInput, signal: 'oi', stickyAgentId: null, stickyIntent: null }, deps);
+    expect(out.outcome).toBe('no_router');
+    expect(out.config?.agentId).toBe('agent-sessao');
+    expect((deps as unknown as { log: { warn: ReturnType<typeof vi.fn> } }).log.warn).toHaveBeenCalled();
+  });
+
+  it('conversa que não nasceu de campanha segue a régua de sempre', async () => {
+    const loadActiveRouter = vi.fn().mockResolvedValue(null);
+    const loadPublishedAgentConfig = vi.fn().mockResolvedValue(fakeConfig('agent-sessao'));
+    const out = await resolveTurnAgent({} as never, {} as never,
+      { ...baseInput, signal: 'oi', stickyAgentId: null, stickyIntent: null },
+      makeDeps({ loadActiveRouter, loadPublishedAgentConfig }));
+    expect(out.outcome).toBe('no_router');
+  });
+});
 
 describe('resolveTurnAgent', () => {
   it('1. canal sem router → no_router, usa loadPublishedAgentConfig por sessão', async () => {

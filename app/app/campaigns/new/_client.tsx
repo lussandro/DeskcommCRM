@@ -26,6 +26,11 @@ import { Textarea } from "@/components/ui/textarea";
 import { useCriarCampanha, usePreviaDaAudiencia } from "@/hooks/campanhas/useCampanhas";
 import { channelLabel, useChannelSessions } from "@/hooks/channels/useChannelSessions";
 import { useT } from "@/hooks/i18n/useT";
+import {
+  useAgentesPublicados,
+  useEtapas,
+  useFunis,
+} from "@/hooks/campanhas/useDestinoDaCampanha";
 import { VARIAVEIS_DA_CAMPANHA, DESCRICAO_DA_VARIAVEL } from "@/lib/campanhas/renderizador";
 
 export function NovaCampanha() {
@@ -50,20 +55,34 @@ export function NovaCampanha() {
   const [tetoDiario, setTetoDiario] = useState("");
   const [tetoHorario, setTetoHorario] = useState("");
   const [extras, setExtras] = useState<string[]>([]);
+  const [funil, setFunil] = useState("");
+  const [etapa, setEtapa] = useState("");
+  const [agente, setAgente] = useState("");
+  const [funilDoPublico, setFunilDoPublico] = useState("");
+  const [etapaDoPublico, setEtapaDoPublico] = useState("");
+
+  const funis = useFunis();
+  const etapas = useEtapas(funil || null);
+  const etapasDoPublico = useEtapas(funilDoPublico || null);
+  const agentes = useAgentesPublicados();
 
   const filtro = useMemo(
     () => ({
       com_alguma_tag: listar(comAlgumaTag),
       sem_tags: listar(semTags),
       sem_interacao_ha_dias: semInteracao ? Number(semInteracao) : null,
+      funis: funilDoPublico ? [funilDoPublico] : [],
+      etapas: etapaDoPublico ? [etapaDoPublico] : [],
       limite: Number(limite) || 100,
     }),
-    [comAlgumaTag, semTags, semInteracao, limite],
+    [comAlgumaTag, semTags, semInteracao, funilDoPublico, etapaDoPublico, limite],
   );
 
   const temCriterio =
     filtro.com_alguma_tag.length > 0 ||
     filtro.sem_tags.length > 0 ||
+    filtro.funis.length > 0 ||
+    filtro.etapas.length > 0 ||
     filtro.sem_interacao_ha_dias !== null;
 
   const podeSalvar =
@@ -87,6 +106,9 @@ export function NovaCampanha() {
       teto_diario: tetoDiario ? Number(tetoDiario) : null,
       teto_horario: tetoHorario ? Number(tetoHorario) : null,
       channel_session_ids: extras,
+      pipeline_id: funil || null,
+      stage_id: etapa || null,
+      agent_id: agente || null,
     });
     router.push(`/app/campaigns/${criada.id}`);
   }
@@ -242,6 +264,42 @@ export function NovaCampanha() {
             />
           </div>
           <div className="space-y-2">
+            <Label htmlFor="pub-funil">{t("Com negócio no funil")}</Label>
+            <select
+              id="pub-funil"
+              className="h-9 w-full rounded-md border border-border bg-surface px-2 text-sm"
+              value={funilDoPublico}
+              onChange={(e) => {
+                setFunilDoPublico(e.target.value);
+                setEtapaDoPublico("");
+              }}
+            >
+              <option value="">{t("Qualquer um")}</option>
+              {(funis.data ?? []).map((f) => (
+                <option key={f.id} value={f.id}>
+                  {f.name}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="pub-etapa">{t("Na etapa")}</Label>
+            <select
+              id="pub-etapa"
+              className="h-9 w-full rounded-md border border-border bg-surface px-2 text-sm"
+              value={etapaDoPublico}
+              onChange={(e) => setEtapaDoPublico(e.target.value)}
+              disabled={!funilDoPublico}
+            >
+              <option value="">{t("Qualquer etapa")}</option>
+              {(etapasDoPublico.data ?? []).map((e) => (
+                <option key={e.id} value={e.id}>
+                  {e.name}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div className="space-y-2">
             <Label htmlFor="limite">{t("Máximo de contatos nesta campanha")}</Label>
             <Input
               id="limite"
@@ -313,6 +371,72 @@ export function NovaCampanha() {
             {t(
               "Quem não tiver o dado que a mensagem usa fica de fora, com o motivo na lista — mensagem com buraco não sai.",
             )}
+          </p>
+        </div>
+      </Card>
+
+      <Card className="space-y-4 p-4">
+        <h2 className="font-medium">{t("Quem responder")}</h2>
+        <p className="text-sm text-muted-foreground">
+          {t("Em branco, tudo segue como hoje: o card nasce no funil do número e quem atende é o agente publicado nele.")}
+        </p>
+        <div className="grid gap-4 sm:grid-cols-2">
+          <div className="space-y-2">
+            <Label htmlFor="funil">{t("Vira card no funil")}</Label>
+            <select
+              id="funil"
+              className="h-9 w-full rounded-md border border-border bg-surface px-2 text-sm"
+              value={funil}
+              onChange={(e) => {
+                setFunil(e.target.value);
+                setEtapa("");
+              }}
+            >
+              <option value="">{t("Funil do número (padrão)")}</option>
+              {(funis.data ?? []).map((f) => (
+                <option key={f.id} value={f.id}>
+                  {f.name}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="etapa">{t("Na etapa")}</Label>
+            <select
+              id="etapa"
+              className="h-9 w-full rounded-md border border-border bg-surface px-2 text-sm"
+              value={etapa}
+              onChange={(e) => setEtapa(e.target.value)}
+              disabled={!funil}
+            >
+              <option value="">{t("Primeira etapa do funil")}</option>
+              {(etapas.data ?? [])
+                .filter((e) => !e.is_won && !e.is_lost)
+                .map((e) => (
+                  <option key={e.id} value={e.id}>
+                    {e.name}
+                  </option>
+                ))}
+            </select>
+          </div>
+        </div>
+        <div className="space-y-2">
+          <Label htmlFor="agente">{t("Quem atende a resposta")}</Label>
+          <select
+            id="agente"
+            className="h-9 w-full rounded-md border border-border bg-surface px-2 text-sm"
+            value={agente}
+            onChange={(e) => setAgente(e.target.value)}
+          >
+            <option value="">{t("Agente publicado no número (padrão)")}</option>
+            {(agentes.data ?? []).map((a) => (
+              <option key={a.id} value={a.id}>
+                {a.name}
+              </option>
+            ))}
+          </select>
+          <p className="text-sm text-muted-foreground">
+            {t("Vale só para conversas que nascem desta campanha: quem já falava com você continua com quem o atendia. Quem aborda precisa saber dizer de onde veio o contato — essa resposta tem de estar no material do agente escolhido.")}
           </p>
         </div>
       </Card>

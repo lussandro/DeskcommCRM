@@ -32,6 +32,7 @@ import {
   type AcaoDeCampanha,
   type CampanhaDetalhada,
 } from "@/hooks/campanhas/useCampanhas";
+import { useAgentesPublicados, useFunis } from "@/hooks/campanhas/useDestinoDaCampanha";
 import { channelLabel, useChannelSessions } from "@/hooks/channels/useChannelSessions";
 import { useContactList } from "@/hooks/contacts/useContactList";
 import { useT } from "@/hooks/i18n/useT";
@@ -206,6 +207,8 @@ export function DetalheDaCampanha({ id }: { id: string }) {
         </Card>
       )}
 
+      <DestinoDaCampanha campanha={c} />
+
       <NumerosDaCampanha campanha={c} />
 
       <RitmoDaCampanha campanha={c} />
@@ -328,6 +331,39 @@ function TesteDaCampanha({
       <Button variant="outline" size="sm" onClick={onCancelar}>
         {t("Fechar")}
       </Button>
+    </Card>
+  );
+}
+
+/**
+ * O que acontece com quem responde: em qual funil o card nasce e quem atende.
+ *
+ * Só aparece quando a campanha DECLAROU algo. Em branco, o comportamento é o de
+ * sempre (funil e agente do número) e um card dizendo "padrão" seria ruído numa
+ * tela que já tem muita informação.
+ */
+function DestinoDaCampanha({ campanha }: { campanha: CampanhaDetalhada }) {
+  const t = useT();
+  const funis = useFunis();
+  const agentes = useAgentesPublicados();
+  if (!campanha.pipeline_id && !campanha.agent_id) return null;
+
+  const funil = (funis.data ?? []).find((f) => f.id === campanha.pipeline_id);
+  const agente = (agentes.data ?? []).find((a) => a.id === campanha.agent_id);
+
+  return (
+    <Card className="space-y-2 p-4">
+      <h2 className="font-medium">{t("Quem responder")}</h2>
+      {campanha.pipeline_id && (
+        <p className="text-sm">
+          {t("Vira card no funil")}: <strong>{funil?.name ?? t("funil removido")}</strong>
+        </p>
+      )}
+      {campanha.agent_id && (
+        <p className="text-sm">
+          {t("Quem atende a resposta")}: <strong>{agente?.name ?? t("agente indisponível")}</strong>
+        </p>
+      )}
     </Card>
   );
 }

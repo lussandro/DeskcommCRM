@@ -29,6 +29,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { useCampanha, useEditarCampanha, usePreviaDaAudiencia } from "@/hooks/campanhas/useCampanhas";
 import { channelLabel, useChannelSessions } from "@/hooks/channels/useChannelSessions";
 import { useT } from "@/hooks/i18n/useT";
+import { useAgentesPublicados, useEtapas, useFunis } from "@/hooks/campanhas/useDestinoDaCampanha";
 import { DESCRICAO_DA_VARIAVEL, VARIAVEIS_DA_CAMPANHA } from "@/lib/campanhas/renderizador";
 
 export function EditarCampanha({ id }: { id: string }) {
@@ -48,7 +49,14 @@ export function EditarCampanha({ id }: { id: string }) {
   const [semInteracao, setSemInteracao] = useState("");
   const [limite, setLimite] = useState("100");
   const [texto, setTexto] = useState("");
+  const [funil, setFunil] = useState("");
+  const [etapa, setEtapa] = useState("");
+  const [agente, setAgente] = useState("");
   const [carregado, setCarregado] = useState(false);
+
+  const funis = useFunis();
+  const etapas = useEtapas(funil || null);
+  const agentes = useAgentesPublicados();
 
   // Uma carga só: depois disso quem manda é o que a pessoa está digitando. Sem
   // a trava, o `refetchInterval` do detalhe apagaria a edição em andamento.
@@ -65,6 +73,9 @@ export function EditarCampanha({ id }: { id: string }) {
     setSemInteracao(f.sem_interacao_ha_dias == null ? "" : String(f.sem_interacao_ha_dias));
     setLimite(f.limite == null ? "100" : String(f.limite));
     setTexto(c.message_body ?? "");
+    setFunil(c.pipeline_id ?? "");
+    setEtapa(c.stage_id ?? "");
+    setAgente(c.agent_id ?? "");
     setCarregado(true);
   }, [campanha.data, carregado]);
 
@@ -251,6 +262,69 @@ export function EditarCampanha({ id }: { id: string }) {
       </Card>
 
       <Card className="space-y-4 p-4">
+        <h2 className="font-medium">{t("Quem responder")}</h2>
+        <p className="text-sm text-muted-foreground">
+          {t("Em branco, tudo segue como hoje: o card nasce no funil do número e quem atende é o agente publicado nele.")}
+        </p>
+        <div className="grid gap-4 sm:grid-cols-2">
+          <div className="space-y-2">
+            <Label htmlFor="e-funil">{t("Vira card no funil")}</Label>
+            <select
+              id="e-funil"
+              className="h-9 w-full rounded-md border border-border bg-surface px-2 text-sm"
+              value={funil}
+              onChange={(ev) => {
+                setFunil(ev.target.value);
+                setEtapa("");
+              }}
+            >
+              <option value="">{t("Funil do número (padrão)")}</option>
+              {(funis.data ?? []).map((f) => (
+                <option key={f.id} value={f.id}>
+                  {f.name}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="e-etapa">{t("Na etapa")}</Label>
+            <select
+              id="e-etapa"
+              className="h-9 w-full rounded-md border border-border bg-surface px-2 text-sm"
+              value={etapa}
+              onChange={(ev) => setEtapa(ev.target.value)}
+              disabled={!funil}
+            >
+              <option value="">{t("Primeira etapa do funil")}</option>
+              {(etapas.data ?? [])
+                .filter((x) => !x.is_won && !x.is_lost)
+                .map((x) => (
+                  <option key={x.id} value={x.id}>
+                    {x.name}
+                  </option>
+                ))}
+            </select>
+          </div>
+        </div>
+        <div className="space-y-2">
+          <Label htmlFor="e-agente">{t("Quem atende a resposta")}</Label>
+          <select
+            id="e-agente"
+            className="h-9 w-full rounded-md border border-border bg-surface px-2 text-sm"
+            value={agente}
+            onChange={(ev) => setAgente(ev.target.value)}
+          >
+            <option value="">{t("Agente publicado no número (padrão)")}</option>
+            {(agentes.data ?? []).map((a) => (
+              <option key={a.id} value={a.id}>
+                {a.name}
+              </option>
+            ))}
+          </select>
+        </div>
+      </Card>
+
+      <Card className="space-y-4 p-4">
         <h2 className="font-medium">{t("Mensagem")}</h2>
         <Textarea
           rows={6}
@@ -288,6 +362,9 @@ export function EditarCampanha({ id }: { id: string }) {
               base_legal: baseLegal,
               lia_ref: liaRef.trim() || null,
               audience_filter: filtro,
+              pipeline_id: funil || null,
+              stage_id: etapa || null,
+              agent_id: agente || null,
             });
             router.push(`/app/campaigns/${id}`);
           }}
