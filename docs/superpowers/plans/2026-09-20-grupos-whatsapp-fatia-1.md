@@ -1353,6 +1353,142 @@ Testes usam payload capturado em produção."
 
 ---
 
+### Task 5b: Descoberta e cadastro de grupo
+
+**Files:**
+- Create: `app/api/v1/groups/disponiveis/route.ts`
+- Create: `app/api/v1/groups/cadastrar/route.ts`
+- Test: `tests/unit/api-grupos-cadastro-contrato.test.ts`
+
+**Interfaces:**
+- Consumes: `listarGrupos`, `lerParticipantes` (Task 3); tabelas (Task 1)
+- Produces: `GET /api/v1/groups/disponiveis` → `{ data: [{ wa_group_id, subject, size, somos_admin, ja_cadastrado }] }`; `POST /api/v1/groups/cadastrar` `{ wa_group_id, channel_session_id }` → `{ data: { id } }`
+
+> **Por que esta task existe:** o `sincronizarGrupo` da Task 5 só ATUALIZA
+> grupo já cadastrado (`if (!existente) return null`), e nenhuma outra task
+> insere linha em `whatsapp_groups`. Sem esta, o painel da Task 8 nasce
+> permanentemente vazio. A spec §6.3 já previa a carga inicial ("ao ligar o
+> módulo num grupo, UMA chamada a `GET /groups` + `participants/v2`"); ela
+> só não tinha virado task.
+
+- [ ] **Step 1: Escrever o teste de contrato (vai falhar)**
+
+Criar `tests/unit/api-grupos-cadastro-contrato.test.ts`:
+
+```ts
+import { describe, expect, it } from "vitest";
+import { readFileSync } from "node:fs";
+
+const ROTAS = [
+  "app/api/v1/groups/disponiveis/route.ts",
+  "app/api/v1/groups/cadastrar/route.ts",
+];
+
+describe("cadastro de grupo — doutrina", () => {
+  it("usa os wrappers ok/fail", () => {
+    for (const r of ROTAS) {
+      expect(readFileSync(r, "utf-8"), r).toMatch(/from "@\/lib\/api\/wrappers"/);
+    }
+  });
+
+  it("não lê organization_id do body", () => {
+    for (const r of ROTAS) {
+      expect(readFileSync(r, "utf-8"), r).not.toMatch(/body\.organization_id/);
+    }
+  });
+
+  it("o cadastro valida o corpo com Zod", () => {
+    const src = readFileSync("app/api/v1/groups/cadastrar/route.ts", "utf-8");
+    expect(src).toMatch(/z\.object/);
+    expect(src).toMatch(/wa_group_id/);
+  });
+
+  it("a carga inicial usa listarGrupos/lerParticipantes, não polling em loop", () => {
+    const src = readFileSync("app/api/v1/groups/cadastrar/route.ts", "utf-8");
+    expect(src).toMatch(/lerParticipantes|listarGrupos/);
+    expect(src).not.toMatch(/setInterval|groups\/refresh/);
+  });
+
+  it("nenhuma rota deixa console.log", () => {
+    for (const r of ROTAS) {
+      expect(readFileSync(r, "utf-8"), r).not.toMatch(/console\.log/);
+    }
+  });
+});
+```
+
+- [ ] **Step 2: Rodar e ver falhar**
+
+```bash
+nvm use && pnpm vitest run tests/unit/api-grupos-cadastro-contrato.test.ts
+```
+
+Esperado: FAIL — `ENOENT` nas duas rotas.
+
+- [ ] **Step 3: Implementar `disponiveis`**
+
+`app/api/v1/groups/disponiveis/route.ts` — GET. Passos:
+
+1. `getUser()` → `organization_id` da sessão
+2. carrega as `channel_sessions` conectadas da org
+3. para cada uma, `listarGrupos(cfg, sessao.waha_session_name)`
+4. marca `ja_cadastrado` cruzando com `whatsapp_groups` filtrado por `organization_id`
+5. `somos_admin` = existe participante com `role` `admin`/`superadmin` cujo `pn` bate com o número da sessão
+
+```ts
+return ok({
+  data: grupos.map((g) => ({
+    wa_group_id: g.id,
+    subject: g.subject,
+    size: g.size ?? g.participants.length,
+    somos_admin: souAdmin(g, sessao),
+    ja_cadastrado: cadastrados.has(g.id),
+    channel_session_id: sessao.id,
+  })),
+});
+```
+
+Se o WAHA estiver fora do ar, devolver `fail` com o erro **cru** (Regra Nº 1), nunca lista vazia — lista vazia mentiria dizendo "você não tem grupos".
+
+- [ ] **Step 4: Implementar `cadastrar`**
+
+`app/api/v1/groups/cadastrar/route.ts` — POST:
+
+```ts
+const corpo = z.object({
+  wa_group_id: z.string().min(1),
+  channel_session_id: z.string().uuid(),
+});
+```
+
+Passos:
+
+1. `getUser()` → `organization_id`; exigir role ≥ `manager`
+2. confere que a `channel_session_id` pertence à org (query filtrada por `organization_id`)
+3. INSERT em `whatsapp_groups` com `modo: "vigiado"` (o default conservador) — `on conflict` na unique devolve o existente em vez de erro
+4. **carga inicial**: `lerParticipantes(cfg, sessao, wa_group_id)` e UPSERT dos membros, exatamente como `sincronizarGrupo` faz — reusar a função, não reescrever o laço
+5. `audit()` da mutação
+6. `ok({ data: { id } })`
+
+A partir daqui os eventos `group.v2.*` mantêm o grupo em dia (Task 5).
+
+- [ ] **Step 5: Rodar e ver passar**
+
+```bash
+nvm use && pnpm vitest run tests/unit/api-grupos-cadastro-contrato.test.ts && pnpm typecheck
+```
+
+Esperado: PASS + typecheck zerado.
+
+- [ ] **Step 6: Commit**
+
+```bash
+git add app/api/v1/groups/disponiveis app/api/v1/groups/cadastrar tests/unit/api-grupos-cadastro-contrato.test.ts
+git commit -m "feat(grupos): descoberta e cadastro de grupo com carga inicial"
+```
+
+---
+
 ### Task 6: API — listar grupos e membros
 
 **Files:**
@@ -1688,7 +1824,7 @@ Esperado: FAIL — rota 404.
 
 - [ ] **Step 4: Implementar as telas**
 
-`app/app/grupos/page.tsx` — lista: nome, nº de membros, modo, selo "somos admin", último sync. Estado vazio explica **como ligar** um grupo (a sessão precisa estar conectada e o grupo precisa ser cadastrado), não só "nada aqui".
+`app/app/grupos/page.tsx` — lista: nome, nº de membros, modo, selo "somos admin", último sync. Estado vazio traz o **botão que liga um grupo**: abre a lista de `GET /api/v1/groups/disponiveis` (Task 5b) e cadastra o escolhido por `POST /api/v1/groups/cadastrar`. Estado vazio que só explica, sem o botão, deixa o operador sem saída — o caminho tem de estar na tela.
 
 `app/app/grupos/[id]/page.tsx` — detalhe: metadados, flags (`announce`, `restrict_info`, `member_add_mode`), modo, e a tabela de membros.
 
