@@ -12,6 +12,7 @@ import { loadAuthUser, resolveActiveOrg } from "@/lib/auth/server";
 import { fail, ok } from "@/lib/api/wrappers";
 import { audit } from "@/lib/audit";
 import { requireRole } from "@/lib/auth/require-role";
+import { requireSupportWrite } from "@/lib/impersonate/support";
 import { createClient } from "@/lib/supabase/server";
 
 export const dynamic = "force-dynamic";
@@ -45,6 +46,10 @@ const corpoPatch = z.object({ modo: z.enum(["vigiado", "semi", "autonomo"]) });
 
 export async function PATCH(req: NextRequest, ctx: { params: Promise<{ id: string }> }): Promise<Response> {
   const requestId = randomUUID();
+
+  // Acompanhamento administrativo só-leitura não escreve em grupo.
+  const supportDenied = await requireSupportWrite();
+  if (supportDenied) return supportDenied;
   const authz = await requireRole("manager", { requestId, resource: "whatsapp_groups" });
   if (!authz.ok) return authz.response;
   const { user, org: activeOrg } = authz;

@@ -16,6 +16,7 @@ import { z } from "zod";
 import { fail, ok } from "@/lib/api/wrappers";
 import { audit } from "@/lib/audit";
 import { requireRole } from "@/lib/auth/require-role";
+import { requireSupportWrite } from "@/lib/impersonate/support";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import { listarGrupos, lerParticipantes, type ConfigWaha } from "@/lib/waha/client-grupos";
@@ -30,6 +31,10 @@ const corpoSchema = z.object({
 
 export async function POST(req: NextRequest): Promise<Response> {
   const requestId = randomUUID();
+
+  // Acompanhamento administrativo só-leitura não escreve em grupo.
+  const supportDenied = await requireSupportWrite();
+  if (supportDenied) return supportDenied;
   const authz = await requireRole("manager", { requestId, resource: "whatsapp_groups" });
   if (!authz.ok) return authz.response;
   const { user, org: activeOrg } = authz;

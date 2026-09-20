@@ -18,6 +18,7 @@ import { z } from "zod";
 import { fail, ok } from "@/lib/api/wrappers";
 import { audit } from "@/lib/audit";
 import { requireRole } from "@/lib/auth/require-role";
+import { requireSupportWrite } from "@/lib/impersonate/support";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import { chamarAcaoDeParticipante, lerParticipantes, type ConfigWaha, type RotaDeParticipante } from "@/lib/waha/client-grupos";
@@ -44,6 +45,10 @@ function papelAposAcao(acao: string, atual: PapelDeMembro): PapelDeMembro {
 
 export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string }> }): Promise<Response> {
   const requestId = randomUUID();
+
+  // Acompanhamento administrativo só-leitura não move ninguém de grupo.
+  const supportDenied = await requireSupportWrite();
+  if (supportDenied) return supportDenied;
 
   // Piso de papel: remover alguém de um grupo é DESTRUTIVO e o CRM não
   // desfaz — `participants/add` devolve 451 para quem não tem o número
