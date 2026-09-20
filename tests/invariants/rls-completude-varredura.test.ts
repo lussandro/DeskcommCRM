@@ -222,6 +222,30 @@ const PROVA_PROPRIA: readonly Excecao[] = [
       "da organização viraram venda, e quem o lê é o servidor com o admin client " +
       "filtrando organization_id à mão (a tela `/app/settings/conversoes`).",
   },
+  // ─── As três de grupos de WhatsApp (migrations 0269/0270) ───
+  {
+    tabela: "whatsapp_groups",
+    razao:
+      "tests/invariants/grupos-isolamento-entre-orgs.test.ts — `countAs` real: " +
+      "org A lê 0 grupos da org B, controle positivo em B, mais o eixo de PAPEL " +
+      "da 0270 (agent não liga modo='autonomo'; `authenticated` só tem UPDATE, " +
+      "nunca INSERT/DELETE). Fora de TABLES de propósito: o usuário semeado em " +
+      "rls-isolation.test.ts é `agent`, e a policy `_write` exige `manager`.",
+  },
+  {
+    tabela: "whatsapp_group_members",
+    razao:
+      "tests/invariants/grupos-isolamento-entre-orgs.test.ts — mesmo arquivo: " +
+      "membro não vaza entre orgs com `countAs`, e `authenticated` não tem " +
+      "INSERT/UPDATE/DELETE nenhum (é espelho do WhatsApp, escrito por service_role).",
+  },
+  {
+    tabela: "whatsapp_group_actions",
+    razao:
+      "tests/invariants/grupos-isolamento-entre-orgs.test.ts — auditoria de " +
+      "moderação: `authenticated` só LÊ, medido em role_table_grants. Nenhum papel " +
+      "do tenant escreve, porque prova que o operador redige não prova nada.",
+  },
 ];
 
 /**
