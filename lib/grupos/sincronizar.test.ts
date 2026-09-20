@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { extrairGrupoDeEvento, extrairMudancaDeParticipantes } from "./sincronizar";
+import {
+  aplicarMudancaDeParticipantes,
+  extrairGrupoDeEvento,
+  extrairMudancaDeParticipantes,
+} from "./sincronizar";
 
 const EVENTO_UPDATE = {
   timestamp: 1789928563597,
@@ -71,5 +75,78 @@ describe("extrairMudancaDeParticipantes", () => {
   it("tipo leave é preservado", () => {
     const m = extrairMudancaDeParticipantes({ ...EVENTO_PARTICIPANTS, type: "leave" });
     expect(m!.tipo).toBe("leave");
+  });
+});
+
+/**
+ * O defeito que estes casos vigiam: todo `group.v2.*` ia pelo mesmo caminho, e
+ * o payload pobre de `participants` fazia `sincronizarGrupo` gravar
+ * `subject=null`/`size=null`/`owner=null` por cima do retrato — toda entrada ou
+ * saída de membro apagava os metadados. `aplicarMudancaDeParticipantes` toca só
+ * o membro, e nunca a linha do grupo.
+ */
+type Escrita = { tabela: string; op: string; dados: Record<string, unknown> };
+
+// ponytail: dublê mínimo do admin client — só o encadeamento que esta função
+// usa (select→eq→maybeSingle e upsert awaitado). Trocar por um fake genérico
+// quando um segundo arquivo precisar dele.
+function adminFalso(): { admin: never; escritas: Escrita[] } {
+  const escritas: Escrita[] = [];
+  const elo = (tabela: string, op: string, dados: Record<string, unknown>) => {
+    const alvo = {
+      eq: () => alvo,
+      maybeSingle: async () => ({ data: { id: "grp-1" }, error: null }),
+      then: (r: (v: unknown) => unknown) => {
+        escritas.push({ tabela, op, dados });
+        return Promise.resolve({ data: null, error: null }).then(r);
+      },
+    };
+    return alvo;
+  };
+  const admin = {
+    from: (tabela: string) => ({
+      select: () => elo(tabela, "select", {}),
+      update: (d: Record<string, unknown>) => elo(tabela, "update", d),
+      upsert: (d: Record<string, unknown>) => elo(tabela, "upsert", d),
+    }),
+  };
+  return { admin: admin as never, escritas };
+}
+
+describe("aplicarMudancaDeParticipantes — o payload pobre não toca o grupo", () => {
+  it("join: mexe só em membro, grava entrou_em e limpa saiu_em", async () => {
+    const { admin, escritas } = adminFalso();
+    const id = await aplicarMudancaDeParticipantes(admin, "org-1", "sess-1", {
+      waGroupId: "120363414984201825@g.us",
+      tipo: "join",
+      participantes: [{ id: "224253161005092@lid", role: "participant" }],
+    });
+    expect(id).toBe("grp-1");
+
+    expect(
+      escritas.filter((e) => e.tabela === "whatsapp_groups" && e.op !== "select"),
+      "nenhuma escrita em whatsapp_groups",
+    ).toEqual([]);
+
+    const membros = escritas.filter((e) => e.tabela === "whatsapp_group_members");
+    expect(membros).toHaveLength(1);
+    expect(membros[0]!.dados.role).toBe("participant");
+    expect(membros[0]!.dados.entrou_em).toEqual(expect.any(String));
+    expect(membros[0]!.dados.saiu_em).toBeNull();
+  });
+
+  it("leave: o membro vira 'left' com saiu_em, e NÃO volta como participant", async () => {
+    const { admin, escritas } = adminFalso();
+    await aplicarMudancaDeParticipantes(admin, "org-1", "sess-1", {
+      waGroupId: "120363414984201825@g.us",
+      tipo: "leave",
+      participantes: [{ id: "224253161005092@lid", role: "participant" }],
+    });
+
+    expect(escritas.filter((e) => e.tabela === "whatsapp_groups" && e.op !== "select")).toEqual([]);
+    const membros = escritas.filter((e) => e.tabela === "whatsapp_group_members");
+    expect(membros).toHaveLength(1);
+    expect(membros[0]!.dados.role).toBe("left");
+    expect(membros[0]!.dados.saiu_em).toEqual(expect.any(String));
   });
 });

@@ -10,6 +10,13 @@
  * `pn` e papel resolvidos — é a fonte de verdade. O
  * `group.v2.participants` é pobre (só id e role) e serve para marcar
  * entrada/saída.
+ *
+ * ⚠️ Os dois caminhos NÃO se misturam, e isso é o defeito que o
+ * `aplicarMudancaDeParticipantes` existe para não repetir: mandar um payload
+ * pobre por `sincronizarGrupo` fazia o `update` INCONDICIONAL gravar
+ * `subject=null`, `size=null`, `owner=null` — toda entrada ou saída de membro
+ * APAGAVA o retrato do grupo. Quem escolhe o caminho é o `eventType`, em
+ * `handleEventoDeGrupo`.
  */
 import type { createAdminClient } from "@/lib/supabase/admin";
 import type { GrupoWaha } from "@/lib/waha/client-grupos";
@@ -135,6 +142,79 @@ export async function sincronizarGrupo(
         role: p.role,
         updated_at: new Date().toISOString(),
       },
+      { onConflict: "organization_id,group_id,wa_lid" },
+    );
+  }
+
+  // Quem aparece no retrato ESTÁ no grupo agora: `saiu_em` de uma volta é
+  // limpo, e `entrou_em` ganha o carimbo de primeira vez visto. O WAHA não diz
+  // quando cada um entrou — este é o piso honesto, e sem ele o
+  // `.order("entrou_em")` de `members/route.ts` ordena sobre coluna sempre nula.
+  const lids = grupo.participants.map((p) => p.id).filter(Boolean);
+  if (lids.length > 0) {
+    await admin
+      .from("whatsapp_group_members")
+      .update({ entrou_em: new Date().toISOString() })
+      .eq("organization_id", organizationId)
+      .eq("group_id", existente.id)
+      .in("wa_lid", lids)
+      .is("entrou_em", null);
+  }
+
+  return existente.id;
+}
+
+/**
+ * Aplica um `group.v2.participants` / `group.v2.leave`.
+ *
+ * Toca SÓ o membro: papel, `entrou_em`, `saiu_em`. Nunca o retrato do grupo —
+ * o payload não o traz, e gravá-lo a partir daqui é o que apagava nome, dono e
+ * flags a cada entrada ou saída.
+ *
+ * `leave`/`remove` NÃO apaga a linha: o histórico de quem esteve no grupo é o
+ * que sustenta a moderação (strikes, ações passadas). O membro vira `left` com
+ * `saiu_em` carimbado.
+ */
+export async function aplicarMudancaDeParticipantes(
+  admin: Admin,
+  organizationId: string,
+  channelSessionId: string,
+  mudanca: { waGroupId: string; tipo: string; participantes: { id: string; role: PapelDeMembro }[] },
+): Promise<string | null> {
+  const { data: existente } = await admin
+    .from("whatsapp_groups")
+    .select("id")
+    .eq("organization_id", organizationId)
+    .eq("channel_session_id", channelSessionId)
+    .eq("wa_group_id", mudanca.waGroupId)
+    .maybeSingle();
+
+  if (!existente) return null;
+
+  const agora = new Date().toISOString();
+  const saindo = mudanca.tipo === "leave" || mudanca.tipo === "remove";
+
+  for (const p of mudanca.participantes) {
+    if (!p.id) continue;
+    await admin.from("whatsapp_group_members").upsert(
+      saindo
+        ? {
+            organization_id: organizationId,
+            group_id: existente.id,
+            wa_lid: p.id,
+            role: "left" as PapelDeMembro,
+            saiu_em: agora,
+            updated_at: agora,
+          }
+        : {
+            organization_id: organizationId,
+            group_id: existente.id,
+            wa_lid: p.id,
+            role: p.role,
+            entrou_em: agora,
+            saiu_em: null,
+            updated_at: agora,
+          },
       { onConflict: "organization_id,group_id,wa_lid" },
     );
   }

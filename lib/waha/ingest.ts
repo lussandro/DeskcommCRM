@@ -1083,6 +1083,14 @@ export async function dispatchWahaEvent(
  * Grupo NÃO CADASTRADO é descartado em silêncio — é o default do produto:
  * o módulo de grupos é ligado por organização e por grupo. Mensagem de
  * grupo continua tratada em `handleInbound` (que retorna seco em @g.us).
+ *
+ * ⚠️ DOIS CAMINHOS, escolhidos pelo `eventType`, e a mistura é um defeito
+ * medido: `group.v2.update`/`join` trazem o retrato completo (subject, owner,
+ * flags, participantes com `pn`); `group.v2.participants`/`leave` trazem só
+ * `{group:{id}, type, participants:[{id,role}]}`. Mandar o payload pobre por
+ * `sincronizarGrupo` fazia o `update` incondicional gravar `subject=null`,
+ * `size=null`, `owner=null` — toda entrada ou saída de membro APAGAVA os
+ * metadados do grupo, e o membro que SAIU voltava como `participant`.
  */
 async function handleEventoDeGrupo(
   admin: Admin,
@@ -1091,7 +1099,24 @@ async function handleEventoDeGrupo(
   p: WahaPayload,
   requestId: string,
 ): Promise<void> {
-  const { extrairGrupoDeEvento, sincronizarGrupo } = await import("@/lib/grupos/sincronizar");
+  const { extrairGrupoDeEvento, extrairMudancaDeParticipantes, aplicarMudancaDeParticipantes, sincronizarGrupo } =
+    await import("@/lib/grupos/sincronizar");
+
+  if (eventType === "group.v2.participants" || eventType === "group.v2.leave") {
+    const mudanca = extrairMudancaDeParticipantes(p);
+    if (!mudanca) return;
+    const id = await aplicarMudancaDeParticipantes(admin, session.organization_id, session.id, mudanca);
+    if (!id) return;
+    logger.info("waha.grupo: participantes atualizados", {
+      requestId,
+      eventType,
+      waGroupId: mudanca.waGroupId,
+      tipo: mudanca.tipo,
+      quantos: mudanca.participantes.length,
+    });
+    return;
+  }
+
   const grupo = extrairGrupoDeEvento(p);
   if (!grupo) return;
 
