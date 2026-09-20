@@ -514,6 +514,16 @@ export const NAV_CATALOG = [
     minRole: "manager",
     sidebar: true,
   },
+  {
+    href: "/app/grupos",
+    label: "Grupos",
+    description:
+      "Grupos de WhatsApp: membros, papéis, quem entrou e saiu, e moderação pela tela.",
+    icon: "UsersThree",
+    group: "canais",
+    minRole: "agent",
+    sidebar: true,
+  },
 
   // ---- Análise — olhar o sistema funcionando ----
   //
