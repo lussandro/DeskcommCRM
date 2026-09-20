@@ -11,20 +11,10 @@ import { loadAuthUser, resolveActiveOrg } from "@/lib/auth/server";
 import { fail, ok } from "@/lib/api/wrappers";
 import { createClient } from "@/lib/supabase/server";
 import { STATUS_SAUDAVEL } from "@/lib/channels/health";
+import { somosAdminDoGrupo } from "@/lib/grupos/tipos";
 import { listarGrupos, type ConfigWaha, type GrupoWaha } from "@/lib/waha/client-grupos";
 
 export const dynamic = "force-dynamic";
-
-function souAdmin(grupo: GrupoWaha, phoneNumber: string | null): boolean {
-  if (!phoneNumber) return false;
-  const alvo = phoneNumber.replace(/\D/g, "");
-  if (!alvo) return false;
-  return grupo.participants.some(
-    (p) =>
-      (p.role === "admin" || p.role === "superadmin") &&
-      (p.pn ?? "").replace(/\D/g, "") === alvo,
-  );
-}
 
 export async function GET(): Promise<Response> {
   const requestId = randomUUID();
@@ -79,7 +69,9 @@ export async function GET(): Promise<Response> {
         wa_group_id: g.id,
         subject: g.subject,
         size: g.size ?? g.participants.length,
-        somos_admin: souAdmin(g, sessao.phone_number as string | null),
+        // `null` (conexão sem telefone conhecido) vira `false` NESTA tela: aqui
+        // é uma sugestão do que provavelmente dá para fazer, não o gate.
+        somos_admin: somosAdminDoGrupo(g.participants, sessao.phone_number as string | null) ?? false,
         ja_cadastrado: cadastrados.has(g.id),
         channel_session_id: sessao.id as string,
       });

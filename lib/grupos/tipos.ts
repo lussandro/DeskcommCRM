@@ -31,3 +31,27 @@ export const CAMPO_WAHA_PARA_COLUNA = {
   memberAddMode: "member_add_mode",
   joinApprovalMode: "join_approval_mode",
 } as const;
+
+/**
+ * SOMOS admin deste grupo? — não "existe algum admin", que é sempre verdade
+ * (todo grupo tem um dono `superadmin`).
+ *
+ * A comparação é por DÍGITOS do telefone da nossa conexão contra o `pn` do
+ * participante: os dois lados chegam em formatos diferentes do WAHA
+ * (`554891972220@c.us`, `554891972220@s.whatsapp.net`, com ou sem `+`), e o
+ * `lid` não serve de chave porque ele é por-grupo.
+ *
+ * `phoneNumber` desconhecido devolve `null`, NUNCA `false`: "não sei" e "não
+ * somos" levam a decisões diferentes — quem chama decide, e `sincronizarGrupo`
+ * preserva o valor gravado em vez de inventar um (Regra Nº 1).
+ */
+export function somosAdminDoGrupo(
+  participantes: readonly { pn: string | null; role: string }[],
+  phoneNumber: string | null | undefined,
+): boolean | null {
+  const alvo = (phoneNumber ?? "").replace(/\D/g, "");
+  if (!alvo) return null;
+  return participantes.some(
+    (p) => (p.role === "admin" || p.role === "superadmin") && (p.pn ?? "").replace(/\D/g, "") === alvo,
+  );
+}

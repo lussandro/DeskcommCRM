@@ -20,7 +20,7 @@
  */
 import type { createAdminClient } from "@/lib/supabase/admin";
 import type { GrupoWaha } from "@/lib/waha/client-grupos";
-import { PAPEIS_DE_MEMBRO, type PapelDeMembro } from "@/lib/grupos/tipos";
+import { PAPEIS_DE_MEMBRO, somosAdminDoGrupo, type PapelDeMembro } from "@/lib/grupos/tipos";
 
 type Admin = ReturnType<typeof createAdminClient>;
 
@@ -109,7 +109,22 @@ export async function sincronizarGrupo(
 
   if (!existente) return null;
 
-  const meuLid = grupo.participants.find((p) => p.role === "superadmin" || p.role === "admin");
+  // SOMOS admin, não "existe algum admin". A versão anterior procurava
+  // QUALQUER participante com papel de admin — e todo grupo tem um dono
+  // `superadmin`, então `somos_admin` gravava `true` SEMPRE. O gate de
+  // `ACOES_QUE_EXIGEM_ADMIN` nunca disparava o 409 e a tela prometia botão
+  // que o WhatsApp recusa. A régua certa é a mesma de
+  // `/api/v1/groups/disponiveis`: o telefone da NOSSA conexão.
+  const { data: sessao } = await admin
+    .from("channel_sessions")
+    .select("phone_number")
+    .eq("organization_id", organizationId)
+    .eq("id", channelSessionId)
+    .maybeSingle();
+  const somosAdmin = somosAdminDoGrupo(
+    grupo.participants,
+    (sessao?.phone_number as string | null) ?? null,
+  );
 
   await admin
     .from("whatsapp_groups")
@@ -124,7 +139,10 @@ export async function sincronizarGrupo(
       restrict_info: grupo.restrict,
       member_add_mode: grupo.memberAddMode,
       join_approval_mode: grupo.joinApprovalMode,
-      somos_admin: Boolean(meuLid),
+      // `null` = conexão sem telefone conhecido (ainda não pareada). Preserva
+      // o valor gravado em vez de afirmar `false`, que é uma afirmação que
+      // ninguém mediu (Regra Nº 1).
+      ...(somosAdmin === null ? {} : { somos_admin: somosAdmin }),
       last_synced_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
     })

@@ -4,6 +4,7 @@ import {
   extrairGrupoDeEvento,
   extrairMudancaDeParticipantes,
 } from "./sincronizar";
+import { somosAdminDoGrupo } from "./tipos";
 
 const EVENTO_UPDATE = {
   timestamp: 1789928563597,
@@ -148,5 +149,33 @@ describe("aplicarMudancaDeParticipantes — o payload pobre não toca o grupo", 
     expect(membros).toHaveLength(1);
     expect(membros[0]!.dados.role).toBe("left");
     expect(membros[0]!.dados.saiu_em).toEqual(expect.any(String));
+  });
+});
+
+/**
+ * C2: `somos_admin` media se ALGUÉM é admin, não se NÓS somos — e todo grupo
+ * tem um dono `superadmin`, então gravava `true` sempre. O gate de
+ * `ACOES_QUE_EXIGEM_ADMIN` nunca disparava o 409 e a tela prometia botão que o
+ * WhatsApp recusa.
+ */
+describe("somosAdminDoGrupo", () => {
+  const DONO = { pn: "554891972220@c.us", role: "superadmin" };
+  const NOS_PARTICIPANTE = { pn: "554891286399@c.us", role: "participant" };
+
+  it("dono alheio no grupo NÃO nos faz admin", () => {
+    expect(somosAdminDoGrupo([DONO, NOS_PARTICIPANTE], "554891286399@c.us")).toBe(false);
+  });
+
+  it("somos admin quando o papel é nosso", () => {
+    expect(somosAdminDoGrupo([DONO, { ...NOS_PARTICIPANTE, role: "admin" }], "+55 48 9128-6399")).toBe(true);
+  });
+
+  it("formatos diferentes do WAHA casam pelos dígitos", () => {
+    expect(somosAdminDoGrupo([{ pn: "554891972220@s.whatsapp.net", role: "superadmin" }], "554891972220@c.us")).toBe(true);
+  });
+
+  it("telefone desconhecido devolve null — não 'false' inventado", () => {
+    expect(somosAdminDoGrupo([DONO], null)).toBeNull();
+    expect(somosAdminDoGrupo([DONO], "")).toBeNull();
   });
 });
