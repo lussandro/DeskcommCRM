@@ -245,7 +245,12 @@ describe("reconciliarTudo", () => {
     vi.mocked(carregarIntegracaoAsaas).mockResolvedValue({
       id: "integ-1",
       status: "healthy",
-      config: { ambiente: "sandbox", followup_pointer_id: null, reemissao: null },
+      config: {
+        ambiente: "sandbox",
+        followup_pointer_id: null,
+        followup_pointer_ids: [],
+        reemissao: null,
+      },
       cliente: cliente as never,
       webhookPathToken: "tok",
     });
@@ -270,7 +275,12 @@ describe("reconciliarTudo", () => {
     vi.mocked(carregarIntegracaoAsaas).mockResolvedValue({
       id: "integ-1",
       status: "healthy",
-      config: { ambiente: "sandbox", followup_pointer_id: null, reemissao: null },
+      config: {
+        ambiente: "sandbox",
+        followup_pointer_id: null,
+        followup_pointer_ids: [],
+        reemissao: null,
+      },
       cliente: cliente as never,
       webhookPathToken: "tok",
     });
@@ -300,7 +310,12 @@ describe("reconciliarTudo", () => {
     vi.mocked(carregarIntegracaoAsaas).mockResolvedValue({
       id: "integ-1",
       status: "healthy",
-      config: { ambiente: "sandbox", followup_pointer_id: null, reemissao: null },
+      config: {
+        ambiente: "sandbox",
+        followup_pointer_id: null,
+        followup_pointer_ids: [],
+        reemissao: null,
+      },
       cliente: cliente as never,
       webhookPathToken: "tok",
     });

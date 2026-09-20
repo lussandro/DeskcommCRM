@@ -45,6 +45,8 @@ function payload(): ExportPayload {
       },
     ],
     voice_calls: [],
+    campaign_recipients: [],
+    campaign_suppressions: [],
   appointment_notices: [
       {
         id: "aviso-aberto",
