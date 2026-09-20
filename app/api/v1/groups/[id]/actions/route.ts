@@ -17,7 +17,7 @@ import { z } from "zod";
 
 import { fail, ok } from "@/lib/api/wrappers";
 import { audit } from "@/lib/audit";
-import { loadAuthUser, resolveActiveOrg } from "@/lib/auth/server";
+import { requireRole } from "@/lib/auth/require-role";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import { chamarAcaoDeParticipante, lerParticipantes, type ConfigWaha, type RotaDeParticipante } from "@/lib/waha/client-grupos";
@@ -44,10 +44,17 @@ function papelAposAcao(acao: string, atual: PapelDeMembro): PapelDeMembro {
 
 export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string }> }): Promise<Response> {
   const requestId = randomUUID();
-  const user = await loadAuthUser();
-  if (!user) return fail("unauthenticated", "Auth required.", 401, { requestId });
-  const activeOrg = await resolveActiveOrg(user);
-  if (!activeOrg) return fail("forbidden_tenant", "Nenhuma organização ativa.", 403, { requestId });
+
+  // Piso de papel: remover alguém de um grupo é DESTRUTIVO e o CRM não
+  // desfaz — `participants/add` devolve 451 para quem não tem o número
+  // salvo, então a volta é só por link de convite, com a pessoa aceitando.
+  // Sem este gate, um `viewer` esvaziava um grupo de 500. O cadastro
+  // (POST /groups/cadastrar) já exige `manager`; a ação destrutiva não
+  // pode ser mais frouxa que ele.
+  const authz = await requireRole("manager", { requestId, resource: "whatsapp_groups" });
+  if (!authz.ok) return authz.response;
+  const user = authz.user;
+  const activeOrg = { orgId: authz.org.orgId };
 
   const parsed = corpo.safeParse(await req.json().catch(() => null));
   if (!parsed.success) {
