@@ -9178,6 +9178,71 @@ export const DICIONARIO: Traducoes = {
   "Uma mensagem que chega depois desse prazo é conversa nova, não resposta à campanha. Isso muda o número de respostas que a tela mostra, inclusive das campanhas já enviadas.": {
     es: "Un mensaje que llega después de ese plazo es una conversación nueva, no una respuesta a la campaña. Eso cambia la cantidad de respuestas que muestra la pantalla, incluso de las campañas ya enviadas.",
   },
+  // ---- Painel de grupos de WhatsApp (app/app/grupos) ----
+  "Grupos": { es: "Grupos" },
+  "Grupo": { es: "Grupo" },
+  "membros": { es: "miembros" },
+  "Erro ao carregar o grupo.": { es: "Error al cargar el grupo." },
+  "Erro ao carregar grupos.": { es: "Error al cargar los grupos." },
+  "Erro ao consultar grupos.": { es: "Error al consultar los grupos." },
+  "somos admin": { es: "somos administradores" },
+  "não somos admin": { es: "no somos administradores" },
+  "só admin envia mensagem": { es: "solo el administrador envía mensajes" },
+  "só admin edita o grupo": { es: "solo el administrador edita el grupo" },
+  "Vigiado": { es: "Vigilado" },
+  "Semi-autônomo": { es: "Semiautónomo" },
+  "Autônomo": { es: "Autónomo" },
+  "Vigiado — a IA não age sozinha": { es: "Vigilado — la IA no actúa sola" },
+  "Semi-autônomo — a IA sugere, humano aprova": {
+    es: "Semiautónomo — la IA sugiere, la persona aprueba",
+  },
+  "Autônomo — a IA age sozinha": { es: "Autónomo — la IA actúa sola" },
+  "Requer papel de gerente ou superior para trocar o modo.": {
+    es: "Requiere rol de gerente o superior para cambiar el modo.",
+  },
+  "Nenhum membro carregado ainda.": { es: "Todavía no se cargó ningún miembro." },
+  "A sessão do WhatsApp não é administradora deste grupo — remover, promover e rebaixar não funcionam até isso mudar.": {
+    es: "La sesión de WhatsApp no es administradora de este grupo — quitar, promover y degradar no funcionan hasta que eso cambie.",
+  },
+  "Silenciar é um controle só do CRM: no WhatsApp a pessoa continua podendo escrever no grupo normalmente — o que muda é o agente de IA passar a ignorá-la.": {
+    es: "Silenciar es un control solo del CRM: en WhatsApp la persona sigue pudiendo escribir en el grupo con normalidad — lo que cambia es que el agente de IA pasa a ignorarla.",
+  },
+  "Papel": { es: "Rol" },
+  "Strikes": { es: "Sanciones" },
+  "Superadmin": { es: "Superadministrador" },
+  "Saiu": { es: "Salió" },
+  "Promover a admin": { es: "Promover a administrador" },
+  "Rebaixar a membro": { es: "Degradar a miembro" },
+  "Remover do grupo": { es: "Quitar del grupo" },
+  "Remover do grupo?": { es: "¿Quitar del grupo?" },
+  "Remover silêncio": { es: "Quitar el silencio" },
+  "Silenciar": { es: "Silenciar" },
+  "Silenciar (só para o agente de IA — não afeta o WhatsApp)": {
+    es: "Silenciar (solo para el agente de IA — no afecta a WhatsApp)",
+  },
+  "A ação não teve efeito no WhatsApp.": { es: "La acción no tuvo efecto en WhatsApp." },
+  "Este membro": { es: "Este miembro" },
+  "sai do grupo no WhatsApp agora. Essa ação não tem desfazer automático.": {
+    es: "sale del grupo en WhatsApp ahora. Esta acción no tiene deshacer automático.",
+  },
+  "nunca sincronizado": { es: "nunca sincronizado" },
+  "Último sync": { es: "Última sincronización" },
+  "Grupos de WhatsApp: membros, papéis e moderação pela tela.": {
+    es: "Grupos de WhatsApp: miembros, roles y moderación desde la pantalla.",
+  },
+  "Ligar grupo": { es: "Conectar grupo" },
+  "Ligar um grupo": { es: "Conectar un grupo" },
+  "Nenhum grupo cadastrado ainda.": { es: "Todavía no hay ningún grupo registrado." },
+  "Ligue um grupo que o WhatsApp conectado já enxerga para começar a acompanhar membros e moderar pela tela.": {
+    es: "Conecte un grupo que el WhatsApp conectado ya ve para empezar a seguir a los miembros y moderar desde la pantalla.",
+  },
+  "Grupos que o WhatsApp conectado enxerga e ainda não estão cadastrados aqui.": {
+    es: "Grupos que el WhatsApp conectado ve y que todavía no están registrados aquí.",
+  },
+  "Nenhum grupo disponível — o WhatsApp conectado não vê grupo nenhum ainda.": {
+    es: "Ningún grupo disponible — el WhatsApp conectado todavía no ve ningún grupo.",
+  },
+  "já cadastrado": { es: "ya registrado" },
 };
 
 /**
