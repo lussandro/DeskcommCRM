@@ -613,6 +613,9 @@ export const AUDIT_ACTIONS = [
   // ritmo que campanha nova herda). Auditável porque muda o comportamento de
   // TODA campanha futura, e a de atribuição muda a métrica das já enviadas.
   "campaign.settings_updated",
+  // Cadastro de grupo de WhatsApp no módulo de grupos (Task 5b) — o ato que
+  // liga o grupo à organização e começa a mantê-lo em dia via group.v2.*.
+  "group.registered",
 ] as const;
 
 /** Um código de auditoria. Derivado de `AUDIT_ACTIONS` — não redigite a lista. */

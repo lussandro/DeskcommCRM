@@ -1072,5 +1072,31 @@ export async function dispatchWahaEvent(
     await handleMessageRevoked(admin, session, payload);
   } else if (eventType === "session.status" || eventType === "state.change") {
     await handleSessionStatus(admin, session, payload);
+  } else if (eventType.startsWith("group.v2.")) {
+    await handleEventoDeGrupo(admin, session, eventType, payload, requestId);
   }
+}
+
+/**
+ * Eventos `group.v2.*`.
+ *
+ * Grupo NÃO CADASTRADO é descartado em silêncio — é o default do produto:
+ * o módulo de grupos é ligado por organização e por grupo. Mensagem de
+ * grupo continua tratada em `handleInbound` (que retorna seco em @g.us).
+ */
+async function handleEventoDeGrupo(
+  admin: Admin,
+  session: Session,
+  eventType: string,
+  p: WahaPayload,
+  requestId: string,
+): Promise<void> {
+  const { extrairGrupoDeEvento, sincronizarGrupo } = await import("@/lib/grupos/sincronizar");
+  const grupo = extrairGrupoDeEvento(p);
+  if (!grupo) return;
+
+  const id = await sincronizarGrupo(admin, session.organization_id, session.id, grupo);
+  if (!id) return;
+
+  logger.info("waha.grupo: sincronizado", { requestId, eventType, waGroupId: grupo.id });
 }
