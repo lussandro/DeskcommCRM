@@ -616,6 +616,13 @@ export const AUDIT_ACTIONS = [
   // Cadastro de grupo de WhatsApp no módulo de grupos (Task 5b) — o ato que
   // liga o grupo à organização e começa a mantê-lo em dia via group.v2.*.
   "group.registered",
+  // Troca de modo (vigiado/semi/autonomo) via PATCH /groups/{id} — muda quanta
+  // autonomia a IA tem no grupo, precisa de "quem mudou e quando".
+  "group.mode_changed",
+  // Ação manual do operador (remover/promover/rebaixar/silenciar) via
+  // POST /groups/{id}/actions — audita mesmo quando pos_condicao_ok é false,
+  // porque a TENTATIVA já é decisão humana registrável.
+  "group.action_executed",
 ] as const;
 
 /** Um código de auditoria. Derivado de `AUDIT_ACTIONS` — não redigite a lista. */
