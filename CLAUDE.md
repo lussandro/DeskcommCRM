@@ -141,7 +141,12 @@ DeskcommCRM é um sistema operacional de vendas open source com agentes de IA na
   `tests/unit/opt-out-deteccao.test.ts`.
 - Mídia: subir pro Supabase Storage primeiro, passar URL ao WAHA (não inline base64)
 - Multi-device: assinar `message.any` (não só `message`); tratar `fromMe=true` sem duplicar
-- Grupos: SKIP CRM binding se `chatId.endsWith('@g.us')`. Sender é `p.author`, não `p.from`
+- Grupos: por default, SKIP CRM binding se `chatId.endsWith('@g.us')` — grupo só entra no CRM
+  pelo módulo de grupos, ligado por organização. **O autor da mensagem é `payload.participant`
+  (topo), NÃO `p.author`**: `author` é vocabulário do WEBJS e não existe no NOWEB, que é o engine
+  do kit. O telefone do autor sai de `_data.key.participantAlt` quando o JID é `@lid`. Medido em
+  produção em 2026-09-20; evidência em `.superpowers-capturas-grupo.jsonl`. Para conferir sem
+  acreditar nesta linha: `grep -o '"participant[A-Za-z]*"' .superpowers-capturas-grupo.jsonl | sort -u`
 - Cron `recover-stuck-messages` (`app/api/v1/cron/recover-stuck-messages/route.ts`, agendado no `scheduler` do `docker-compose.prod.yml`): marca `status='sending'` há >5min como `failed` **e abre aviso na Central** (`agent_inbox_items` kind `message_send_stuck`). Não toca em `queued`: esse estado tem dono (o agent-engine reagenda por `SEND_QUEUED_RETRY_MS`), e falhá-lo perderia mensagem que ia sair. Não reenvia — envio em dobro é pior que não-envio
 
 ### Marca própria (white-label)
