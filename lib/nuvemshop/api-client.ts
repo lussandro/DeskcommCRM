@@ -142,4 +142,25 @@ export class NuvemshopApiClient {
   deleteWebhook(id: number): Promise<void> {
     return this.delete(`/webhooks/${id}`);
   }
+
+  /**
+   * Uma PÁGINA de pedidos. A Nuvemshop pagina por `page`/`per_page` (1-based) e
+   * devolve lista vazia quando acaba — não há cursor nem `Link` a seguir.
+   *
+   * `per_page` tem teto de 200 no provedor; pedir mais é recusado. O default de
+   * 50 é conservador de propósito: o sync inicial roda numa VPS de cliente, e
+   * uma página de 200 pedidos com payload inteiro é memória que não sobra.
+   */
+  listOrders(params: {
+    page?: number;
+    perPage?: number;
+    /** ISO — só pedidos criados a partir daqui. */
+    createdAtMin?: string;
+  } = {}): Promise<unknown[]> {
+    const q = new URLSearchParams();
+    q.set("page", String(params.page ?? 1));
+    q.set("per_page", String(Math.min(params.perPage ?? 50, 200)));
+    if (params.createdAtMin) q.set("created_at_min", params.createdAtMin);
+    return this.get<unknown[]>(`/orders?${q.toString()}`);
+  }
 }

@@ -35,15 +35,24 @@ export function isConfigured(): boolean {
  * events (`store/redact`, `customers/redact`, `customers/data_request`) are
  * deferred to EPIC-08.
  */
+/**
+ * Os webhooks que a loja assina ao conectar (Sub-PRD 06 §3.4, Spec §4.6).
+ *
+ * ⚠️ ASSINAR E CONSUMIR SÃO LISTAS QUE PRECISAM CONCORDAR. `order/fulfilled` e
+ * `cart/abandoned` estavam na spec e FORA desta lista: o consumidor os trata e
+ * eles nunca chegariam — evento tratado que a loja não manda é código morto que
+ * parece funcionalidade. O par é medido por `lib/nuvemshop/config.test.ts`.
+ *
+ * `product/*` e `app/uninstalled` não entram: nenhum consumidor os lê hoje, e
+ * webhook assinado sem consumidor é o inverso do mesmo defeito — ruído no
+ * `event_log` que ninguém processa.
+ */
 export const SUBSCRIBED_EVENTS = [
   "order/created",
-  "order/updated",
   "order/paid",
   "order/cancelled",
-  "product/created",
-  "product/updated",
-  "product/deleted",
-  "app/uninstalled",
+  "order/fulfilled",
+  "cart/abandoned",
 ] as const;
 
 export type NuvemshopEvent = (typeof SUBSCRIBED_EVENTS)[number];

@@ -15,6 +15,8 @@ import { env } from "@/lib/env";
 import { audit } from "@/lib/audit";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getConfig, SUBSCRIBED_EVENTS, eventToSlug } from "@/lib/nuvemshop/config";
+import { EVENTO_SYNC_PEDIDO } from "@/lib/nuvemshop/vocabulario";
+import { logger } from "@/lib/logger";
 import { exchangeCodeForToken } from "@/lib/nuvemshop/oauth";
 import { NuvemshopApiClient } from "@/lib/nuvemshop/api-client";
 import { verifyState } from "@/lib/nuvemshop/state";
@@ -170,6 +172,27 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
         .map(([k]) => k),
     },
   });
+
+  // O HISTÓRICO, em segundo plano. Emite e redireciona: puxar centenas de
+  // pedidos aqui faria quem acabou de conectar esperar olhando tela em branco,
+  // e um timeout de proxy no meio deixaria a loja conectada com histórico pela
+  // metade, sem ninguém saber onde parou.
+  const { error: erroSync } = await admin.rpc("emit_event", {
+    p_event_type: EVENTO_SYNC_PEDIDO,
+    p_entity_kind: "tenant_integration",
+    p_entity_id: integration?.id ?? null,
+    p_payload: {},
+    p_metadata: { store_id: storeId },
+    p_organization_id: state.orgId,
+  });
+  if (erroSync) {
+    // Não derruba a conexão: a loja ESTÁ conectada e os webhooks registrados.
+    // Sem o histórico, o CRM começa do próximo pedido — degradação, não falha.
+    logger.warn("nuvemshop: sync inicial não foi enfileirado", {
+      organizationId: state.orgId,
+      erro: erroSync.message,
+    });
+  }
 
   return redirectTo(`/app/integrations/nuvemshop?ok=1`);
 }

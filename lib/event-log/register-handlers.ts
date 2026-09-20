@@ -18,6 +18,8 @@ import { campanhaRespostaHandler } from "@/lib/campanhas/resposta.handler";
 import { followupGatilhoEtapaHandler } from "@/lib/followup/gatilho-etapa.handler";
 import { followupGatilhoCasoHandler } from "@/lib/followup/gatilho-caso.handler";
 import { asaasCobrancaHandler } from "@/lib/asaas/consumidor.handler";
+import { nuvemshopPedidoHandler } from "@/lib/nuvemshop/consumidor.handler";
+import { nuvemshopSyncHandler } from "@/lib/nuvemshop/sync.handler";
 import { mediaPersistHandler } from "@/workers/media-persist-worker.handler";
 import { mediaDeriveHandler } from "@/workers/media-derive-worker.handler";
 import { webPushInboundHandler } from "@/lib/notifications/push.handler";
@@ -46,6 +48,12 @@ export function ensureHandlersRegistered(): void {
   registerHandler(followupGatilhoCasoHandler);
   registerHandler(followupGatilhoPresencaHandler);
   registerHandler(asaasCobrancaHandler);
+  // O pedido da loja vira card no funil. Registrado junto do Asaas porque é o
+  // mesmo tipo de consumidor: evento de terceiro que só escreve no banco.
+  registerHandler(nuvemshopPedidoHandler);
+  // O histórico da loja recém-conectada. Depois do de pedido: se os dois caírem
+  // na mesma rodada, o webhook do pedido novo é mais urgente que a varredura.
+  registerHandler(nuvemshopSyncHandler);
   registerHandler(mediaPersistHandler);
   registerHandler(mediaDeriveHandler);
   registerHandler(webPushInboundHandler);

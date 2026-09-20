@@ -1,0 +1,136 @@
+{
+  "schema_version": 1,
+  "diagram_type": "architecture",
+  "meta": {
+    "title": "Nuvemshop — o pedido da loja vira card no funil",
+    "subtitle": "O webhook já chegava e ninguém consumia: orders tinha quatro leitores e zero escritores. O consumidor é a ponta que faltava",
+    "output": "nuvemshop.html",
+    "quality_profile": "standard"
+  },
+  "lanes": [
+    { "id": "tela", "label": "Tela" },
+    { "id": "loja", "label": "Nuvemshop" },
+    { "id": "eventos", "label": "Eventos" },
+    { "id": "regra", "label": "Regra" },
+    { "id": "dados", "label": "Dados" }
+  ],
+  "mainPath": ["rota-webhook", "event-log", "consumidor", "orders", "lead"],
+  "nodes": [
+    {
+      "id": "tela-integracao",
+      "lane": "tela",
+      "col": 0,
+      "type": "ui",
+      "label": "Tela Nuvemshop (/app/integrations/nuvemshop) — conectar por OAuth"
+    },
+    {
+      "id": "callback",
+      "lane": "loja",
+      "col": 1,
+      "type": "route",
+      "label": "GET /api/v1/integrations/nuvemshop/callback — troca o code, assina os 5 webhooks"
+    },
+    {
+      "id": "loja-webhook",
+      "lane": "loja",
+      "col": 2,
+      "type": "external",
+      "label": "A loja envia order/created, order/paid, order/cancelled, order/fulfilled, cart/abandoned"
+    },
+    {
+      "id": "rota-webhook",
+      "lane": "loja",
+      "col": 3,
+      "type": "route",
+      "label": "POST /api/v1/webhooks/nuvemshop/[event] — confere HMAC e grava o recibo"
+    },
+    {
+      "id": "event-log",
+      "lane": "eventos",
+      "col": 4,
+      "type": "queue",
+      "label": "event_log — nuvemshop.order_* e nuvemshop.sync_requested"
+    },
+    {
+      "id": "consumidor",
+      "lane": "regra",
+      "col": 5,
+      "type": "worker",
+      "label": "nuvemshopPedidoHandler — lê o pedido, grava e move o card"
+    },
+    {
+      "id": "sync",
+      "lane": "regra",
+      "col": 5,
+      "type": "worker",
+      "label": "nuvemshopSyncHandler — puxa o histórico da loja recém-conectada (teto de 500)"
+    },
+    {
+      "id": "leitura",
+      "lane": "regra",
+      "col": 6,
+      "type": "lib",
+      "label": "lerPedido / lerCarrinho — recusa payload sem total, id ou contato; nunca completa buraco"
+    },
+    {
+      "id": "decisao",
+      "lane": "regra",
+      "col": 6,
+      "type": "lib",
+      "label": "decidir() — pago fecha como ganho, cancelado como perda, enviado não fecha"
+    },
+    {
+      "id": "orders",
+      "lane": "dados",
+      "col": 7,
+      "type": "table",
+      "label": "orders — upsert pela unique (org, provider, external_id); reentrega não duplica"
+    },
+    {
+      "id": "lead",
+      "lane": "dados",
+      "col": 7,
+      "type": "table",
+      "label": "crm_leads + crm_lead_links — um card por pedido, na etapa do próprio funil"
+    },
+    {
+      "id": "timeline",
+      "lane": "dados",
+      "col": 8,
+      "type": "table",
+      "label": "crm_lead_activities — order_created, order_paid, order_cancelled, order_fulfilled, order_abandoned"
+    },
+    {
+      "id": "ficha",
+      "lane": "tela",
+      "col": 8,
+      "type": "ui",
+      "label": "Ficha do contato — os 3 últimos pedidos (a tela já lia orders; agora tem dado)"
+    },
+    {
+      "id": "kanban",
+      "lane": "tela",
+      "col": 8,
+      "type": "ui",
+      "label": "Kanban — o card do pedido no funil de entrada da organização"
+    }
+  ],
+  "edges": [
+    { "id": "tela-conecta", "from": "tela-integracao", "to": "callback", "label": "conectar loja" },
+    { "id": "callback-assina", "from": "callback", "to": "loja-webhook", "label": "assina os 5 webhooks que têm consumidor" },
+    { "id": "callback-pede-sync", "from": "callback", "to": "event-log", "label": "emite nuvemshop.sync_requested e redireciona (não espera o histórico)" },
+    { "id": "loja-chama", "from": "loja-webhook", "to": "rota-webhook", "label": "HTTP com assinatura" },
+    { "id": "rota-emite", "from": "rota-webhook", "to": "event-log", "label": "emit_event por evento recebido" },
+    { "id": "event-consumidor", "from": "event-log", "to": "consumidor", "label": "drain entrega o evento de pedido" },
+    { "id": "event-sync", "from": "event-log", "to": "sync", "label": "drain entrega o pedido de sync" },
+    { "id": "sync-reusa", "from": "sync", "to": "consumidor", "label": "monta o mesmo EventRow — uma rota de escrita só" },
+    { "id": "consumidor-le", "from": "consumidor", "to": "leitura", "label": "pergunta se o payload dá um pedido" },
+    { "id": "consumidor-decide", "from": "consumidor", "to": "decisao", "label": "pergunta o que fazer com o card" },
+    { "id": "consumidor-orders", "from": "consumidor", "to": "orders", "label": "upsert do pedido" },
+    { "id": "consumidor-lead", "from": "consumidor", "to": "lead", "label": "cria o card uma vez e vincula ao pedido" },
+    { "id": "consumidor-timeline", "from": "consumidor", "to": "timeline", "label": "registra o que aconteceu" },
+    { "id": "orders-ficha", "from": "orders", "to": "ficha", "label": "os 3 últimos pedidos do contato" },
+    { "id": "lead-kanban", "from": "lead", "to": "kanban", "label": "o card aparece no funil" },
+    { "id": "consumidor-retorno", "from": "consumidor", "to": "event-log", "label": "laço de retorno: erro volta em consumed_by com o motivo" }
+  ]
+}

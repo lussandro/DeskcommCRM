@@ -22,6 +22,7 @@ ser fonte sem ninguém decidir isso.
 | `encerramento-atendimento.architecture.json` | conversa/demanda independentes, mutex no inbound, origem imutável dos jobs, memória vigente e guardas antes dos efeitos |
 | `agent-turn.workflow.json` | Conversador e Operador, entregas determinísticas de Meet e respostas aprovadas; revisão humana ligada ao mesmo core e à cadeia de envio. O JSON é a fonte atual; o HTML é um render anterior |
 | `crm-vivo.architecture.json` | subsistema **CRM Vivo** — 24 peças, 44 arestas, 6 faixas |
+| `nuvemshop.architecture.json` | pedido da loja vira card no funil (Sub-PRD 06) — o evento que ninguém consumia; 14 peças, 16 arestas, 5 faixas |
 | `atualizacao-self-service.architecture.json` | botão de atualizar pela UI — `agent.sh`/`update.sh` (host) ↔ rota do agente ↔ tabelas de instância ↔ rodapé/tela |
 | `gestao-funis.architecture.json` | gestão de funis pela tela do Kanban — 18 peças, 30 arestas; as três dependências do funil e por que só uma o banco defende |
 | `ia-360-organizar.architecture.json` | IA 360 W4 — o agente organiza a operação: 18 peças, 24 arestas; uma regra por operação servindo REST e MCP, a autoria da configuração ao lado do estado, e **quatro não-ligações declaradas** (autoria não aponta para `ai_agents`; o agente não escreve regra automática, nem resposta pronta, nem o vocabulário canônico de marcadores) |

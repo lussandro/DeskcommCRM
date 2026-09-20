@@ -161,7 +161,21 @@ export type ActivityType =
   | "charge_deleted"
   | "charge_due_changed"
   | "charge_reissued"
-  | "charge_waiting_slot";
+  | "charge_waiting_slot"
+  /**
+   * O COMÉRCIO NA TIMELINE (Sub-PRD 06 §3.4). Sem estas linhas, um card que
+   * nasce de um pedido da loja aparece no kanban sem dizer de onde veio, e a
+   * mudança de etapa por pagamento parece alguém tendo arrastado o card.
+   *
+   * `order_abandoned` é o carrinho, e não é pedido: ele não tem total fechado
+   * nem linha em `orders`. Está aqui porque é o alvo de recuperação — o motivo
+   * pelo qual alguém fala com essa pessoa.
+   */
+  | "order_created"
+  | "order_paid"
+  | "order_cancelled"
+  | "order_fulfilled"
+  | "order_abandoned";
 
 export const ACTIVITY_LABELS: Record<ActivityType, string> = {
   lead_created: "Entrou pelo WhatsApp",
@@ -266,6 +280,11 @@ export const ACTIVITY_LABELS: Record<ActivityType, string> = {
   charge_due_changed: "Vencimento alterado no Asaas",
   charge_reissued: "Boleto prorrogado",
   charge_waiting_slot: "Cobrança vencida aguardando outro retorno terminar",
+  order_created: "Pedido feito na loja",
+  order_paid: "Pedido pago",
+  order_cancelled: "Pedido cancelado",
+  order_fulfilled: "Pedido enviado",
+  order_abandoned: "Carrinho abandonado",
 };
 
 /** Quando o tipo é legado/desconhecido, a linha ainda é honesta — sem jargão. */
