@@ -521,7 +521,14 @@ export const NAV_CATALOG = [
       "Grupos de WhatsApp: membros, papéis, quem entrou e saiu, e moderação pela tela.",
     icon: "UsersThree",
     group: "canais",
-    minRole: "agent",
+    // `manager`, não `agent`: o grupo CANAIS inteiro é manager+/admin, e um
+    // item mais permissivo que o grupo faz aparecer o cabeçalho "Canais"
+    // sozinho para um agent (cabeçalho órfão — vigiado por
+    // `navegacao-registry` e `sidebar-grupos`). É também o papel que a tela
+    // exige de fato: trocar o modo e toda ação de moderação passam por
+    // `requireRole("manager")`, então para um agent a página seria só botão
+    // morto.
+    minRole: "manager",
     sidebar: true,
   },
 
