@@ -9179,6 +9179,9 @@ export const DICIONARIO: Traducoes = {
     es: "Un mensaje que llega después de ese plazo es una conversación nueva, no una respuesta a la campaña. Eso cambia la cantidad de respuestas que muestra la pantalla, incluso de las campañas ya enviadas.",
   },
   // ---- Painel de grupos de WhatsApp (app/app/grupos) ----
+  "Grupos de WhatsApp: membros, papéis, quem entrou e saiu, e moderação pela tela.": {
+    es: "Grupos de WhatsApp: miembros, roles, quién entró y salió, y moderación desde la pantalla.",
+  },
   "Grupos": { es: "Grupos" },
   "Grupo": { es: "Grupo" },
   "membros": { es: "miembros" },
